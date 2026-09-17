@@ -1,0 +1,16 @@
+{
+  "schema": "bootcrate-project-intake/v1",
+  "language": "pt-BR",
+  "answers": {
+    "project_name": "Example Project",
+    "one_sentence": "Example only — replace with exported app data.",
+    "project_kind": "other",
+    "existing_or_new": "new",
+    "success": "Describe the first meaningful success condition.",
+    "report_language": "pt-BR",
+    "repo_language": "en",
+    "single_or_team": "single",
+    "issues_tracking": "yes",
+    "primary_orchestration": "chatgpt"
+  }
+}

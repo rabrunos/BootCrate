@@ -1,0 +1,21 @@
+name: "Refactor"
+description: "Structural improvement intended to preserve behavior."
+title: "[Refactor] "
+labels: ["type:refactor"]
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: Structural problem}
+    validations: {required: true}
+  - type: textarea
+    id: invariants
+    attributes: {label: Behavior/API invariants}
+    validations: {required: true}
+  - type: textarea
+    id: scope
+    attributes: {label: Scope / boundaries}
+    validations: {required: true}
+  - type: textarea
+    id: validation
+    attributes: {label: Equivalence validation}
+    validations: {required: true}

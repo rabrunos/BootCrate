@@ -1,0 +1,30 @@
+name: "Task"
+description: "Bounded executable work, including tooling tasks."
+title: "[Task] "
+labels: ["type:task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: "Outcome, not a speculative implementation plan."
+    validations: {required: true}
+  - type: textarea
+    id: scope
+    attributes: {label: In scope}
+    validations: {required: true}
+  - type: textarea
+    id: non_goals
+    attributes: {label: Non-goals / do-not-touch}
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: "- [ ] ..."
+    validations: {required: true}
+  - type: textarea
+    id: validation
+    attributes: {label: Validation / owner smoke}
+  - type: input
+    id: related
+    attributes: {label: Related Epic / Milestone / Issues}

@@ -1,0 +1,22 @@
+name: "Investigation"
+description: "Evidence-gathering work that should end in findings or a decision."
+title: "[Investigation] "
+labels: ["type:investigation"]
+body:
+  - type: textarea
+    id: question
+    attributes: {label: Question to answer}
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes: {label: Required evidence}
+    validations: {required: true}
+  - type: textarea
+    id: constraints
+    attributes: {label: Constraints / no-change boundaries}
+  - type: textarea
+    id: output
+    attributes:
+      label: Expected output
+      description: "Findings, options, recommendation, unknowns."
+    validations: {required: true}

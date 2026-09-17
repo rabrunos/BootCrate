@@ -1,0 +1,25 @@
+name: "Release"
+description: "Prepare and track a release. Real publication requires explicit owner authorization."
+title: "[Release] "
+labels: ["type:release"]
+body:
+  - type: input
+    id: target
+    attributes: {label: Version / release target}
+    validations: {required: true}
+  - type: textarea
+    id: payload
+    attributes: {label: Payload / source of truth}
+    validations: {required: true}
+  - type: textarea
+    id: checks
+    attributes:
+      label: Release checks
+      placeholder: "- [ ] build\n- [ ] tests\n- [ ] package/integrity\n- [ ] notes\n- [ ] owner smoke if required"
+    validations: {required: true}
+  - type: textarea
+    id: destinations
+    attributes: {label: Publication destinations}
+  - type: markdown
+    attributes:
+      value: "Packaging/preflight does not authorize publication. The implementation task must explicitly authorize any real external upload."

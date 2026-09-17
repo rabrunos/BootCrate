@@ -1,0 +1,33 @@
+{
+  "$schema": "./schemas/project-profile.schema.json",
+  "schema": "project-profile/v1",
+  "project": {
+    "name": "<materialize>",
+    "kind": "<materialize>",
+    "summary": "<materialize>"
+  },
+  "owner": {
+    "repository_language": "en",
+    "report_language": "pt-BR"
+  },
+  "platforms": [],
+  "languages": [],
+  "toolchain": [],
+  "constraints": [],
+  "architecture_invariants": [],
+  "validation": {
+    "canonical_capabilities": []
+  },
+  "workflow": {
+    "tracking": "github_issues",
+    "primary_orchestrator": "chatgpt",
+    "fallback_planners": [
+      "codex_plan",
+      "claude_plan"
+    ],
+    "implementation_harnesses": [
+      "codex",
+      "claude_code"
+    ]
+  }
+}

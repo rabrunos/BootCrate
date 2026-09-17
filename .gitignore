@@ -1,0 +1,7 @@
+.local/
+.temp/
+**/.claude/settings.local.json
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
