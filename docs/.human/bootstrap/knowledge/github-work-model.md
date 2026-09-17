@@ -26,3 +26,32 @@ GitHub Issues are the only active-work state system BootCrate requires:
 - Release — release tracking.
 
 Implementation agents update/comment only when the active contract says so. Owner/ChatGPT normally decides closure after implementation evidence and required manual validation are reviewed.
+
+## Live GitHub metadata
+
+Repository files and live GitHub metadata are different things.
+
+Tracked files such as:
+
+```text
+.github/ISSUE_TEMPLATE/*.yml
+.github/labels.yml
+```
+
+travel with Git history/copies, but live repository objects such as Issues, Milestones, and label definitions belong to the destination repository.
+
+BootCrate therefore does not depend on the exact metadata inheritance behavior of forks, templates, ZIP uploads, or future GitHub changes.
+
+During materialization:
+
+1. ChatGPT decides the final project Issue taxonomy and required initial work.
+2. The executor adapts Issue Forms and `.github/labels.yml`.
+3. `.github/labels.yml` becomes the declarative desired state for project labels.
+4. The executor uses an authenticated GitHub write capability to reconcile the actual repository labels.
+5. Reconciliation creates missing labels, updates configured metadata, and preserves unrelated labels by default.
+6. The executor verifies the live labels before creating Issues that reference them.
+7. It then creates only the Milestones/Issues/comments explicitly requested by the approved materialization contract.
+
+This synchronization must be idempotent so retrying materialization does not duplicate or damage repository metadata.
+
+The owner may need to authorize the GitHub integration or authenticate a CLI, but manually recreating the label catalog is not the intended workflow.

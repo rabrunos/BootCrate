@@ -259,7 +259,18 @@ BootCrate ships generic Issue Forms for:
 
 GitHub Milestones are delivery targets and are created when the project needs them. Tooling work normally uses a Task; it does not need a separate Issue type.
 
-`.github/labels.yml` is a seed/specification file. Uploading/forking the repository does not by itself guarantee those labels are created in the target repository; create/apply them through GitHub when materializing the project.
+`.github/labels.yml` is the declarative desired state for project labels.
+
+Do **not** make the owner manually recreate labels after a fork, ZIP upload, or fresh repository setup. During materialization, the implementation harness must reconcile the live GitHub labels to the adapted `.github/labels.yml` using an authenticated GitHub write capability already available to the environment (for example a native GitHub integration, GitHub CLI, or the GitHub REST API).
+
+The reconciliation is intentionally idempotent:
+
+- create required labels that are missing;
+- update matching labels when color/description differs;
+- preserve unrelated existing labels unless the owner-approved task explicitly removes them;
+- verify the live labels before creating Issues that depend on them.
+
+Initial project Issues and Milestones are also repository metadata, not files. ChatGPT decides what should exist from the approved project plan, and the materialization task creates them programmatically when required.
 
 ## What BootCrate intentionally does not add by default
 

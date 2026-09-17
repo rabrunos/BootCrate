@@ -1,21 +1,43 @@
-# Seed label specification. Apply/create these through GitHub during materialization when relevant.
+# Declarative desired state for project labels.
+# During materialization, adapt this list to the actual project and reconcile the live GitHub labels.
+# Reconciliation should create missing labels, update matching metadata, and preserve unrelated labels by default.
+
 - name: "type:epic"
   color: "5319e7"
+  description: "Large coordinated product or technical outcome."
+
 - name: "type:feature"
   color: "1d76db"
+  description: "User-facing or product capability."
+
 - name: "type:task"
   color: "0e8a16"
+  description: "Bounded executable work, including tooling."
+
 - name: "type:bug"
   color: "d73a4a"
+  description: "Unexpected or incorrect behavior."
+
 - name: "type:investigation"
   color: "fbca04"
+  description: "Evidence-gathering work that should end in findings or a decision."
+
 - name: "type:refactor"
   color: "c5def5"
+  description: "Structural improvement intended to preserve behavior."
+
 - name: "type:release"
   color: "0052cc"
+  description: "Release preparation and tracking."
+
 - name: "status:blocked"
   color: "b60205"
+  description: "Cannot proceed until a dependency or blocker is resolved."
+
 - name: "status:needs-owner"
   color: "f9d0c4"
+  description: "Requires an owner/product decision or approval."
+
 - name: "status:needs-validation"
   color: "fef2c0"
+  description: "Implementation exists but required validation or owner smoke remains."

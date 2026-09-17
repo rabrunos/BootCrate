@@ -77,6 +77,8 @@ Before the discovery conversation becomes authoritative, make sure the BootCrate
 
 ChatGPT uses GitHub as its canonical observable repository state.
 
+At this stage, the owner does **not** need to manually recreate BootCrate labels, Milestones, or Issues in the new repository. Live GitHub metadata is reconciled later by the materialization task after ChatGPT has decided what the actual project needs.
+
 The expected solo-development discipline is:
 
 ```text
@@ -334,7 +336,8 @@ discuss product/architecture choices with owner
 define validation approach
 decide Codex/Claude/both
 decide Main/Worker/Scout needs
-define Issue model/milestones/epics where useful
+define the final Issue Forms/labels/Milestones taxonomy
+define initial Epics/Features/Tasks/Bugs/Investigations where useful
 ```
 
 ChatGPT should not pretend to verify facts that only the execution environment can observe. Those are marked for local verification later.
@@ -381,9 +384,40 @@ The executor:
 2. confirms any facts that were marked local-only;
 3. materializes the approved architecture;
 4. creates/adapts only useful project tooling;
-5. validates;
-6. performs requested Git/Issue actions;
-7. produces the final report in the owner-selected language.
+5. adapts the final Issue Forms and `.github/labels.yml`;
+6. reconciles the **live GitHub labels** to that desired state using an authenticated writable GitHub interface available to the executor;
+7. verifies the live labels, then creates requested Milestones/Issues/comments from the materialization contract;
+8. validates the resulting project;
+9. performs the requested commit/push actions;
+10. produces the final report in the owner-selected language.
+
+### GitHub metadata is bootstrap work, not owner busywork
+
+The normal path must not tell the owner to click through GitHub and manually create project labels one by one.
+
+The executor should use the least-complex authenticated GitHub write path already available, such as:
+
+```text
+native GitHub integration / plugin
+        ↓ otherwise
+GitHub CLI (`gh`)
+        ↓ otherwise
+GitHub REST API
+```
+
+Do not introduce MCP or a permanent GitHub automation framework merely to provision labels.
+
+Label synchronization must be safe to run more than once:
+
+```text
+missing required label    → create
+same label, wrong metadata → update
+unrelated existing label  → preserve by default
+```
+
+After synchronization, list/verify the actual repository labels before creating Issues whose forms reference them.
+
+If no authenticated GitHub write path is available, report that bootstrap is blocked on **GitHub write authorization/tooling**. The owner may need to authorize a connector or authenticate `gh`, but manual label-by-label creation is not the intended BootCrate workflow.
 
 ## 21. Return the implementation report to ChatGPT
 
@@ -521,6 +555,8 @@ After materialization:
 
 - [ ] Deterministic validation passed or limitations are explicit.
 - [ ] Baseline committed and pushed.
+- [ ] Live GitHub labels match the final `.github/labels.yml`.
+- [ ] Required initial Milestones/Issues were created programmatically, or the approved plan explicitly requires none.
 - [ ] Owner/ChatGPT reviewed the result.
 - [ ] Bootstrap directory removed.
 - [ ] Raw intake removed.
