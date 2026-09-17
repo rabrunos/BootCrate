@@ -4,6 +4,20 @@ BootCrate is a stack-neutral bootstrap for AI-assisted software projects.
 
 It does **not** try to be one starter project for every technology. It provides a disciplined discovery and materialization process so a new repository can become the right development environment for its actual project.
 
+## New project? Start here
+
+If you just copied, forked, or cloned BootCrate for a new project, do not start implementing yet.
+
+Follow:
+
+**[`docs/.human/bootstrap/START_HERE.md`](docs/.human/bootstrap/START_HERE.md)**
+
+That guide covers the complete initial setup: GitHub, ChatGPT Project, project-only memory, GitHub access, optional Codex/Claude cloud execution, intake, discovery, materialization, validation, and final pruning.
+
+The normal rule is:
+
+> **Set up the remote project context first, then run discovery, then materialize.**
+
 ## Core philosophy
 
 > Use abundant intelligence before consuming limited implementation intelligence.
@@ -60,17 +74,22 @@ The expected solo workflow keeps GitHub and local state synchronized. A task con
 
 ## Bootstrap lifecycle
 
-1. Fork/copy BootCrate into a new repository.
-2. Open `docs/.human/bootstrap/app/index.html` locally.
-3. Complete the bilingual project intake. `Unknown` is a valid answer.
-4. Export the validated `project-intake.json`.
-5. Create/use a ChatGPT Project and point its short instructions at the repository.
-6. Give ChatGPT the intake. ChatGPT reads GitHub, researches unknowns, discusses architecture with the owner, and reaches explicit agreement.
-7. ChatGPT uses `docs/.human/bootstrap/templates/bootstrap-materialization.md` to produce the first implementation task.
-8. Run that task in Codex or Claude Code.
-9. The implementation harness materializes only what the project needs.
-10. Validate, commit, and push.
-11. **Remove all BootCrate/bootstrap-only material from the materialized project.** Git history preserves the bootstrap history.
+The detailed operational procedure is in [`docs/.human/bootstrap/START_HERE.md`](docs/.human/bootstrap/START_HERE.md).
+
+At a high level:
+
+1. Create/prepare the project's GitHub repository and local checkout.
+2. Create the ChatGPT Project, use project-only memory, connect GitHub, and install the short BootCrate project instructions.
+3. Choose the implementation harnesses you actually intend to use.
+4. Open `docs/.human/bootstrap/app/index.html` locally and complete the bilingual intake.
+5. Export the validated `project-intake.json`. Do not make it permanent project state.
+6. Give the intake to the ChatGPT Project.
+7. ChatGPT reads GitHub, researches unknowns, discusses architecture with the owner, and reaches explicit agreement.
+8. ChatGPT uses `docs/.human/bootstrap/templates/bootstrap-materialization.md` to produce the first implementation task.
+9. Run that task in Codex or Claude Code.
+10. The implementation harness materializes only what the project needs.
+11. Validate, commit, and push.
+12. **Remove all BootCrate/bootstrap-only material from the materialized project.** Git history preserves the bootstrap history.
 
 ## RAW → NORMALIZED → EXECUTION
 
