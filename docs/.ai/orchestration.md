@@ -8,12 +8,13 @@ This file becomes the concise project-specific orchestration contract after mate
 2. ChatGPT inspects the current GitHub repository before project-specific technical guidance and reads relevant Issues when work state/decisions matter.
 3. ChatGPT researches external facts when needed.
 4. ChatGPT resolves product/architecture ambiguity with the owner.
-5. ChatGPT uses `TASK_POLICY.md` and the appropriate template under `prompts/`.
-6. ChatGPT produces the **smallest sufficient** implementation contract.
-7. Owner sends it to Codex or Claude Code.
-8. Executor verifies local branch/HEAD/status/diff, implements, validates, commits/pushes as instructed, and performs only explicit Issue actions.
-9. Owner sends the result/report back to ChatGPT when review or follow-up is needed.
-10. Owner/ChatGPT normally decides Issue closure after acceptance/manual smoke is actually satisfied.
+5. ChatGPT reads the project's canonical version source, decides whether the request is a mutating root task or a continuation/read-only task, and assigns/preserves the Target Version according to `TASK_POLICY.md`.
+6. ChatGPT uses `TASK_POLICY.md` and the appropriate template under `prompts/`.
+7. ChatGPT produces the **smallest sufficient** implementation contract with the required version identity.
+8. Owner sends it to Codex or Claude Code.
+9. Executor verifies local branch/HEAD/status/diff and the local canonical version source, implements, validates, versions, commits/pushes as instructed, and performs only explicit Issue actions.
+10. Owner sends the result/report back to ChatGPT when review or follow-up is needed.
+11. Owner/ChatGPT normally decides Issue closure after acceptance/manual smoke is actually satisfied.
 
 ## Intelligence compression
 
@@ -54,3 +55,21 @@ Small tasks still may pass through ChatGPT. Optimize by shortening the contract,
 ## Issues
 
 GitHub Issues own active work state. Do not generate project-status/roadmap/decision-index files that duplicate them.
+
+
+## Target Version identity
+
+For every mutating root task, ChatGPT assigns the Target Version before execution.
+
+Use the same exact version token across the execution chain:
+
+```text
+PROMPT        # [v0.4] ...
+CONTINUATION  # [v0.4] ...
+COMMIT        [v0.4] ...
+REPORT        # [v0.4] ...
+```
+
+Only the token must match; the remaining title text may differ and the report may use the owner-facing language.
+
+Continuations and corrective work for the same unaccepted target keep the existing Target Version. A new independent mutating root task receives a new Target Version. Read-only work does not bump the project version.
