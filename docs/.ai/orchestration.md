@@ -46,6 +46,21 @@ Use `deep` for external/native/modding/reverse-engineering or difficult local-on
 
 Discovery refines technical implementation inside owner-approved direction. It does not silently reopen product decisions.
 
+## Local configuration routing
+
+When the project depends on machine-local paths/resources, ChatGPT defines the portable requirement, not a guessed absolute path.
+
+The executor determines the actual machine value and materializes a reusable setup contract:
+
+```text
+explicit override
+→ persisted .local/config value
+→ safe auto-detection
+→ guided/actionable configuration
+```
+
+ChatGPT should expect fresh-machine validation when this local state is required for build/run/install/validation.
+
 ## Repository freshness
 
 When practical, include the GitHub commit SHA used as repository basis. The executor compares it to local HEAD and inspects local changes rather than re-reading the repository remotely.
