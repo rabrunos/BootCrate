@@ -278,6 +278,35 @@ Real external publication is never part of validation and requires explicit owne
 
 The directory does not need to exist until a project needs it.
 
+## Machine-local configuration
+
+Machine-specific paths and environment values never belong in tracked project configuration merely because one developer needed them.
+
+When a materialized project depends on a local game install, SDK, executable, emulator, database, external tool, or similar machine-local resource, BootCrate uses two layers:
+
+```text
+tracked contract
+        ↓
+docs/.ai/LOCAL_WORKSPACE.md + project scripts/validation
+
+machine-local values
+        ↓
+.local/config/...
+```
+
+The tracked project documents what is required and how it is validated. Actual machine paths stay ignored by Git.
+
+Preferred resolution order is:
+
+1. explicit command/environment override when the project supports one;
+2. valid persisted value under `.local/config/`;
+3. safe automatic detection;
+4. actionable configuration/error flow.
+
+When useful, `doctor --configure` (or the native equivalent) should guide configuration instead of requiring a nontechnical user to hand-edit JSON.
+
+Projects that depend on machine-local state must validate the fresh-machine experience: missing config, invalid/stale config, unique auto-detection, ambiguous candidates, and no candidates.
+
 ## GitHub Issues
 
 BootCrate ships generic Issue Forms for:
