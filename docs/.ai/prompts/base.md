@@ -2,9 +2,17 @@
 
 Use `../TASK_POLICY.md`. Remove every section the task does not need.
 
+For a mutating root task, the H1 and version fields are mandatory. Continuations preserve the active Target Version. Strictly read-only work may identify the version being observed without creating a new target.
+
 ## Compact shape
 
-Task: <SHORT_TITLE>
+# [<TARGET_VERSION>] <SHORT_TITLE>
+
+Current version:
+<CURRENT_ACCEPTED_VERSION>
+
+Target version:
+<TARGET_VERSION>
 
 Goal:
 <EXACT_OUTCOME>
@@ -42,6 +50,7 @@ Assumptions:
 
 Acceptance criteria:
 - <MEASURABLE_CRITERION>
+- canonical version source equals <TARGET_VERSION> for a mutating root task
 
 Non-goals:
 - <EXPLICIT_NON_GOAL>
@@ -59,10 +68,10 @@ Validation delta:
 <CHECKS_BEYOND_REPOSITORY_BASELINE>
 
 Commit and push:
-<REQUIREMENT>
+<REQUIREMENT; MUTATING ROOT TASK COMMIT SUBJECT STARTS WITH [<TARGET_VERSION>]>
 
 GitHub Issue actions:
 <EXACT_COMMENT/UPDATE/LEAVE-OPEN ACTIONS; CLOSURE ONLY WHEN EXPLICITLY AUTHORIZED>
 
 Final report:
-<PROJECT-PROFILE REPORT LANGUAGE; concise behavior/files, validation, commit/push, Issue actions, limitations/follow-up>
+<PROJECT-PROFILE REPORT LANGUAGE; H1 STARTS WITH EXACT [<TARGET_VERSION>] TOKEN; concise behavior/files, version source, validation, commit/push, Issue actions, limitations/follow-up>
