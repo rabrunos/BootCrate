@@ -8,7 +8,8 @@
     "schema",
     "project",
     "owner",
-    "workflow"
+    "workflow",
+    "versioning"
   ],
   "properties": {
     "$schema": {
@@ -145,6 +146,44 @@
           },
           "minItems": 1,
           "uniqueItems": true
+        }
+      }
+    },
+    "versioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "canonical_source",
+        "format",
+        "target_version_in_prompt_h1",
+        "target_version_in_commit",
+        "target_version_in_report_h1",
+        "continuations_reuse_target"
+      ],
+      "properties": {
+        "required": {
+          "const": true
+        },
+        "canonical_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_version_in_prompt_h1": {
+          "const": true
+        },
+        "target_version_in_commit": {
+          "const": true
+        },
+        "target_version_in_report_h1": {
+          "const": true
+        },
+        "continuations_reuse_target": {
+          "const": true
         }
       }
     }
