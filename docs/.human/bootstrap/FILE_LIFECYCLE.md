@@ -44,9 +44,9 @@ Examples, only when useful:
 
 ## Local-only / generated evidence
 
-Use ignored `.local/` for binaries, decompiled/extracted trees, symbol indexes, raw/sanitized logs, research tools, caches, build artifacts, screenshots/video, and temporary diagnostics.
+Use ignored `.local/` for machine-local configuration values, binaries, decompiled/extracted trees, symbol indexes, raw/sanitized logs, research tools, caches, build artifacts, screenshots/video, and temporary diagnostics.
 
-Promote only compact stable conclusions into tracked project knowledge.
+Machine-local configuration values are disposable/recreatable per checkout and must not be required from Git history. Promote only portable configuration rules and compact stable conclusions into tracked project knowledge.
 
 ## Permanent stable in a materialized project
 
