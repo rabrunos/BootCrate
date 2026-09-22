@@ -29,5 +29,14 @@
       "codex",
       "claude_code"
     ]
+  },
+  "versioning": {
+    "required": true,
+    "canonical_source": "<materialize>",
+    "format": "<materialize>",
+    "target_version_in_prompt_h1": true,
+    "target_version_in_commit": true,
+    "target_version_in_report_h1": true,
+    "continuations_reuse_target": true
   }
 }
