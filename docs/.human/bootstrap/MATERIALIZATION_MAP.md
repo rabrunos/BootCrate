@@ -114,6 +114,36 @@ The final project may materialize:
 
 The owner should not manually reproduce metadata that the executor can create safely.
 
+### Machine-local configuration contract
+
+Projects that require local installations/resources should materialize a portable contract rather than a shared absolute path.
+
+Tracked artifacts may include:
+
+- specialized `docs/.ai/LOCAL_WORKSPACE.md`;
+- doctor/configure/setup behavior;
+- validation rules for required executables/manifests/SDKs;
+- auto-detection rules;
+- environment/CLI override names;
+- non-interactive failure behavior.
+
+Actual values are stored only under ignored `.local/config/` (or an ecosystem-native local-only equivalent).
+
+Example:
+
+```text
+TRACKED:
+required resource = game_root
+validation = expected executable + manifest
+detection = launcher libraries + known platform locations
+
+LOCAL:
+.local/config/project.json
+game_root = D:\...\Installed Game
+```
+
+The tracked project must remain usable when cloned on another machine with a different path.
+
 ### Local-only discovery/evidence
 
 Never commit bulky/raw local evidence merely to help AI.
