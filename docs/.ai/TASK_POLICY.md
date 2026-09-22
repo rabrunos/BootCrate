@@ -64,6 +64,21 @@ The orchestrator also classifies local discovery:
 
 Local discovery should answer specific blocking questions and stop. Do not explore broadly merely because tools are available.
 
+## Machine-local portability
+
+When a task/project depends on a machine-local resource, the contract should identify the required resource but must not embed the orchestrator's or owner's absolute local path as shared project state.
+
+Materialized projects should define:
+
+- tracked contract: required resource/key and validation;
+- ignored local value location when persistence is useful;
+- explicit override behavior when useful;
+- safe auto-detection behavior when practical;
+- guided/actionable setup when auto-detection is insufficient;
+- fresh-machine negative-path validation.
+
+A local path discovered during execution is evidence/configuration for that machine, not a stable project fact unless only the portable detection rule is promoted.
+
 ## Risk
 
 Risk is independent of effort:
