@@ -17,11 +17,17 @@ Owner languages:
 - repository technical language: <...>
 - implementation final report language: <...>
 
+Versioning:
+- initial/current accepted version: <...>
+- target version for this materialization: <...>
+- canonical version source: <ECOSYSTEM_NATIVE_SOURCE_OR_MINIMAL_VERSION_FILE>
+- version format/convention: <...>
+
 Materialization requirements:
 
 1. Inspect local branch, HEAD, status, and diff first. Preserve unrelated local changes.
 2. Use the approved architecture; do not reopen resolved owner decisions unless local evidence proves the path unsafe/impossible.
-3. Build the final normalized `docs/.ai/project-profile.json` from stable resolved facts only. Do not put roadmap/status/open work there; use GitHub Issues.
+3. Establish mandatory project versioning. Prefer an ecosystem-native canonical version source; if none exists, create the smallest suitable source such as `VERSION`. Set it to the materialization Target Version. Build the final normalized `docs/.ai/project-profile.json` from stable resolved facts and versioning policy only; do not duplicate the current version value there and do not put roadmap/status/open work there.
 4. Specialize `docs/.ai/orchestration.md`, `TASK_POLICY.md`, `PLANNING_FALLBACK.md`, `CONTEXT_INDEX.md`, and prompt templates. Keep them concise.
 5. Adapt Issue Forms and `.github/labels.yml` to the actual project; remove irrelevant forms/labels from the desired specification. Tooling normally uses Task.
 6. Materialize the required live GitHub repository metadata as described below. The owner should not need to manually create labels one by one.
@@ -72,6 +78,8 @@ Pruning — required for completion:
 - search tracked files and remove unintended `BootCrate` or bootstrap-history references.
 
 Validation:
+- verify the final project has exactly one documented canonical version source and that it equals the materialization Target Version;
+- verify any required version mirrors are synchronized with that canonical source;
 - validate JSON/TOML/YAML/config files deterministically where applicable;
 - verify `.github/labels.yml` is structurally readable by the chosen synchronization method;
 - verify the required live GitHub labels exist with the intended metadata after reconciliation;
@@ -89,4 +97,4 @@ Issue closure:
 Do not close implementation Issues unless this materialization contract explicitly authorizes it. Owner/ChatGPT normally reviews the implementation report and required manual smoke first.
 
 Final report:
-Use the owner-selected report language. Report changed files/behavior, harness configuration, live GitHub label synchronization, requested Issue/Milestone actions, validation, commit/push, limitations, and owner follow-up concisely.
+The H1 must begin with the exact materialization Target Version token. Use the owner-selected report language for the remaining title/body. Report changed files/behavior, resulting canonical version/source, harness configuration, live GitHub label synchronization, requested Issue/Milestone actions, validation, commit/push, limitations, and owner follow-up concisely.
