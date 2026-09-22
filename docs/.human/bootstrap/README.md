@@ -8,28 +8,22 @@ If you are starting a new project from BootCrate, read:
 
 **[`START_HERE.md`](START_HERE.md)**
 
-It is the operational onboarding guide covering:
+For the complete execution/materialization model and possible outputs, read:
 
-- GitHub repository preparation;
-- ChatGPT Project setup and project-only memory;
-- GitHub connection and ChatGPT Project instructions;
-- optional Codex/Claude/local/cloud setup;
-- intake;
-- discovery;
-- materialization;
-- validation and final pruning.
+**[`MATERIALIZATION_MAP.md`](MATERIALIZATION_MAP.md)**
 
-Do not start product implementation before completing the relevant bootstrap phases.
+It covers how remote planning, local discovery, agent effort, generated project maps/scripts, GitHub metadata, validation, and pruning fit together.
 
 Normal downstream development should not load this directory. Successful materialization removes this entire directory and the raw intake; Git history preserves the origin.
 
 ## Contents
 
 - `START_HERE.md` — step-by-step onboarding and bootstrap procedure.
+- `MATERIALIZATION_MAP.md` — complete materialization pipeline and artifact catalog.
 - `app/` — offline bilingual project intake.
 - `schemas/` — deterministic structure for exported intake.
 - `knowledge/` — bootstrap heuristics for ChatGPT/materialization, not project facts.
-- `library/` — canonical Main/Worker/Scout and skill semantics used to generate only the required harness adapters.
+- `library/` — canonical Main/Worker/Scout and skill semantics.
 - `templates/` — ChatGPT Project and materialization handoff templates.
 
 ## Boundary
@@ -37,10 +31,13 @@ Normal downstream development should not load this directory. Successful materia
 The app collects intent, preferences, constraints, and known facts. It does **not** choose architecture.
 
 ChatGPT is the normal primary orchestrator:
+
 1. inspect GitHub;
 2. read the intake;
 3. research material unknowns;
 4. discuss options with the owner;
-5. resolve decisions;
-6. promote open work into GitHub Issues when appropriate;
+5. resolve product/architecture direction;
+6. classify execution effort and local discovery;
 7. produce a proportional materialization contract.
+
+The executor then verifies local truth, performs only the required local discovery, specializes the baseline, validates it, and prunes bootstrap-only material.

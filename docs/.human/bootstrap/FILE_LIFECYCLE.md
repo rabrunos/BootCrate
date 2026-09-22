@@ -5,7 +5,7 @@
 - `docs/.human/bootstrap/**`
 - raw `project-intake.json`
 - generic library role/skill definitions
-- this BootCrate README/history/branding
+- BootCrate README/history/branding
 
 ## Skeleton — adapt, keep only if the materialized project uses it
 
@@ -26,17 +26,35 @@
 - `.github/labels.yml`
 - `scripts/README.md`
 
+## Generated tracked artifacts — project-specific
+
+Examples, only when useful:
+
+- source/build/project manifests;
+- canonical version source;
+- CI/workflows;
+- build/test/run/package/install/diagnostics/publish scripts;
+- source architecture map;
+- validation/tooling map;
+- external-target/native/runtime map;
+- API/command/data/save/release maps;
+- tests and fixtures;
+- packaging/install configuration;
+- specialized agents/skills.
+
+## Local-only / generated evidence
+
+Use ignored `.local/` for binaries, decompiled/extracted trees, symbol indexes, raw/sanitized logs, research tools, caches, build artifacts, screenshots/video, and temporary diagnostics.
+
+Promote only compact stable conclusions into tracked project knowledge.
+
 ## Permanent stable in a materialized project
 
-Only final project invariants such as harness instructions, safety/publication boundaries, and project workflow rules. These change rarely.
+Only final project invariants such as harness instructions, versioning rules, safety/publication boundaries, and stable workflow rules.
 
 ## Permanent mutable
 
-Source/config/tests, context routing, project profile when stable facts/toolchain change, prompt templates when project workflow changes, and GitHub Issues for active work/status.
-
-## Generated/project-specific
-
-Build/run/test scripts, CI, packaging, diagnostics reducers, architecture maps, release tooling, integration configuration, and additional skills/agents only when the actual project requires them.
+Source/config/tests, version source, context routing, project profile when stable facts/toolchain change, prompt templates when workflow changes, and GitHub Issues for active work/status.
 
 ## Pruning rule
 

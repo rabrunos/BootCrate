@@ -7,17 +7,24 @@ Possible project-specific subdirectories:
 ```text
 .local/
   config/
+  tools/
+  research/
+    raw/
+    indexes/
+    summaries/
   logs/
     raw/
     sanitized/
     summaries/
-  tools/
-  research/
   cache/
   artifacts/
   temp/
 ```
 
-Materialization should document only the subdirectories the actual project uses.
+Materialization should document/create only the subdirectories the actual project uses.
 
-Prefer compact structured evidence for AI consumption. Keep raw logs, large extracted/decompiled trees, caches, binaries, and machine-specific data out of Git.
+Local discovery may place installed-target indexes, extracted/decompiled evidence, SDK/tool downloads, symbol/resource indexes, screenshots/video, and investigation outputs here.
+
+Prefer compact structured evidence for AI consumption. Keep raw logs, large extracted/decompiled trees, caches, binaries, credentials, and machine-specific data out of Git.
+
+Promote only stable reusable conclusions into tracked project maps/scripts.

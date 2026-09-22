@@ -6,10 +6,13 @@ Do not store project status, roadmap, open work, or task history here. GitHub Is
 
 During materialization, replace the examples with the project's real context map:
 
-- `project-profile.json` — stable normalized project identity, constraints, toolchain, workflow configuration.
-- architecture map — read only for architecture/cross-module work.
-- validation/tooling map — read for build/test/dev-environment tasks.
-- external-target/native map — read only for relevant integration/modding/native tasks.
+- `project-profile.json` — stable normalized project identity, constraints, toolchain, workflow/version configuration.
+- source architecture map — architecture/cross-module work.
+- validation/tooling map — build/test/dev-environment tasks.
+- external-target/native/runtime map — only for relevant integration/modding/native work.
+- API/framework map — only when repeated API discovery would otherwise consume context.
+- command cookbook — only when lifecycle/build/run/install operations are non-obvious.
+- data/save/release maps — only when the project actually has those domains.
 - human design material — ChatGPT/owner only unless an implementation task explicitly needs a promoted subset.
 
-The goal is selective context loading, not documentation discovery by brute force.
+Discovery may create these maps, but only when future tasks benefit from them. The goal is selective context loading, not documentation generation or discovery by brute force.

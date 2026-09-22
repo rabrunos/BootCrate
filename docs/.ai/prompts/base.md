@@ -2,7 +2,7 @@
 
 Use `../TASK_POLICY.md`. Remove every section the task does not need.
 
-For a mutating root task, the H1 and version fields are mandatory. Continuations preserve the active Target Version. Strictly read-only work may identify the version being observed without creating a new target.
+For a mutating root task, H1/version fields are mandatory. Continuations preserve the active Target Version. Strictly read-only work may identify the observed version without creating a new target.
 
 ## Compact shape
 
@@ -17,11 +17,20 @@ Target version:
 Goal:
 <EXACT_OUTCOME>
 
+Execution policy:
+- effort: <E0|E1|E2|E3>
+- main effort: <high|xhigh>
+- local discovery: <none|targeted|deep>
+- risk: <normal|elevated>
+
 Repository basis:
 <OPTIONAL_GITHUB_BRANCH_AND_SHA_USED_BY_ORCHESTRATOR>
 
 Target / likely location:
 <ONLY_WHEN_KNOWN_AND_USEFUL>
+
+Local discovery questions:
+<OMIT_WHEN_NONE; ONLY LOCAL QUESTIONS THAT BLOCK RELIABLE EXECUTION>
 
 Scope boundary:
 <DO_NOT_TOUCH_OR_NONE>
@@ -55,23 +64,20 @@ Acceptance criteria:
 Non-goals:
 - <EXPLICIT_NON_GOAL>
 
-Execution policy:
-- effort: <E0|E1|E2|E3>
-- risk: <normal|elevated>
-- delegation: <OMIT_WHEN_DEFAULT_NONE>
-- independent review: <OMIT_UNLESS_REQUIRED>
+Delegation guidance:
+<OMIT_WHEN DEFAULT NONE; USE WORKER/SCOUT ONLY WHEN IT SAVES MAIN WORK>
 
 Task-specific constraints:
-<ONLY_CONSTRAINTS_NOT_ALREADY_OWNED_BY_REPOSITORY_RULES>
+<ONLY_CONSTRAINTS NOT ALREADY OWNED BY REPOSITORY RULES>
 
 Validation delta:
-<CHECKS_BEYOND_REPOSITORY_BASELINE>
+<CHECKS BEYOND REPOSITORY BASELINE>
 
 Commit and push:
 <REQUIREMENT; MUTATING ROOT TASK COMMIT SUBJECT STARTS WITH [<TARGET_VERSION>]>
 
 GitHub Issue actions:
-<EXACT_COMMENT/UPDATE/LEAVE-OPEN ACTIONS; CLOSURE ONLY WHEN EXPLICITLY AUTHORIZED>
+<EXACT COMMENT/UPDATE/LEAVE-OPEN ACTIONS; CLOSURE ONLY WHEN EXPLICITLY AUTHORIZED>
 
 Final report:
-<PROJECT-PROFILE REPORT LANGUAGE; H1 STARTS WITH EXACT [<TARGET_VERSION>] TOKEN; concise behavior/files, version source, validation, commit/push, Issue actions, limitations/follow-up>
+<PROJECT-PROFILE REPORT LANGUAGE; H1 STARTS WITH EXACT [<TARGET_VERSION>] TOKEN; concise behavior/files, version source, discovery findings promoted to project context, validation, commit/push, Issue actions, limitations/follow-up>

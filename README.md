@@ -190,23 +190,39 @@ For dual-harness projects, Claude Code can import `AGENTS.md` from `CLAUDE.md`, 
 
 Tool formats and precedence change over time. Materialization must verify the current official documentation and, when possible, the **effective loaded configuration**, not merely assume a written file is active.
 
+## Adaptive local discovery
+
+Remote planning cannot prove local-only facts such as installed SDKs, game binaries, engine/runtime details, generated files, local logs, or the exact APIs exposed by an installed target.
+
+Materialization therefore classifies local discovery as:
+
+- `none` — remote/repository evidence is already sufficient;
+- `targeted` — confirm toolchain, scaffold/runtime, paths, commands, or integration points;
+- `deep` — inspect unfamiliar/native/external targets, modding surfaces, binaries, packages, or decompiled evidence before finalizing the baseline.
+
+For `targeted` or `deep` discovery, the executor gathers the smallest useful local evidence, reduces noisy output, and then materializes only the project-specific maps/scripts/tooling justified by that evidence.
+
+See `docs/.human/bootstrap/MATERIALIZATION_MAP.md` and `docs/.human/bootstrap/knowledge/local-discovery.md`.
+
 ## Agents
 
 The default topology is intentionally small:
 
 ```text
 Main
-├── Worker   (bounded, cheap/mechanical work)
-└── Scout    (optional, interpretive investigation)
+├── High   — default implementation reasoning
+├── XHigh  — escalation mode for E3/deep work
+├── Worker — bounded cheap/mechanical work
+└── Scout  — optional interpretive investigation
 ```
 
-- **Main** owns the task, ambiguity, difficult implementation, integration, and final judgment.
-- **Worker** locates, executes, extracts, compares, builds, tests, and reports concise evidence.
-- **Scout** is optional and exists for unfamiliar APIs, native/decompiled evidence, dependency/runtime investigation, or diagnostics requiring more interpretation.
+**High and XHigh are two effort modes of the same Main role, not two duplicated agents.** Main owns the task, ambiguity, implementation, integration, and final judgment. High is the normal mode for E1/E2 work; XHigh is reserved for E3 work such as difficult architecture, deep debugging, unfamiliar native/runtime behavior, or complex reverse engineering.
 
-No permanent Reviewer agent is required. High-risk tasks may request an independent review pass with fresh context.
+Worker locates, executes, extracts, compares, builds, tests, and reports concise evidence. Scout is optional and exists for unfamiliar APIs, native/decompiled evidence, dependency/runtime investigation, or diagnostics requiring more interpretation.
 
-Subagents should replace expensive Main work, not duplicate it.
+The task contract states the desired Main effort and local-discovery depth. Materialization maps those semantics to the current Codex/Claude mechanisms and verifies the effective configuration.
+
+No permanent Reviewer agent is required. High-risk tasks may request an independent fresh-context review. Subagents should replace expensive Main work, not duplicate it.
 
 ## Deterministic-first validation
 
@@ -329,4 +345,4 @@ The intended default for this repository is English technical content and `pt-BR
 
 ## Current status
 
-This package is **BootCrate v0.4**. The repository's canonical version source is `VERSION`.
+This package is **BootCrate v0.5**. The repository's canonical version source is `VERSION`.
