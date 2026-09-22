@@ -374,4 +374,4 @@ The intended default for this repository is English technical content and `pt-BR
 
 ## Current status
 
-This package is **BootCrate v0.5**. The repository's canonical version source is `VERSION`.
+This package is **BootCrate v0.6**. The repository's canonical version source is `VERSION`.
