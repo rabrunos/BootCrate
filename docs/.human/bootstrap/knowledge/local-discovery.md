@@ -62,6 +62,23 @@ Deep discovery normally maps to E3/Main XHigh, with Worker/Scout used to reduce 
 
 **Web/backend:** confirm installed/runtime versions, package manager/lockfile, database/service dependencies, migration commands, and browser/E2E availability.
 
+## Machine-local resource setup
+
+When discovery finds a resource whose location varies by machine, do not promote the discovered absolute path into tracked project files.
+
+Instead, materialize the portable resolver:
+
+1. define what makes a candidate valid (expected executable/manifest/version/signature);
+2. decide whether an explicit environment/CLI override is useful;
+3. define the ignored persisted local key/path;
+4. implement safe platform-specific auto-detection when practical;
+5. automatically persist one unambiguous valid candidate when appropriate;
+6. require user selection or explicit path for ambiguous/missing candidates;
+7. keep interactive setup separate from non-interactive/CI behavior;
+8. validate stale configuration and fresh-machine scenarios.
+
+For an installed game, detection may inspect launcher/library metadata (for example Steam library locations) and known platform paths, but should verify the actual target rather than assuming the first matching directory is valid.
+
 ## Outputs
 
 Local discovery may justify generating:
