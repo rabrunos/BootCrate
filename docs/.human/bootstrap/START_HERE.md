@@ -362,7 +362,22 @@ Open implementation work/status belongs in GitHub Issues when appropriate. Do no
 
 # Phase 5 — Materialize the project
 
-## 19. Ask ChatGPT for the materialization task
+## 19. Establish project versioning and ask ChatGPT for the materialization task
+
+Every BootCrate project must have one canonical version source before normal development begins.
+
+ChatGPT and the materialization task select the appropriate source:
+
+```text
+ecosystem-native metadata when available
+        ↓ otherwise
+minimal VERSION file
+```
+
+The first mutating materialization contract receives a Target Version. That exact version token is preserved in the prompt, any continuations, the main implementation commit, and the final report.
+
+Versioning is mandatory even for static/file-only projects. Publication is separate and remains optional/explicitly authorized.
+
 
 After agreement, ChatGPT uses:
 
@@ -549,10 +564,14 @@ Before materialization:
 - [ ] Important unknowns researched.
 - [ ] Owner decisions resolved.
 - [ ] Relevant Issues created/updated where appropriate.
+- [ ] Canonical version source/convention decided.
+- [ ] Materialization Target Version assigned.
 - [ ] Materialization contract generated only after agreement.
 
 After materialization:
 
+- [ ] Canonical version source equals the materialization Target Version.
+- [ ] Prompt/commit/report preserve the same Target Version token.
 - [ ] Deterministic validation passed or limitations are explicit.
 - [ ] Baseline committed and pushed.
 - [ ] Live GitHub labels match the final `.github/labels.yml`.
