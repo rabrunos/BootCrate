@@ -112,6 +112,23 @@ Codex / Claude
 
 The normalized project profile is **not** a project-status file. Open work and changing status belong in GitHub Issues.
 
+## Mandatory versioning and Target Version
+
+Every project materialized by BootCrate is versioned, even if it only updates static files, documentation, scripts, configuration, or tooling.
+
+Each project has exactly one canonical version source. Materialization prefers the stack's native version metadata and falls back to a minimal source such as `VERSION` when no native source exists.
+
+Every independent mutating root task receives an orchestrator-assigned **Target Version**. The exact version token links the execution chain:
+
+```text
+prompt        # [v0.4] ...
+continuation  # [v0.4] ...
+commit        [v0.4] ...
+report        # [v0.4] ...
+```
+
+Continuations and fixes required to complete the same unaccepted target keep that Target Version. Read-only work does not increment the project version. Versioning is mandatory; external publication remains a separate, explicitly authorized action.
+
 ## Proportional task contracts
 
 Every normal project task may pass through ChatGPT, including small ones. The contract size changes with the task.
@@ -312,4 +329,4 @@ The intended default for this repository is English technical content and `pt-BR
 
 ## Current status
 
-This package is **BootCrate V0.3**, the first version intended to be placed in the new `rabrunos/BootCrate` repository and iterated from there.
+This package is **BootCrate v0.4**. The repository's canonical version source is `VERSION`.
