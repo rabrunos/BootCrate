@@ -3,44 +3,60 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>BootCrate Intake</title>
+  <meta name="color-scheme" content="light">
+  <title>BootCrate Setup</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <div>
-      <h1>BootCrate</h1>
-      <p id="subtitle">Project discovery intake — architecture is decided later with the orchestrator.</p>
+  <header class="topbar">
+    <div class="brand">
+      <strong>BootCrate</strong>
+      <span id="subtitle">Setup</span>
     </div>
-    <div class="toolbar">
-      <button id="langBtn">PT-BR</button>
-      <button id="newBtn">New</button>
-      <button id="saveBtn">Save local</button>
-      <button id="exportBtn">Export JSON</button>
-      <label class="fileBtn">Import JSON<input id="importInput" type="file" accept=".json,application/json"></label>
+    <div class="topActions">
+      <span id="saveStatus" class="saveStatus" role="status" aria-live="polite">Saved</span>
+      <button id="langBtn" class="quietButton" type="button">PT-BR</button>
+      <label class="quietButton fileButton">Import JSON<input id="importInput" type="file" accept=".json,application/json"></label>
+      <button id="newBtn" class="quietButton" type="button">New</button>
     </div>
   </header>
 
-  <main>
-    <aside>
-      <div class="status">
-        <strong id="progressText">0 / 0 answered</strong>
-        <div class="bar"><div id="barFill"></div></div>
-        <p id="requiredText" class="requiredStatus"></p>
+  <main class="shell">
+    <aside class="sidebar" aria-label="Setup navigation">
+      <div class="progressCard">
+        <div class="progressRow"><strong id="progressText">0 / 0</strong><span id="progressPercent">0%</span></div>
+        <div class="progressTrack" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="barFill"></div></div>
+        <p id="requiredText"></p>
       </div>
-      <nav id="sectionNav"></nav>
-      <p class="hint" id="privacyHint">Everything stays in your browser unless you export the JSON.</p>
+      <nav id="sectionNav" class="sectionNav"></nav>
+      <p id="privacyHint" class="privacyHint">Your answers stay in this browser until you export them.</p>
     </aside>
 
-    <section id="formRoot"></section>
+    <section class="workspace" aria-live="polite">
+      <div id="stepHeader" class="stepHeader"></div>
+      <div id="formRoot"></div>
+      <div id="inlineMessage" class="inlineMessage" role="status" aria-live="polite"></div>
+      <div class="stepActions">
+        <button id="backBtn" class="secondaryButton" type="button">Back</button>
+        <button id="nextBtn" class="primaryButton" type="button">Continue</button>
+      </div>
+    </section>
   </main>
 
-  <footer>
-    <p id="footerText">Unknown is a valid answer. The orchestrator researches what you should not need to research yourself.</p>
-  </footer>
+  <dialog id="resetDialog">
+    <form method="dialog" class="dialogCard">
+      <h2 id="resetTitle">Start over?</h2>
+      <p id="resetText">This clears the local draft in this browser.</p>
+      <div class="dialogActions">
+        <button id="cancelResetBtn" value="cancel" class="secondaryButton">Cancel</button>
+        <button id="confirmResetBtn" value="confirm" class="dangerButton">Start new</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="questions.js"></script>
   <script src="intake-core.js"></script>
+  <script src="setup-handoff.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
