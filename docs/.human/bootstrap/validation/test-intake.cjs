@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const app = path.join(__dirname, '../app');
 const Core = require(path.join(app, 'intake-core.js'));
+const Handoff = require(path.join(app, 'setup-handoff.js'));
 const scope = {window:{}};
 vm.runInNewContext(fs.readFileSync(path.join(app,'questions.js'),'utf8'),scope);
 const Q = JSON.parse(JSON.stringify(scope.window.BOOTCRATE_QUESTIONS));
@@ -60,8 +61,30 @@ test('HTML-like text stays text; validation never evaluates it',()=>{
 test('question metadata cycles are rejected',()=>{
   assert.throws(()=>Core.create([{id:'a',condition:{id:'b',in:['yes']}},{id:'b',condition:{id:'a',in:['yes']}}]));
 });
-test('app includes core before execution and no question changes are required',()=>{
+test('handoff parses only supported GitHub repository forms',()=>{
+  assert.equal(Handoff.parseRepository('owner/project'),'owner/project');
+  assert.equal(Handoff.parseRepository('https://github.com/owner/project'),'owner/project');
+  assert.equal(Handoff.parseRepository('javascript:alert(1)'),'');
+  assert.equal(Handoff.parseRepository('https://example.com/owner/project'),'');
+});
+test('GitHub template URL uses only expected safe parameters',()=>{
+  const url=new URL(Handoff.githubCreateUrl({name:'My Project <x>',description:'Example',visibility:'private'}));
+  assert.equal(url.origin,'https://github.com');
+  assert.equal(url.pathname,'/new');
+  assert.equal(url.searchParams.get('template_owner'),'rabrunos');
+  assert.equal(url.searchParams.get('template_name'),'BootCrate');
+  assert.equal(url.searchParams.get('name'),'my-project-x');
+  assert.equal(url.searchParams.get('visibility'),'private');
+  assert.equal(url.searchParams.get('token'),null);
+});
+test('Project instructions route through stable PROJECT_GUIDE only',()=>{
+  const text=Handoff.projectInstructions('owner/project');
+  assert.match(text,/PROJECT_GUIDE\.md/);
+  assert.doesNotMatch(text,/docs\/.ai\/TASK_POLICY|AGENTS\.md|CLAUDE\.md/);
+});
+test('app includes pure helpers before execution and keeps questions data-driven',()=>{
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
   assert.ok(html.indexOf('intake-core.js')<html.indexOf('src="app.js"'));
+  assert.ok(html.indexOf('setup-handoff.js')<html.indexOf('src="app.js"'));
   assert.ok(Q.length>50);
 });
