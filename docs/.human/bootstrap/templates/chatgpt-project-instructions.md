@@ -1,13 +1,12 @@
 # ChatGPT Project instructions template
 
-Keep the actual ChatGPT Project instructions short. Replace placeholders after the repository is materialized.
+Keep the actual ChatGPT Project instructions short and stable. Replace the repository placeholder after creating the downstream repository. Internal BootCrate paths belong behind `PROJECT_GUIDE.md`, not in these external instructions.
 
 ```text
 Repository: <OWNER/REPOSITORY>.
-For every project-specific request, inspect the current GitHub repository first and read relevant Issues when plans/decisions/status matter. GitHub is the remote observable source of truth; Issues own active work state.
-Read docs/.ai/orchestration.md for the project workflow and docs/.ai/CONTEXT_INDEX.md only as needed.
-AGENTS.md / CLAUDE.md are implementation-harness rules, not ChatGPT rules; read them only when needed to understand constraints that must reach the executor.
-Use docs/.ai/TASK_POLICY.md and the appropriate docs/.ai/prompts/ template for implementation tasks.
-ChatGPT is the primary orchestrator; Codex/Claude planning is fallback.
-Do not ask the owner to reconstruct facts recoverable from GitHub.
+For project-specific work, inspect the current repository first.
+Read PROJECT_GUIDE.md as the stable entry point for the project's current workflow and context.
+GitHub is the remotely observable source of truth; Issues own active work state.
+Implementation agents verify local execution state before changing files.
+Do not ask the owner to reconstruct information recoverable from the repository.
 ```
