@@ -1,299 +1,36 @@
-(() => {
-  const Q = window.BOOTCRATE_QUESTIONS;
-  const SECTIONS = window.BOOTCRATE_SECTIONS;
-  const CORE = window.BootCrateIntakeCore;
-  const core = CORE.create(Q);
-  const KEY = "bootcrate-project-intake-v1";
-  const SCHEMA = "bootcrate-project-intake/v1";
-
-  let storageAvailable = true;
-  function getLocal(key) { try { return localStorage.getItem(key); } catch { storageAvailable = false; return null; } }
-  function setLocal(key, value) { try { localStorage.setItem(key, value); } catch { storageAvailable = false; } }
-  let lang = getLocal(KEY + "-lang") === "pt" ? "pt" : "en";
-  let answers = {};
-  let invalidIds = new Set();
-  let sessionMeta = newSession();
-
-  const t = (en, pt) => lang === "pt" ? pt : en;
-  const root = document.getElementById("formRoot");
-  const nav = document.getElementById("sectionNav");
-
-  function newSession() {
-    return { id: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now()), created_at: new Date().toISOString() };
-  }
-
-  const visible = (q, source = answers) => core.visible(q, source);
-  const visibleQuestions = (source = answers) => core.active(source);
-  const valuePresent = v => typeof v === "string" ? v.trim().length > 0 : Array.isArray(v) && v.length > 0;
-  const requiredMissing = (source = answers) => core.missing(source);
-  const currentExportAnswers = (source = answers) => core.exportAnswers(source);
-  const validateImport = data => core.validate(data).map(e => t(
-    `Invalid intake field: ${e.path} (${e.code}).`,
-    `Campo de intake inválido: ${e.path} (${e.code}).`
-  ));
-
-  function inputFor(q) {
-    const wrap = document.createElement("div");
-    wrap.className = "question" + (q.required ? " required" : "") + (invalidIds.has(q.id) ? " invalid" : "");
-    wrap.dataset.qid = q.id;
-
-    const label = document.createElement("label");
-    label.className = "label";
-    label.textContent = lang === "pt" ? q.pt : q.en;
-    wrap.appendChild(label);
-
-    const set = v => {
-      answers[q.id] = v;
-      invalidIds.delete(q.id);
-      persist();
-      render();
-    };
-
-    if (q.type === "text" || q.type === "textarea") {
-      const el = document.createElement(q.type === "textarea" ? "textarea" : "input");
-      if (q.type === "text") el.type = "text";
-      el.value = answers[q.id] || "";
-      el.maxLength = CORE.MAX_TEXT;
-      el.addEventListener("input", () => {
-        answers[q.id] = el.value;
-        invalidIds.delete(q.id);
-        wrap.classList.remove("invalid");
-        persist();
-        updateProgress();
-      });
-      wrap.appendChild(el);
-    } else if (q.type === "select") {
-      const el = document.createElement("select");
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = t("Choose…", "Escolha…");
-      el.appendChild(empty);
-      (q.options || []).forEach(([value, en, pt]) => {
-        const o = document.createElement("option");
-        o.value = value;
-        o.textContent = lang === "pt" ? pt : en;
-        if (answers[q.id] === value) o.selected = true;
-        el.appendChild(o);
-      });
-      el.addEventListener("change", () => set(el.value));
-      wrap.appendChild(el);
-    } else if (q.type === "multiselect") {
-      const opts = document.createElement("div");
-      opts.className = "options";
-      const selected = new Set(answers[q.id] || []);
-      (q.options || []).forEach(([value, en, pt]) => {
-        const l = document.createElement("label");
-        l.className = "opt";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = selected.has(value);
-        cb.addEventListener("change", () => {
-          const cur = new Set(answers[q.id] || []);
-          cb.checked ? cur.add(value) : cur.delete(value);
-          set([...cur]);
-        });
-        const span = document.createElement("span");
-        span.textContent = lang === "pt" ? pt : en;
-        l.append(cb, span);
-        opts.appendChild(l);
-      });
-      wrap.appendChild(opts);
-    }
-
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.textContent = q.id;
-    wrap.appendChild(meta);
-    return wrap;
-  }
-
-  function render() {
-    document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
-    document.getElementById("langBtn").textContent = lang === "pt" ? "EN" : "PT-BR";
-    document.getElementById("newBtn").textContent = t("New", "Novo");
-    document.getElementById("saveBtn").textContent = t("Save local", "Salvar local");
-    document.getElementById("exportBtn").textContent = t("Export final JSON", "Exportar JSON final");
-    document.querySelector(".fileBtn").childNodes[0].nodeValue = t("Import JSON", "Importar JSON");
-    document.getElementById("subtitle").textContent = t(
-      "Project discovery intake — architecture is decided later with ChatGPT and the owner.",
-      "Intake de descoberta — a arquitetura é decidida depois com o ChatGPT e o owner."
-    );
-    document.getElementById("privacyHint").textContent = t(
-      "Everything stays in your browser unless you export the JSON.",
-      "Tudo fica no navegador até você exportar o JSON."
-    );
-    document.getElementById("footerText").textContent = t(
-      "Unknown is a valid answer. ChatGPT researches what you should not need to research yourself.",
-      "“Não sei” é uma resposta válida. O ChatGPT pesquisa o que você não deveria precisar pesquisar sozinho."
-    );
-
-    root.innerHTML = "";
-    nav.innerHTML = "";
-    Object.keys(SECTIONS).forEach(sectionId => {
-      const qs = Q.filter(q => q.section === sectionId && visible(q));
-      if (!qs.length) return;
-      const section = document.createElement("section");
-      section.className = "section";
-      section.id = "section-" + sectionId;
-      const h = document.createElement("h2");
-      h.textContent = lang === "pt" ? SECTIONS[sectionId][1] : SECTIONS[sectionId][0];
-      section.appendChild(h);
-      qs.forEach(q => section.appendChild(inputFor(q)));
-      root.appendChild(section);
-
-      const b = document.createElement("button");
-      b.textContent = h.textContent;
-      b.onclick = () => section.scrollIntoView({behavior:"smooth"});
-      nav.appendChild(b);
-    });
-
-    updateProgress();
-  }
-
-  function updateProgress() {
-    const visibleQs = visibleQuestions();
-    const answered = visibleQs.filter(q => valuePresent(answers[q.id])).length;
-    const missing = requiredMissing();
-    document.getElementById("progressText").textContent = t(
-      `${answered} / ${visibleQs.length} answered`,
-      `${answered} / ${visibleQs.length} respondidas`
-    );
-    document.getElementById("barFill").style.width = `${visibleQs.length ? answered / visibleQs.length * 100 : 0}%`;
-    const req = document.getElementById("requiredText");
-    req.textContent = missing.length
-      ? t(`${missing.length} required answer(s) missing`, `${missing.length} resposta(s) obrigatória(s) faltando`)
-      : t("Required answers complete", "Respostas obrigatórias completas");
-    req.className = "requiredStatus" + (missing.length ? " error" : "");
-  }
-
-  function payload() {
-    return {
-      schema: SCHEMA,
-      exported_at: new Date().toISOString(),
-      session: sessionMeta,
-      language: lang === "pt" ? "pt-BR" : "en",
-      answers: currentExportAnswers(),
-      interpretation_rules: {
-        owner_explicit_answers_are_not_to_be_overwritten: true,
-        unknown_requires_research_when_material: true,
-        preferences_are_not_hard_constraints_unless_owner_says_so: true,
-        app_does_not_choose_architecture: true,
-        hidden_conditional_answers_are_not_exported: true
-      }
-    };
-  }
-
-  function persist() {
-    setLocal(KEY, JSON.stringify({sessionMeta, answers}));
-  }
-
-  document.getElementById("langBtn").onclick = () => {
-    lang = lang === "pt" ? "en" : "pt";
-    setLocal(KEY + "-lang", lang);
-    render();
-  };
-
-  document.getElementById("saveBtn").onclick = () => {
-    persist();
-    alert(storageAvailable
-      ? t("Draft saved locally in this browser.", "Rascunho salvo localmente neste navegador.")
-      : t("Browser storage is unavailable. Keep this page open and export your intake.", "O armazenamento do navegador está indisponível. Mantenha a página aberta e exporte o intake."));
-  };
-
-  document.getElementById("newBtn").onclick = () => {
-    if (!confirm(t("Start a new intake? Current local answers will be cleared.", "Iniciar um novo intake? As respostas locais atuais serão apagadas."))) return;
-    answers = {};
-    invalidIds = new Set();
-    sessionMeta = newSession();
-    persist();
-    render();
-  };
-
-  document.getElementById("exportBtn").onclick = () => {
-    const missing = requiredMissing();
-    if (missing.length) {
-      invalidIds = new Set(missing.map(q => q.id));
-      render();
-      const first = document.querySelector(".question.invalid");
-      if (first) first.scrollIntoView({behavior:"smooth", block:"center"});
-      alert(t(
-        `Complete the ${missing.length} required answer(s) before exporting.`,
-        `Complete as ${missing.length} resposta(s) obrigatória(s) antes de exportar.`
-      ));
-      return;
-    }
-    invalidIds = new Set();
-    const invalidValues = visibleQuestions().filter(q => valuePresent(answers[q.id]) && !core.validValue(q, answers[q.id]));
-    if (invalidValues.length) {
-      invalidIds = new Set(invalidValues.map(q => q.id));
-      render();
-      alert(t("Some answers exceed their limits or have an invalid value.", "Algumas respostas excedem os limites ou possuem valor inválido."));
-      return;
-    }
-    const data = payload();
-    const exportErrors = validateImport(data);
-    if (exportErrors.length) { alert(exportErrors.slice(0, 10).join("\n")); return; }
-    const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
-    if (blob.size > CORE.MAX_FILE_BYTES) {
-      alert(t("Intake exceeds 1 MiB. Shorten the longest answers before export.", "O intake excede 1 MiB. Reduza as respostas mais longas antes de exportar."));
-      return;
-    }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    const safe = (answers.project_name || "project").replace(/[^a-z0-9_-]+/gi,"-").replace(/^-|-$/g,"");
-    a.download = `${safe || "project"}-intake.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
-  document.getElementById("importInput").onchange = async ev => {
-    const f = ev.target.files[0];
-    if (!f) return;
-    try {
-      if (f.size > CORE.MAX_FILE_BYTES) {
-        alert(t("Intake file is too large (maximum 1 MiB).", "Intake grande demais (máximo de 1 MiB)."));
-        return;
-      }
-      const data = JSON.parse(await f.text());
-      const errors = validateImport(data);
-      if (errors.length) {
-        alert(t("Invalid intake:\n", "Intake inválido:\n") + errors.slice(0, 10).join("\n"));
-        return;
-      }
-      const imported = core.normalize(data);
-      answers = imported.answers;
-      sessionMeta = {...newSession(), ...(imported.session || {})};
-      lang = imported.language === "pt-BR" ? "pt" : "en";
-      invalidIds = new Set();
-      persist();
-      render();
-      const missing = requiredMissing();
-      if (missing.length) {
-        alert(t(
-          `Imported as a draft. ${missing.length} required answer(s) are still missing.`,
-          `Importado como rascunho. Ainda faltam ${missing.length} resposta(s) obrigatória(s).`
-        ));
-      }
-    } catch (e) {
-      alert(t("Invalid JSON file.", "Arquivo JSON inválido."));
-    } finally {
-      ev.target.value = "";
-    }
-  };
-
-  try {
-    const saved = JSON.parse(getLocal(KEY) || "null");
-    if (saved) {
-      const storedAnswers = saved.answers && typeof saved.answers === "object" && !Array.isArray(saved.answers)
-        ? Object.fromEntries(Object.entries(saved.answers).filter(([, v]) => valuePresent(v))) : {};
-      const data = {schema: SCHEMA, answers: storedAnswers, session: saved.sessionMeta};
-      if (!core.validate(data).length) {
-        const imported = core.normalize(data);
-        answers = imported.answers;
-        sessionMeta = {...sessionMeta, ...(imported.session || {})};
-      }
-    }
-  } catch {}
-
-  render();
+(()=>{"use strict";
+const Q=window.BOOTCRATE_QUESTIONS,S=window.BOOTCRATE_SECTIONS,C=window.BootCrateIntakeCore,H=window.BootCrateHandoff,core=C.create(Q),KEY="bootcrate-project-intake-v1";
+let storage=true,lang="en",answers={},invalid=new Set(),session={id:crypto?.randomUUID?.()||String(Date.now()),created_at:new Date().toISOString()},step=0,repository="";
+const $=id=>document.getElementById(id),t=(en,pt)=>lang==="pt"?pt:en,present=v=>typeof v==="string"?!!v.trim():Array.isArray(v)&&v.length>0;
+const get=k=>{try{return localStorage.getItem(k)}catch{storage=false;return null}},set=(k,v)=>{try{localStorage.setItem(k,v);return true}catch{storage=false;return false}};
+lang=get(KEY+"-lang")==="pt"?"pt":"en";
+try{const s=JSON.parse(get(KEY)||"null");if(s&&s.answers&&typeof s.answers==="object"){const d={schema:C.SCHEMA,answers:s.answers,session:s.sessionMeta};if(!core.validate(d).length){const n=core.normalize(d);answers=n.answers;session={...session,...(n.session||{})}}}}catch{}
+const sections=()=>Object.keys(S).filter(id=>Q.some(q=>q.section===id&&core.visible(q,answers))),steps=()=>[...sections(),"__review","__finish"];
+function title(id){if(id==="__review")return t("Review","Revisão");if(id==="__finish")return t("Finish","Conclusão");return lang==="pt"?S[id][1]:S[id][0]}
+function desc(id){if(id==="__review")return t("Check your answers before the handoff.","Confira suas respostas antes do handoff.");if(id==="__finish")return t("Create the repository and copy the prepared handoff.","Crie o repositório e copie o handoff preparado.");return t("Answer only what you know. Technical decisions are resolved later.","Responda apenas o que você sabe. Decisões técnicas são resolvidas depois.")}
+function save(){const ok=set(KEY,JSON.stringify({sessionMeta:session,answers}));$("saveStatus").textContent=ok?t("Saved","Salvo"):t("Local storage unavailable","Armazenamento local indisponível")}
+function payload(){return{schema:C.SCHEMA,exported_at:new Date().toISOString(),session,language:lang==="pt"?"pt-BR":"en",answers:core.exportAnswers(answers),interpretation_rules:{owner_explicit_answers_are_not_to_be_overwritten:true,unknown_requires_research_when_material:true,preferences_are_not_hard_constraints_unless_owner_says_so:true,app_does_not_choose_architecture:true,hidden_conditional_answers_are_not_exported:true}}}
+function progress(){const qs=core.active(answers),n=qs.filter(q=>present(answers[q.id])).length,p=qs.length?Math.round(n/qs.length*100):0,m=core.missing(answers).length;$("progressText").textContent=t(`${n} / ${qs.length} answered`,`${n} / ${qs.length} respondidas`);$("progressPercent").textContent=p+"%";$("barFill").style.width=p+"%";document.querySelector(".progressTrack").setAttribute("aria-valuenow",p);$("requiredText").textContent=m?t(`${m} required remaining`,`${m} obrigatórias faltando`):t("Required answers complete","Respostas obrigatórias completas")}
+function complete(id){return !id.startsWith("__")&&!Q.some(q=>q.section===id&&core.visible(q,answers)&&q.required&&!present(answers[q.id]))}
+function nav(){const n=$("sectionNav");n.replaceChildren();steps().forEach((id,i)=>{const b=document.createElement("button");b.type="button";if(i===step)b.setAttribute("aria-current","step");if(complete(id))b.classList.add("complete");const d=document.createElement("span");d.className="navDot";d.setAttribute("aria-hidden","true");const s=document.createElement("span");s.textContent=title(id);b.append(d,s);b.onclick=()=>{step=i;render(true)};n.appendChild(b)})}
+function qnode(q){const w=document.createElement(q.type==="multiselect"?"fieldset":"div");w.className="question"+(q.type==="textarea"?" textarea wide":"")+(invalid.has(q.id)?" invalid":"");const id="field-"+q.id,l=document.createElement(q.type==="multiselect"?"legend":"label");l.className="label";if(q.type!=="multiselect")l.htmlFor=id;l.textContent=lang==="pt"?q.pt:q.en;if(q.required){const m=document.createElement("span");m.className="requiredMark";m.textContent=" *";m.setAttribute("aria-hidden","true");l.appendChild(m)}w.appendChild(l);
+const changed=(v,rerender)=>{answers[q.id]=v;invalid.delete(q.id);save();progress();if(rerender)render(false)};
+if(q.type==="text"||q.type==="textarea"){const x=document.createElement(q.type==="textarea"?"textarea":"input");if(q.type==="text")x.type="text";x.id=id;x.maxLength=C.MAX_TEXT;x.value=answers[q.id]||"";x.oninput=()=>{answers[q.id]=x.value;invalid.delete(q.id);w.classList.remove("invalid");save();progress()};w.appendChild(x)}
+else if(q.type==="select"){const x=document.createElement("select");x.id=id;const z=document.createElement("option");z.value="";z.textContent=t("Choose…","Escolha…");x.appendChild(z);(q.options||[]).forEach(([v,en,pt])=>{const o=document.createElement("option");o.value=v;o.textContent=lang==="pt"?pt:en;o.selected=answers[q.id]===v;x.appendChild(o)});x.onchange=()=>changed(x.value,true);w.appendChild(x)}
+else{const box=document.createElement("div");box.className="options";const selected=new Set(answers[q.id]||[]);(q.options||[]).forEach(([v,en,pt])=>{const lab=document.createElement("label");lab.className="opt";const x=document.createElement("input");x.type="checkbox";x.checked=selected.has(v);const s=document.createElement("span");s.textContent=lang==="pt"?pt:en;x.onchange=()=>{const next=new Set(answers[q.id]||[]);x.checked?next.add(v):next.delete(v);changed([...next],false)};lab.append(x,s);box.appendChild(lab)});w.appendChild(box)}
+if(invalid.has(q.id)){const e=document.createElement("p");e.className="fieldError";e.textContent=t("This required field needs an answer.","Este campo obrigatório precisa de uma resposta.");w.appendChild(e)}return w}
+function questions(id){const g=document.createElement("div");g.className="questionGrid";Q.filter(q=>q.section===id&&core.visible(q,answers)).forEach(q=>g.appendChild(qnode(q)));$("formRoot").replaceChildren(g)}
+function display(q,v){if(Array.isArray(v))return v.map(x=>(q.options||[]).find(o=>o[0]===x)).filter(Boolean).map(o=>lang==="pt"?o[2]:o[1]).join(", ");const o=(q.options||[]).find(x=>x[0]===v);return o?(lang==="pt"?o[2]:o[1]):String(v||"")}
+function review(){const r=$("formRoot");r.replaceChildren();sections().forEach(id=>{const g=document.createElement("section");g.className="reviewGroup";const h=document.createElement("h2");h.textContent=title(id);const edit=document.createElement("button");edit.type="button";edit.className="editLink";edit.textContent=t("Edit section","Editar seção");edit.onclick=()=>{step=steps().indexOf(id);render(true)};g.append(h,edit);Q.filter(q=>q.section===id&&core.visible(q,answers)&&present(answers[q.id])).forEach(q=>{const row=document.createElement("div");row.className="reviewItem";const a=document.createElement("div");a.className="reviewLabel";a.textContent=lang==="pt"?q.pt:q.en;const b=document.createElement("div");b.className="reviewValue";b.textContent=display(q,answers[q.id]);row.append(a,b);g.appendChild(row)});r.appendChild(g)})}
+function copy(text,msg){if(!text){$("inlineMessage").textContent=t("Add a valid GitHub repository first.","Adicione primeiro um repositório GitHub válido.");return}navigator.clipboard?.writeText(text).then(()=>$("inlineMessage").textContent=msg).catch(()=>$("inlineMessage").textContent=t("Copy failed; select the text manually.","Falha ao copiar; selecione o texto manualmente."))}
+function download(){const miss=core.missing(answers);if(miss.length){invalid=new Set(miss.map(q=>q.id));step=Math.max(0,steps().indexOf(miss[0].section));render(true);return}const blob=new Blob([JSON.stringify(payload(),null,2)],{type:"application/json"});if(blob.size>C.MAX_FILE_BYTES)return;const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(H.slugify(answers.project_name)||"project")+"-intake.json";a.click();URL.revokeObjectURL(a.href)}
+function finish(){const r=$("formRoot"),c=document.createElement("section");c.className="completionCard";const h=document.createElement("h2");h.textContent=t("Start the real project","Comece o projeto real");const p=document.createElement("p");p.textContent=t("Create a repository from BootCrate, then use the generated handoff in a ChatGPT Project.","Crie um repositório a partir do BootCrate e use o handoff gerado em um Projeto do ChatGPT.");c.append(h,p);
+const rl=document.createElement("label");rl.htmlFor="repoInput";rl.textContent=t("New repository URL or owner/name","URL do novo repositório ou owner/name");const row=document.createElement("div");row.className="repoRow";const ri=document.createElement("input");ri.id="repoInput";ri.value=repository;ri.placeholder="owner/project";const gh=document.createElement("button");gh.type="button";gh.className="secondaryButton";gh.textContent=t("Create on GitHub","Criar no GitHub");gh.onclick=()=>window.open(H.githubCreateUrl({name:answers.project_name,description:answers.one_sentence,visibility:"private"}),"_blank","noopener");row.append(ri,gh);c.append(rl,row);
+const il=document.createElement("label");il.htmlFor="instructionsOutput";il.textContent=t("ChatGPT Project instructions","Instruções do Projeto do ChatGPT");const io=document.createElement("textarea");io.id="instructionsOutput";io.readOnly=true;const ci=document.createElement("button");ci.type="button";ci.className="secondaryButton";ci.textContent=t("Copy instructions","Copiar instruções");ci.onclick=()=>copy(io.value,t("Instructions copied.","Instruções copiadas."));
+const ml=document.createElement("label");ml.htmlFor="messageOutput";ml.textContent=t("First message to ChatGPT","Primeira mensagem para o ChatGPT");const mo=document.createElement("textarea");mo.id="messageOutput";mo.readOnly=true;const cm=document.createElement("button");cm.type="button";cm.className="secondaryButton";cm.textContent=t("Copy message","Copiar mensagem");cm.onclick=()=>copy(mo.value,t("Message copied.","Mensagem copiada."));const dl=document.createElement("button");dl.type="button";dl.className="primaryButton";dl.textContent=t("Download intake JSON","Baixar intake JSON");dl.onclick=download;c.append(il,io,ci,ml,mo,cm,dl);r.replaceChildren(c);const refresh=()=>{repository=ri.value;io.value=H.projectInstructions(repository);mo.value=H.initialMessage(lang==="pt"?"pt-BR":"en")};ri.oninput=refresh;refresh()}
+function render(focus){const list=steps();if(step>=list.length)step=list.length-1;const id=list[Math.max(0,step)];document.documentElement.lang=lang==="pt"?"pt-BR":"en";$("langBtn").textContent=lang==="pt"?"EN":"PT-BR";$("newBtn").textContent=t("New","Novo");document.querySelector(".fileButton").childNodes[0].nodeValue=t("Import JSON","Importar JSON");$("privacyHint").textContent=t("Your answers stay in this browser until you export them.","Suas respostas ficam neste navegador até você exportá-las.");const head=$("stepHeader");head.replaceChildren();const h=document.createElement("h1");h.tabIndex=-1;h.textContent=title(id);const p=document.createElement("p");p.textContent=desc(id);head.append(h,p);$("inlineMessage").textContent="";id==="__review"?review():id==="__finish"?finish():questions(id);$("backBtn").textContent=t("Back","Voltar");$("backBtn").disabled=step===0;$("nextBtn").textContent=id==="__review"?t("Prepare handoff","Preparar handoff"):id==="__finish"?t("Download intake","Baixar intake"):t("Continue","Continuar");nav();progress();if(focus)h.focus()}
+$("backBtn").onclick=()=>{if(step>0){step--;render(true)}};$("nextBtn").onclick=()=>{const id=steps()[step];if(id==="__finish"){download();return}if(!id.startsWith("__")){const miss=Q.filter(q=>q.section===id&&core.visible(q,answers)&&q.required&&!present(answers[q.id]));if(miss.length){invalid=new Set(miss.map(q=>q.id));render(false);document.querySelector(".invalid input,.invalid textarea,.invalid select")?.focus();return}}step++;render(true)};
+$("langBtn").onclick=()=>{lang=lang==="pt"?"en":"pt";set(KEY+"-lang",lang);render(false)};$("newBtn").onclick=()=>$("resetDialog").showModal();$("confirmResetBtn").onclick=()=>{answers={};invalid=new Set();session={id:crypto?.randomUUID?.()||String(Date.now()),created_at:new Date().toISOString()};step=0;save();render(true)};
+$("importInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>C.MAX_FILE_BYTES)throw Error();const d=JSON.parse(await f.text()),errs=core.validate(d);if(errs.length)throw Error();const n=core.normalize(d);answers=n.answers;session={...session,...(n.session||{})};lang=n.language==="pt-BR"?"pt":"en";invalid=new Set();step=0;save();render(true)}catch{$("inlineMessage").textContent=t("Invalid intake JSON.","JSON de intake inválido.")}finally{e.target.value=""}};
+render(false);
 })();

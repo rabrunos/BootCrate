@@ -4,11 +4,15 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import tempfile
 import validate as v
 
 spec = importlib.util.spec_from_file_location("evaluate", v.BOOT / "evals/evaluate.py")
 evaluate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluate)
+verify_spec = importlib.util.spec_from_file_location("verify_materialized", v.BOOT / "validation/verify-materialized.py")
+verify_materialized = importlib.util.module_from_spec(verify_spec)
+verify_spec.loader.exec_module(verify_materialized)
 
 
 class ValidationTests(unittest.TestCase):
@@ -81,6 +85,17 @@ class ValidationTests(unittest.TestCase):
            "controls":e["required_controls"],"capabilities":[],"blocked_actions":e["required_blocked_actions"],
            "needs_owner_decision":False,"rationale":"Synthetic invalid downgrade"}
         self.assertIn("unexpected main_effort",evaluate.grade(s,c))
+
+    def test_post_materialization_smoke(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/"docs/.ai").mkdir(parents=True)
+            (root/"PROJECT_GUIDE.md").write_text("# Project Guide\nStable downstream context.\n")
+            (root/"README.md").write_text("# Example\n")
+            (root/"docs/.ai/project-profile.json").write_text('{"project":"example"}')
+            self.assertEqual(verify_materialized.check(root),[])
+            (root/"docs/.human/bootstrap").mkdir(parents=True)
+            self.assertIn("bootstrap directory remains",verify_materialized.check(root))
 
 
 if __name__ == "__main__": unittest.main()

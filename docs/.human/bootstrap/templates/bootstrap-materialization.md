@@ -35,7 +35,7 @@ Use `knowledge/service-selection.md` from this bootstrap directory to resolve re
 
 ## 4. Materialize only the necessary project
 
-Create source/manifests/tests, one canonical version source and stable normalized `project-profile.json` matching its schema. Populate security and any selected services; do not duplicate current version, findings/status, secrets or actual machine paths in the profile.
+Create source/manifests/tests, one canonical version source and stable normalized `project-profile.json` matching its schema. Rewrite the root `PROJECT_GUIDE.md` for the real project and preserve that path as the stable ChatGPT entry point. Populate security and any selected services; do not duplicate current version, findings/status, secrets or actual machine paths in the profile.
 
 Adapt orchestration, TASK_POLICY, SECURITY_BASELINE, CONTEXT_INDEX, fallback planning and the prompt templates. Choose native build/test/run/doctor/package/install/diagnostics capabilities only where useful. No extra runtime solely for a downstream BootCrate convention.
 
@@ -58,7 +58,7 @@ If write authorization is missing, report the exact blocker rather than claim su
 - Run deterministic schema/config, build, behavior and selected security checks. Failed required checks block completion. Report unavailable checks precisely.
 - Verify secret-free source/packages, intended privileges and applicable negative/restore/rollback tests. A self-test pass is not a security audit or production approval.
 - Confirm version/mirrors, tracked/untracked scope and `git diff --check`.
-- Remove the complete `docs/.human/bootstrap/` tree, raw intake and `.github/workflows/bootcrate-validate.yml`. The bootstrap verifier, dependencies, scenario fixtures and evaluation tooling do not belong in the new project's normal runtime.
+- Preserve and validate the rewritten root `PROJECT_GUIDE.md`. Remove the complete `docs/.human/bootstrap/` tree, raw intake and `.github/workflows/bootcrate-validate.yml`. The bootstrap verifier, dependencies, scenario fixtures and evaluation tooling do not belong in the new project's normal runtime.
 - Remove disabled adapters/unused scripts/forms/skills; promote only selected controls and needed tooling before deleting their generic source library.
 - Rewrite README for the real project; remove BootCrate version/history/branding/provenance unless attribution was requested.
 - Verify no dangling reference to removed bootstrap content. Re-run the final project's own checks after pruning; do not retain the bootstrap just to satisfy its self-test.

@@ -2,7 +2,7 @@
 
 BootCrate is a stack-neutral starting system for AI-assisted software projects. It supplies discovery, policies and reusable skeletons, not one fixed application stack.
 
-**Starting a new project? Read [START_HERE](docs/.human/bootstrap/START_HERE.md).**
+**Starting a new project? Open [BootCrate Setup](docs/.human/bootstrap/app/index.html).** It guides the intake, review, repository handoff and ChatGPT setup. [START_HERE](docs/.human/bootstrap/START_HERE.md) remains the detailed fallback/reference.
 
 The template is the product being maintained here. A downstream project adapts it and removes generic bootstrap material; maintaining BootCrate itself does not run that materialization workflow.
 
@@ -15,7 +15,7 @@ Owner → ChatGPT → current GitHub/Issues + research + owner agreement
 → authorized commit/push → final response → owner/ChatGPT review
 ```
 
-ChatGPT is the normal abundant planning layer, not a step to bypass for small tasks. Codex/Claude planning remains a fallback. Durable knowledge is in the repository; active work and acceptance are in Issues. Local checkout is execution reality and is checked before edits. No parallel work-state, checkpoint or last-report file is required.
+ChatGPT is the normal planning layer for work that needs discovery, decisions or coordination. Fully resolved deterministic E0/eligible E1 work may go directly to an executor when the owner intentionally chooses that lane; all versioning, safety and validation rules still apply. Codex/Claude planning remains a fallback. Durable knowledge is in the repository; active work and acceptance are in Issues. Local checkout is execution reality and is checked before edits. No parallel work-state, checkpoint or last-report file is required.
 
 ## Context and version identity
 
@@ -87,4 +87,4 @@ After downstream materialization remove `docs/.human/bootstrap/`, raw intake, `.
 
 No AI telemetry, checkpoint database, Decision Index, MCP setup, permanent Reviewer, migration framework or tracked last-report is added by default. Reports remain responses containing the actual commit/push outcome; Issues remain active-work truth.
 
-Technical content defaults to English and owner-facing reports to pt-BR, configurable in the materialized profile. This package is **BootCrate v0.7**; `VERSION` is its canonical version source.
+Technical content defaults to English and owner-facing reports to pt-BR, configurable in the materialized profile. This package is **BootCrate v0.8**; `VERSION` is its canonical version source.
