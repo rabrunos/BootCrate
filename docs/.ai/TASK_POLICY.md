@@ -1,153 +1,70 @@
 # Task Policy — materialization skeleton
 
-Vendor-neutral rules for turning an owner request into the least expensive reliable execution contract.
+Vendor-neutral execution policy. Quality and safety take priority over marginal savings.
 
-## Mandatory project versioning
+## Version identity
 
-Every project materialized by BootCrate is versioned, including projects that only contain static files, documentation, scripts, configuration, or tooling.
+Every materialized project has one canonical project version source, including static sites, documentation and tooling projects. Prefer native metadata; use a minimal `VERSION` only when needed.
 
-Each project has exactly one canonical version source. Prefer the ecosystem-native source when one exists. If no natural source exists, materialization creates the smallest suitable source such as `VERSION`.
+Every independent root task that mutates tracked project state receives an orchestrator-assigned Target Version before execution. Prompt H1, implementation commit subject and final report H1 preserve `# [<TARGET_VERSION>] <TITLE>` / `[<TARGET_VERSION>]` literally. The rest of each title is free.
 
-### Target Version
+State the observed baseline version and repository-basis SHA when available. The executor verifies local HEAD/status/diff and never silently chooses a different target. The version source stores the version in its native format (for example `0.7`); the title may add the agreed `v` prefix. Required mirrors must agree.
 
-Every independent root implementation contract that mutates tracked project state receives a Target Version chosen by the orchestrator before execution.
+Continuations and corrective work for the same unaccepted target retain that target. Abandoned targets are not reassigned to different work; record assignments/abandonment in the existing task/Issue history when needed, not a new registry. Accepted or externally distributed artifacts are not silently replaced: subsequent changes receive a new version. Commits distinguish intermediate revisions within an unfinished target.
 
-Rules:
+Read-only investigation, discussion, local setup and Issue-only actions do not bump version. Persisting tracked findings is a mutation. Versioning never authorizes publication.
 
-- prompt H1: `# [<TARGET_VERSION>] <TITLE>`;
-- state current accepted version and Target Version;
-- executor never chooses or silently changes Target Version;
-- main implementation commit starts with `[<TARGET_VERSION>]`;
-- final report H1 starts with the same token;
-- canonical version source equals Target Version before completion;
-- assigned Target Versions are not reused for another root task.
+## Main: three effort levels, one role
 
-Continuations, implementation corrections, and owner-smoke fixes for the same unaccepted target reuse the existing Target Version.
+Main retains the task context at all levels. Do not create three Main agents or duplicate the investigation.
 
-Planning, repository inspection, owner smoke, reporting, Issue-only actions, and strictly read-only investigations do not increment the version. If tracked project state is written, the task is mutating and needs a new Target Version.
+| Class | Default execution | Escalation |
+| --- | --- | --- |
+| E0: deterministic | Direct canonical command; Worker only when useful | Main if output requires judgment |
+| E1: narrow | Medium only when every eligibility condition below is satisfied; otherwise High | High on unexpected uncertainty |
+| E2: normal implementation | High | XHigh for unresolved complex interactions |
+| E3: deep/ambiguous | XHigh, or the highest verified supported equivalent | Stop for owner decisions/evidence that reasoning cannot replace |
 
-Versioning is not publication. Real publication remains separately authorized.
+### Medium eligibility — all required
 
-## Execution effort
+- Scope, desired behavior and acceptance are already resolved.
+- Stack/API and affected boundaries are understood; no material research or local unknown remains.
+- No authentication, authorization, tenant isolation, cryptography, secrets, untrusted-input boundary, destructive migration, production access or release-security change.
+- Changes are reversible and do not introduce a new architecture/dependency/service boundary.
+- Focused deterministic checks directly cover the changed behavior and likely regressions; passing lint alone is insufficient.
 
-### E0 — deterministic
+Medium is an option, not an automatic discount for short tasks or few changed lines. When evidence is insufficient, choose High. Security-sensitive implementation has a High minimum; complex security design normally requires XHigh plus independent review, not merely more reasoning.
 
-A known script/tool/check performs essentially all work. Prefer Worker or direct deterministic execution. Main supervises only when needed.
+### Escalation without quality loss
 
-### E1 — narrow
+Unexpected ambiguity, contradictory evidence, an unexplained failing check or newly discovered security impact invalidates the original selection. Reassess before further edits; do not repeat blind attempts or weaken tests. Increase effort using the harness's supported session control when available. If the executor cannot change effective effort, report the needed setting and pause the affected work instead of claiming it switched. Preserve the same active Target Version.
 
-Localized, well-understood work with little ambiguity.
+The contract describes desired effort; it cannot itself change a model setting. Verify available levels and effective settings for the selected model/client. Never fabricate a vendor option, add API spending, change subscriptions or relax permissions to achieve an effort tier.
 
-**Main effort: High** by default. Usually no subagent.
+## Discovery and risk are separate
 
-### E2 — standard
+Local discovery: `none` (normal truth gate only), `targeted` (specific known-stack checks), or `deep` (unfamiliar/native/external behavior). State blocking questions and a stopping condition. Do not repeat research already verified remotely.
 
-Normal implementation work, integration, validation, or debugging.
-
-**Main effort: High** by default. Worker may be used when bounded work can be delegated cheaply.
-
-### E3 — deep
-
-Architecture, difficult debugging, unfamiliar/native behavior, complex cross-module logic, deep local discovery, or complex reverse engineering.
-
-**Main effort: XHigh** by default when the selected harness currently supports it reliably. Scout may be useful. If the harness uses different effort names, materialization maps XHigh to the closest verified equivalent.
-
-High/XHigh are effort modes of Main, not separate agents. XHigh is not the default for all coding.
-
-## Local discovery
-
-The orchestrator also classifies local discovery:
-
-- `none` — no material local unknowns beyond normal truth checks;
-- `targeted` — confirm known toolchain/runtime/paths/commands/integration points;
-- `deep` — investigate unfamiliar/native/external targets, binaries, decompiled evidence, or ambiguous local-only behavior.
-
-Local discovery should answer specific blocking questions and stop. Do not explore broadly merely because tools are available.
-
-## Machine-local portability
-
-When a task/project depends on a machine-local resource, the contract should identify the required resource but must not embed the orchestrator's or owner's absolute local path as shared project state.
-
-Materialized projects should define:
-
-- tracked contract: required resource/key and validation;
-- ignored local value location when persistence is useful;
-- explicit override behavior when useful;
-- safe auto-detection behavior when practical;
-- guided/actionable setup when auto-detection is insufficient;
-- fresh-machine negative-path validation.
-
-A local path discovered during execution is evidence/configuration for that machine, not a stable project fact unless only the portable detection rule is promoted.
-
-## Risk
-
-Risk is independent of effort:
-
-- `normal`
-- `elevated`
-
-Elevated risk may justify stronger mechanical restrictions, additional validation, explicit owner approval, or an independent fresh-context review. It does not automatically require XHigh.
+Risk: `normal` or `elevated`. A simple production operation can be elevated without requiring deep reasoning. Extra reasoning does not replace authorization, isolation, evidence or review.
 
 ## Delegation
 
-Default to no subagent.
+Default to no subagent. Worker handles bounded locate/execute/extract/compare/test tasks. Scout interprets a narrow evidence set using read/search tools. Main owns integration and final judgment. Delegate only when it removes more work than coordination creates. No recursive fan-out by default; no permanent Reviewer. A fresh-context independent review is requested for consequential security/architecture changes when useful.
 
-Use Worker when a bounded task can be moved out of Main without duplicating Main work.
+## Security and services
 
-Use Scout only when evidence requires interpretation beyond Worker and spending Main context on raw exploration would be inefficient.
+Load `SECURITY_BASELINE.md` and only the applicable materialized controls when attack surfaces change. Derive risk from exposure, data and operations rather than owner knowledge of security terms. Never reduce mandatory controls to meet a budget. Record unresolved material risks in Issues; do not publish while required security checks or approvals are missing.
 
-Do not create a permanent Reviewer role; request an independent review pass only for elevated-risk work when it adds value.
+Select external services by capability, operating responsibility, total cost, recovery and exit requirements. Prefer no service when none is needed. Provider selection is research, not permission to provision, purchase or deploy.
 
-## Contract proportionality
+## Machine-local portability
 
-Use the smallest contract that is executable without guesswork. Remove empty sections.
+Track resource requirements/resolvers, not machine values. Use explicit override, validated ignored config, bounded auto-detection, then guided/actionable setup. Invalid explicit overrides must fail rather than silently select another target. Test missing/stale/ambiguous configuration with temporary fixtures, never by deleting owner state. Secrets require their own protected mechanism, not plain local path configuration.
 
-### Compact contract — usually E0/E1
+## Proportional contracts and reports
 
-```text
-# [<TARGET_VERSION>] <TITLE>
-Current version
-Target version
-Goal
-Execution: E-level + Main effort + local discovery
-Repository basis (when useful)
-Likely location or exact target
-Scope boundary
-Validation
-Git/Issue action if any
-```
+Use the smallest sufficient contract. A compact mutation contract needs version identity, goal, affected scope, relevant validation and requested Git/Issue actions. Include execution/discovery/security details only where they change the work; defaults are inherited, not repeated as empty headings.
 
-### Extended contract — usually E2/E3
+Extended contracts add verified facts, local questions, non-goals, compatibility, acceptance, security controls/tests, service/operation constraints and review requirements only as needed.
 
-Use the same identity/execution fields, then add only what the task actually needs:
-
-```text
-Owner decisions
-Verified facts
-Local verification required
-Local discovery questions
-Assumptions
-Acceptance criteria
-Non-goals
-Compatibility/safety constraints
-Risk
-Delegation guidance when non-default
-Validation delta
-Commit/push
-Exact Issue actions
-Final report requirements
-```
-
-## Remote versus local truth
-
-ChatGPT may pre-resolve remote facts, but the executor must verify:
-
-- local HEAD/branch/status/diff;
-- canonical version source;
-- local uncommitted work;
-- local-only configuration/tools;
-- installed SDKs/game/runtime/binaries;
-- local logs/decompiled evidence not provided to ChatGPT;
-- actual build/tests/runtime/graphical behavior.
-
-A task contract must not ask the executor to rediscover remote facts without a reason.
+The final report is an ephemeral response after the requested Git actions. Include the exact target token, changed behavior, checks actually run, failures/unverified items, commit/push result and explicit Issue actions. Do not generate a tracked last-report or parallel work-state file.

@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>BootCrate Project Intake</title>
+  <title>BootCrate Intake</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
     <div>
       <h1>BootCrate</h1>
-      <p id="subtitle">Project discovery intake — architecture is decided later with ChatGPT and the owner.</p>
+      <p id="subtitle">Project discovery intake — architecture is decided later with the orchestrator.</p>
     </div>
     <div class="toolbar">
       <button id="langBtn">PT-BR</button>
       <button id="newBtn">New</button>
       <button id="saveBtn">Save local</button>
-      <button id="exportBtn">Export final JSON</button>
+      <button id="exportBtn">Export JSON</button>
       <label class="fileBtn">Import JSON<input id="importInput" type="file" accept=".json,application/json"></label>
     </div>
   </header>
@@ -26,7 +26,7 @@
       <div class="status">
         <strong id="progressText">0 / 0 answered</strong>
         <div class="bar"><div id="barFill"></div></div>
-        <div id="requiredText" class="requiredStatus"></div>
+        <p id="requiredText" class="requiredStatus"></p>
       </div>
       <nav id="sectionNav"></nav>
       <p class="hint" id="privacyHint">Everything stays in your browser unless you export the JSON.</p>
@@ -36,10 +36,11 @@
   </main>
 
   <footer>
-    <p id="footerText">Unknown is a valid answer. ChatGPT researches what you should not need to research yourself.</p>
+    <p id="footerText">Unknown is a valid answer. The orchestrator researches what you should not need to research yourself.</p>
   </footer>
 
   <script src="questions.js"></script>
+  <script src="intake-core.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

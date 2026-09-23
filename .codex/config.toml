@@ -1,3 +1,5 @@
+# Main defaults to High. Use supported per-session effort controls for Medium/XHigh.
+# Project settings are defaults, not an immutable boundary against a writable workspace.
 model_reasoning_effort = "high"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
@@ -11,4 +13,5 @@ interrupt_message = true
 network_access = false
 
 [shell_environment_policy]
+inherit = "core"
 ignore_default_excludes = false

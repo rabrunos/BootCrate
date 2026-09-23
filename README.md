@@ -1,377 +1,90 @@
 # BootCrate
 
-BootCrate is a stack-neutral bootstrap for AI-assisted software projects.
+BootCrate is a stack-neutral starting system for AI-assisted software projects. It supplies discovery, policies and reusable skeletons, not one fixed application stack.
 
-It does **not** try to be one starter project for every technology. It provides a disciplined discovery and materialization process so a new repository can become the right development environment for its actual project.
+**Starting a new project? Read [START_HERE](docs/.human/bootstrap/START_HERE.md).**
 
-## New project? Start here
+The template is the product being maintained here. A downstream project adapts it and removes generic bootstrap material; maintaining BootCrate itself does not run that materialization workflow.
 
-If you just copied, forked, or cloned BootCrate for a new project, do not start implementing yet.
-
-Follow:
-
-**[`docs/.human/bootstrap/START_HERE.md`](docs/.human/bootstrap/START_HERE.md)**
-
-That guide covers the complete initial setup: GitHub, ChatGPT Project, project-only memory, GitHub access, optional Codex/Claude cloud execution, intake, discovery, materialization, validation, and final pruning.
-
-The normal rule is:
-
-> **Set up the remote project context first, then run discovery, then materialize.**
-
-## Core philosophy
-
-> Use abundant intelligence before consuming limited implementation intelligence.
-
-In the normal workflow, ChatGPT is the primary orchestrator. It may spend substantial effort reading GitHub, Issues, documentation, uploaded evidence, and external sources so the implementation harness receives a compact, well-resolved task.
+## Workflow
 
 ```text
-Owner
-  ↓
-ChatGPT
-  ↓
-GitHub repository + relevant Issues + research
-  ↓
-proportional task contract
-  ↓
-Codex OR Claude Code
-  ↓
-local truth check → implementation → validation → commit/push
-  ↓
-report
-  ↓
-Owner / ChatGPT review
+Owner → ChatGPT → current GitHub/Issues + research + owner agreement
+→ smallest sufficient versioned contract → Codex or Claude Code
+→ local truth + bounded discovery → implementation + validation
+→ authorized commit/push → final response → owner/ChatGPT review
 ```
 
-The optimization target is **not** minimizing ChatGPT usage. The target is minimizing scarce implementation-agent work: unnecessary reasoning, broad file exploration, repeated context, tool calls, retries, subagents, and expensive model usage.
+ChatGPT is the normal abundant planning layer, not a step to bypass for small tasks. Codex/Claude planning remains a fallback. Durable knowledge is in the repository; active work and acceptance are in Issues. Local checkout is execution reality and is checked before edits. No parallel work-state, checkpoint or last-report file is required.
 
-## Fallback planning
+## Context and version identity
 
-The repository must remain usable if ChatGPT becomes unavailable, limited, or intentionally bypassed.
+Raw intake becomes a stable normalized project profile after discussion/research. Each execution receives only its necessary subset, not all answers or the entire knowledge library.
 
-```text
-Owner
-  ↓
-Codex Plan Mode OR Claude Code Plan Mode
-  ↓
-repository rules + local checkout + relevant Issues
-  ↓
-same task policy
-  ↓
-implementation
-```
+Every materialized project is versioned, even HTML-only, documentation and tooling projects. Use one native version source or a minimal `VERSION`. New mutating root tasks receive a Target Version; continuations preserve the same unaccepted target. Prompt/commit/report share `[<TARGET_VERSION>]`, while titles may differ. Read-only work/local setup do not bump version; versioning does not authorize publication.
 
-Fallback planning is portability, not the normal operating model.
+## Quality-first reasoning
 
-## Source of truth
+Main is one role with three effort levels:
 
-- **Owner decisions** have highest product authority.
-- **GitHub repository** is ChatGPT's canonical observable project state.
-- **GitHub Issues** own active project work: epics, features, tasks, bugs, investigations, acceptance criteria, decisions tied to work, status, follow-ups, and owner/manual validation.
-- **Local working tree** is the executor's immediate execution reality. Codex/Claude inspect branch, HEAD, status, and diff before editing.
-- Do not create parallel status systems, AI checkpoints, decision indexes, or roadmap files that duplicate Issues.
+| Level | Use |
+| --- | --- |
+| Medium | Resolved, familiar, reversible work with direct deterministic coverage and no sensitive-boundary change |
+| High | Default for normal implementation and judgment |
+| XHigh | Deep ambiguity, difficult architecture/debugging and complex security/native work |
 
-The expected solo workflow keeps GitHub and local state synchronized. A task contract may include the GitHub commit SHA ChatGPT used. The executor verifies its local state before changing files instead of re-downloading repository files from GitHub.
+[TASK_POLICY](docs/.ai/TASK_POLICY.md) defines all eligibility and escalation rules. Uncertainty falls back to High. A prompt cannot itself switch model effort: use supported client settings and verify the effective choice.
 
-## Bootstrap lifecycle
+Worker handles bounded mechanical execution; Scout interprets scoped read-only evidence. Delegation is optional and must replace work, not multiply it. No permanent reviewer or automatic fan-out is required.
 
-The detailed operational procedure is in [`docs/.human/bootstrap/START_HERE.md`](docs/.human/bootstrap/START_HERE.md).
+## Security by attack surface
 
-At a high level:
+[SECURITY_BASELINE](docs/.ai/SECURITY_BASELINE.md) supplies a small universal core. Discovery selects only relevant web/API, desktop/mobile, multiplayer/native, infrastructure and sensitive-data controls. The owner describes users/data/operations, not vulnerability names.
 
-1. Create/prepare the project's GitHub repository and local checkout.
-2. Create the ChatGPT Project, use project-only memory, connect GitHub, and install the short BootCrate project instructions.
-3. Choose the implementation harnesses you actually intend to use.
-4. Open `docs/.human/bootstrap/app/index.html` locally and complete the bilingual intake.
-5. Export the validated `project-intake.json`. Do not make it permanent project state.
-6. Give the intake to the ChatGPT Project.
-7. ChatGPT reads GitHub, researches unknowns, discusses architecture with the owner, and reaches explicit agreement.
-8. ChatGPT uses `docs/.human/bootstrap/templates/bootstrap-materialization.md` to produce the first implementation task.
-9. Run that task in Codex or Claude Code.
-10. The implementation harness materializes only what the project needs.
-11. Validate, commit, and push.
-12. **Remove all BootCrate/bootstrap-only material from the materialized project.** Git history preserves the bootstrap history.
+Materialization links selected controls to implementations and negative tests: authorization, injection/XSS, input/parser limits, host/file/process boundaries, secret leakage, recovery and abuse controls as applicable. Security, functional validation and explicit deployment approval are separate gates. No model/template/scanner guarantees vulnerability-free software or compliance.
 
-## RAW → NORMALIZED → EXECUTION
+Secrets do not belong in source, logs, prompts, reports, artifacts or client applications. `.env` and common private-key/credential paths are ignored; placeholder-only examples may be tracked. Ignore rules are not access control. Use scoped local/CI/production secret facilities, verify effective agent restrictions and rotate exposed credentials.
 
-BootCrate deliberately uses three context layers:
+## Local discovery and another computer
 
-```text
-RAW
-project-intake.json
-owner answers
-        ↓ ChatGPT + owner + research
-NORMALIZED
-docs/.ai/project-profile.json
-stable project facts/decisions only
-        ↓ ChatGPT per task
-EXECUTION CONTEXT
-compact task contract
-        ↓
-Codex / Claude
-```
+Local discovery is `none`, `targeted` or `deep`, answering only blocking questions. Verify actual runtime/API/representation before selecting inspection/decompilation tools; prefer supported extension points and use reverse engineering only when authorized.
 
-The normalized project profile is **not** a project-status file. Open work and changing status belong in GitHub Issues.
+Track resource requirements/resolvers, not machine-specific absolute paths. Keep actual values in ignored `.local/config/` or a native equivalent. Prefer explicit override → validated config → bounded detection → guided/actionable setup. Reject invalid overrides, handle ambiguous candidates and never hang in CI. Test new-machine paths safely with disposable fixtures.
 
-## Mandatory versioning and Target Version
+`.local/` may hold only necessary config, tools, research/indexes, diagnostics, caches and artifacts. Credentials require separate appropriate protection. See [LOCAL_WORKSPACE](docs/.ai/LOCAL_WORKSPACE.md).
 
-Every project materialized by BootCrate is versioned, even if it only updates static files, documentation, scripts, configuration, or tooling.
+## External services and operating cost
 
-Each project has exactly one canonical version source. Materialization prefers the stack's native version metadata and falls back to a minimal source such as `VERSION` when no native source exists.
+[Service selection](docs/.human/bootstrap/knowledge/service-selection.md) starts with needs such as persistence, authentication, scores, storage or jobs. Compare no service, managed, self-hosted and hybrid using total cost, operator responsibility, recovery, scale and exit strategy.
 
-Every independent mutating root task receives an orchestrator-assigned **Target Version**. The exact version token links the execution chain:
+No provider, database or VPS is mandatory. Free software is not cost-free operation and no provider is assumed unlimited. Research current terms/limits during discovery. Do not provision paid services, change live infrastructure or deploy merely because an option was selected.
 
-```text
-prompt        # [v0.4] ...
-continuation  # [v0.4] ...
-commit        [v0.4] ...
-report        # [v0.4] ...
-```
+## What a project receives
 
-Continuations and fixes required to complete the same unaccepted target keep that Target Version. Read-only work does not increment the project version. Versioning is mandatory; external publication remains a separate, explicitly authorized action.
+Use the [materialization map](docs/.human/bootstrap/MATERIALIZATION_MAP.md). Keep only relevant source/manifests/tests, enabled harnesses/skills, stable profile/context/policies, selected security controls, required tooling and GitHub metadata.
 
-## Proportional task contracts
+Possible capabilities are doctor, build, test, validate, run, package, install, diagnostics and publish. They are not a requirement to create nine scripts or introduce another runtime.
 
-Every normal project task may pass through ChatGPT, including small ones. The contract size changes with the task.
+Codex uses `AGENTS.md`, `.codex/` and `.agents/skills/`. Claude uses `CLAUDE.md` and `.claude/`; the shared import avoids needless rule duplication. Formats and effective settings must be verified against the installed client, not assumed from valid TOML/JSON alone.
 
-A tiny UI fix may need only:
+## GitHub setup
 
-```text
-Goal
-Likely location
-Scope boundary
-Validation
-```
+Issue Forms cover Epic, Feature, Task, Bug, Investigation, Refactor and Release. Tooling normally uses Task. Milestones are delivery groupings, not another status file.
 
-A difficult persistence or architecture change may need verified facts, acceptance criteria, non-goals, compatibility constraints, local verification, risk handling, and Issue actions.
+`.github/labels.yml` is desired metadata. During materialization the executor creates/updates the required live labels, preserves unrelated labels and verifies results before creating the exact approved Issues/Milestones. Fork/ZIP creation is not assumed to provision metadata. Missing authentication is a setup blocker, not a request for the owner to recreate every label manually.
 
-See `docs/.ai/TASK_POLICY.md`.
+## Validation of this reusable template
 
-## Execution effort
+[Validation guide](docs/.human/bootstrap/validation/README.md) provides one local/CI command for schemas, JSON/TOML/YAML, question/schema consistency, skills, policy invariants, secret-pattern smoke checks, links and intake tests. CI uses read-only permissions and pinned external actions; it does not publish or spend model credits.
 
-BootCrate uses vendor-neutral effort classes instead of hard-coding model names:
+[Scenario evals](docs/.human/bootstrap/evals/README.md) distinguish deterministic fixture/grader tests, actual model-plan evaluation and real isolated materialization. Passing the first layer does not prove the latter two or certify security.
 
-- `E0` — deterministic execution; script/tool does nearly all the work.
-- `E1` — narrow/localized implementation with little ambiguity.
-- `E2` — normal implementation work.
-- `E3` — deep/ambiguous work: architecture, difficult debugging, native investigation, complex cross-module behavior.
+The current intake questions are unchanged. Missing security/hosting intentions are asked in conversation using the [coverage guide](docs/.human/bootstrap/knowledge/discovery-coverage.md) until the questionnaire is redesigned.
 
-Risk is separate:
+## Pruning and boundaries
 
-- `normal`
-- `elevated`
+After downstream materialization remove `docs/.human/bootstrap/`, raw intake, `.github/workflows/bootcrate-validate.yml`, unused adapters/roles/forms/tooling and generic BootCrate identity/version/history. Promote only necessary project controls/tests first, verify links and run the final project's own checks. Do not copy bootstrap evaluation data or maintenance state into the new product.
 
-A release can be easy to reason about but high risk. A difficult algorithm can be low operational risk.
+No AI telemetry, checkpoint database, Decision Index, MCP setup, permanent Reviewer, migration framework or tracked last-report is added by default. Reports remain responses containing the actual commit/push outcome; Issues remain active-work truth.
 
-The materialized project maps effort classes to the models/reasoning levels actually available at that time.
-
-## Implementation harnesses
-
-BootCrate supports Codex and Claude Code as first-class implementation harnesses.
-
-### Codex
-
-Current project-scoped surfaces include:
-
-- `AGENTS.md`
-- `.codex/config.toml`
-- `.codex/agents/*.toml`
-- `.agents/skills/*/SKILL.md`
-
-### Claude Code
-
-Current project-scoped surfaces include:
-
-- `CLAUDE.md`
-- `.claude/settings.json`
-- `.claude/agents/*.md`
-- `.claude/skills/*/SKILL.md`
-
-For dual-harness projects, Claude Code can import `AGENTS.md` from `CLAUDE.md`, avoiding needless duplication of stable rules. Product-specific deltas remain in the product-specific files.
-
-Tool formats and precedence change over time. Materialization must verify the current official documentation and, when possible, the **effective loaded configuration**, not merely assume a written file is active.
-
-## Adaptive local discovery
-
-Remote planning cannot prove local-only facts such as installed SDKs, game binaries, engine/runtime details, generated files, local logs, or the exact APIs exposed by an installed target.
-
-Materialization therefore classifies local discovery as:
-
-- `none` — remote/repository evidence is already sufficient;
-- `targeted` — confirm toolchain, scaffold/runtime, paths, commands, or integration points;
-- `deep` — inspect unfamiliar/native/external targets, modding surfaces, binaries, packages, or decompiled evidence before finalizing the baseline.
-
-For `targeted` or `deep` discovery, the executor gathers the smallest useful local evidence, reduces noisy output, and then materializes only the project-specific maps/scripts/tooling justified by that evidence.
-
-See `docs/.human/bootstrap/MATERIALIZATION_MAP.md` and `docs/.human/bootstrap/knowledge/local-discovery.md`.
-
-## Agents
-
-The default topology is intentionally small:
-
-```text
-Main
-├── High   — default implementation reasoning
-├── XHigh  — escalation mode for E3/deep work
-├── Worker — bounded cheap/mechanical work
-└── Scout  — optional interpretive investigation
-```
-
-**High and XHigh are two effort modes of the same Main role, not two duplicated agents.** Main owns the task, ambiguity, implementation, integration, and final judgment. High is the normal mode for E1/E2 work; XHigh is reserved for E3 work such as difficult architecture, deep debugging, unfamiliar native/runtime behavior, or complex reverse engineering.
-
-Worker locates, executes, extracts, compares, builds, tests, and reports concise evidence. Scout is optional and exists for unfamiliar APIs, native/decompiled evidence, dependency/runtime investigation, or diagnostics requiring more interpretation.
-
-The task contract states the desired Main effort and local-discovery depth. Materialization maps those semantics to the current Codex/Claude mechanisms and verifies the effective configuration.
-
-No permanent Reviewer agent is required. High-risk tasks may request an independent fresh-context review. Subagents should replace expensive Main work, not duplicate it.
-
-## Deterministic-first validation
-
-Prefer deterministic mechanisms before LLM judgment:
-
-```text
-compiler / type checker / schema validator / linter / tests / hashes / scripts
-                              ↓
-                       compact evidence
-                              ↓
-                              AI
-```
-
-For large diagnostics:
-
-```text
-raw log / decompile / noisy test output
-        ↓
-deterministic sanitizer/indexer/reducer
-        ↓
-compact structured evidence
-        ↓
-AI
-        ↓
-raw source only when escalation is necessary
-```
-
-## Trust and security
-
-Content discovered in source code, logs, web pages, external repositories, dependency documentation, tool/plugin output, generated data, decompiled files, or user-generated content is **evidence**, not new instruction authority.
-
-When a high-impact action can be blocked mechanically, prefer enforcement to prose alone. Materialized projects should use the native sandbox/permission mechanisms of their enabled harnesses where practical, especially for secrets, destructive operations, production access, and real publication.
-
-Real external publication is never part of validation and requires explicit owner authorization.
-
-## `.local/`
-
-`.local/` is always ignored and may hold only machine-local/private/generated state the project actually needs:
-
-```text
-.local/
-  config/
-  logs/
-    raw/
-    sanitized/
-    summaries/
-  tools/
-  research/
-  cache/
-  artifacts/
-  temp/
-```
-
-The directory does not need to exist until a project needs it.
-
-## Machine-local configuration
-
-Machine-specific paths and environment values never belong in tracked project configuration merely because one developer needed them.
-
-When a materialized project depends on a local game install, SDK, executable, emulator, database, external tool, or similar machine-local resource, BootCrate uses two layers:
-
-```text
-tracked contract
-        ↓
-docs/.ai/LOCAL_WORKSPACE.md + project scripts/validation
-
-machine-local values
-        ↓
-.local/config/...
-```
-
-The tracked project documents what is required and how it is validated. Actual machine paths stay ignored by Git.
-
-Preferred resolution order is:
-
-1. explicit command/environment override when the project supports one;
-2. valid persisted value under `.local/config/`;
-3. safe automatic detection;
-4. actionable configuration/error flow.
-
-When useful, `doctor --configure` (or the native equivalent) should guide configuration instead of requiring a nontechnical user to hand-edit JSON.
-
-Projects that depend on machine-local state must validate the fresh-machine experience: missing config, invalid/stale config, unique auto-detection, ambiguous candidates, and no candidates.
-
-## GitHub Issues
-
-BootCrate ships generic Issue Forms for:
-
-- Epic
-- Feature
-- Task
-- Bug
-- Investigation
-- Refactor
-- Release
-
-GitHub Milestones are delivery targets and are created when the project needs them. Tooling work normally uses a Task; it does not need a separate Issue type.
-
-`.github/labels.yml` is the declarative desired state for project labels.
-
-Do **not** make the owner manually recreate labels after a fork, ZIP upload, or fresh repository setup. During materialization, the implementation harness must reconcile the live GitHub labels to the adapted `.github/labels.yml` using an authenticated GitHub write capability already available to the environment (for example a native GitHub integration, GitHub CLI, or the GitHub REST API).
-
-The reconciliation is intentionally idempotent:
-
-- create required labels that are missing;
-- update matching labels when color/description differs;
-- preserve unrelated existing labels unless the owner-approved task explicitly removes them;
-- verify the live labels before creating Issues that depend on them.
-
-Initial project Issues and Milestones are also repository metadata, not files. ChatGPT decides what should exist from the approved project plan, and the materialization task creates them programmatically when required.
-
-## What BootCrate intentionally does not add by default
-
-- AI usage telemetry or token dashboards
-- custom checkpoint/state files
-- `DECISIONS.md` or parallel project-status files
-- MCP configuration without a project-specific need
-- a permanent Reviewer agent
-- a BootCrate migration framework
-- BootCrate provenance metadata in the materialized project
-- unused harness files, agents, skills, scripts, Issue Forms, or release tooling
-
-## Materialization pruning
-
-The final project should contain no BootCrate residue merely because it originated here.
-
-Examples:
-
-- Codex-only project → remove Claude files.
-- Claude-only project → remove Codex files; move stable rules into the surviving Claude instructions if needed.
-- Dual project → keep both, normally with `CLAUDE.md` importing shared stable rules from `AGENTS.md`.
-- No Scout need → remove Scout adapters.
-- No automated release → remove release tooling.
-- Irrelevant Issue Forms/skills/scripts → remove them.
-- Remove `docs/.human/bootstrap/` and the raw intake after successful materialization.
-- Rewrite this README for the actual project.
-- Verify tracked files contain no unintended `BootCrate`/bootstrap references.
-
-Git history is the bootstrap audit trail.
-
-## Repository language
-
-The intake records both:
-
-- repository technical language;
-- owner-facing implementation report language.
-
-The intended default for this repository is English technical content and `pt-BR` owner-facing implementation reports, but downstream materialization follows the owner's intake.
-
-## Current status
-
-This package is **BootCrate v0.6**. The repository's canonical version source is `VERSION`.
+Technical content defaults to English and owner-facing reports to pt-BR, configurable in the materialized profile. This package is **BootCrate v0.7**; `VERSION` is its canonical version source.

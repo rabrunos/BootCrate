@@ -9,14 +9,15 @@
     "project",
     "owner",
     "workflow",
-    "versioning"
+    "versioning",
+    "security"
   ],
   "properties": {
     "$schema": {
       "type": "string"
     },
     "schema": {
-      "const": "project-profile/v1"
+      "const": "project-profile/v2"
     },
     "project": {
       "type": "object",
@@ -184,6 +185,130 @@
         },
         "continuations_reuse_target": {
           "const": true
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exposure",
+        "data_classes",
+        "untrusted_inputs",
+        "modules",
+        "control_map",
+        "verification_commands"
+      ],
+      "properties": {
+        "exposure": {
+          "enum": [
+            "unknown",
+            "local",
+            "lan",
+            "internet"
+          ]
+        },
+        "data_classes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "public",
+              "internal",
+              "personal",
+              "sensitive",
+              "payments"
+            ]
+          }
+        },
+        "untrusted_inputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "modules": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "web-api",
+              "desktop-mobile",
+              "multiplayer-native",
+              "infrastructure",
+              "sensitive-data"
+            ]
+          }
+        },
+        "control_map": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_commands": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capability",
+          "operating_model",
+          "operator",
+          "rationale",
+          "security_requirements",
+          "exit_strategy"
+        ],
+        "properties": {
+          "capability": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operating_model": {
+            "enum": [
+              "managed",
+              "self-hosted",
+              "hybrid"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          },
+          "security_requirements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "exit_strategy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cost_ceiling": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

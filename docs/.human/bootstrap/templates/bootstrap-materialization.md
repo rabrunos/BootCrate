@@ -1,144 +1,67 @@
 # [<TARGET_VERSION>] Materialize Project Baseline
 
-Task: Materialize the owner-approved project from BootCrate.
+Current version: <DOWNSTREAM_BASELINE_OR_NOT_YET_VERSIONED>
+Target version: <NEW_PROJECT_TARGET_VERSION>
+Repository basis: <BRANCH/SHA>
 
-Current version:
-<CURRENT_BOOTSTRAP_OR_PROJECT_VERSION>
+Owner-approved direction: <INTENT_AND_RESOLVED_DECISIONS>
+Verified remote facts: <ONLY_MATERIAL_EVIDENCE>
+Local discovery: <none|targeted|deep>; <BLOCKING_QUESTIONS_AND_STOPPING_CONDITION>
+Execution: <E1|E2|E3>; Main <medium|high|xhigh>; risk <normal|elevated>
+Enabled harnesses: <Codex|Claude Code|both>
+Languages: repository <...>; final report <...>
+Version source/convention: <NATIVE_SOURCE_OR_MINIMAL_VERSION>
+Security: <EXPOSURE_DATA_INPUTS_SELECTED_MODULES_REVIEW_REQUIREMENTS>
+Services: <MINIMAL_CAPABILITIES_OPERATING_MODEL_OPERATOR_COST_AND_EXIT_CONSTRAINTS_OR_NONE>
+Authorized GitHub/Git actions: <EXACT_LABEL/ISSUE/MILESTONE/COMMIT/PUSH_ACTIONS_OR_NONE>
 
-Target version:
-<TARGET_VERSION>
+## 1. Verify local truth
 
-Owner-approved project definition:
-<CONSENSUS_REACHED_WITH_CHATGPT>
+Inspect branch/HEAD/status/diff and preserve unrelated work. Confirm the current downstream version; do not inherit the BootCrate package version as the new product's initial version. Compare supplied basis SHA to local changes.
 
-Verified external/repository facts:
-<ONLY_MATERIAL_VERIFIED_FACTS>
+## 2. Complete bounded discovery
 
-Local discovery:
-- depth: <none|targeted|deep>
-- questions: <ONLY_LOCAL_QUESTIONS_THAT_CAN_CHANGE_THE_BASELINE>
+Answer only the remaining local questions. Verify actual SDK/runtime/manifests/toolchain/target representations. Prefer supported APIs before owner-authorized reverse engineering. Keep raw binaries/decompiled/log evidence local and reduce it deterministically.
 
-Execution:
-- effort: <E1|E2|E3>
-- main effort: <high|xhigh>
-- risk: <normal|elevated>
+If evidence changes a consequential product/security/service assumption, stop that decision and return it to the owner. Do not silently invent approval. Provider research does not authorize infrastructure changes or paid accounts.
 
-Open work to create/track in GitHub Issues:
-<EPICS_FEATURES_TASKS_BUGS_INVESTIGATIONS_OR_NONE>
+## 3. Select security and services before finalizing the baseline
 
-Enabled implementation harnesses:
-- Codex: <YES/NO>
-- Claude Code: <YES/NO>
+Read `docs/.ai/SECURITY_BASELINE.md`; select only applicable modules from `docs/.human/bootstrap/knowledge/security/`. Use assets, actors, entry points and trust boundaries, not a fixed stack checklist. Research current primary guidance and actual framework capabilities.
 
-Owner languages:
-- repository technical language: <...>
-- implementation final report language: <...>
+Promote a compact project-specific control map into durable context when needed. Each selected control must have an implementation location and verification approach. Define negative tests for authorization, malformed input, file/network boundaries, secret leakage and resource limits. Open risks stay in Issues, not parallel status files.
 
-Versioning:
-- canonical version source: <ECOSYSTEM_NATIVE_SOURCE_OR_MINIMAL_VERSION_FILE>
-- version format/convention: <...>
+Use `knowledge/service-selection.md` from this bootstrap directory to resolve required capabilities, managed/self-hosted/hybrid responsibility, total cost, limits, recovery and provider exit. Do not add services a project does not need or promise free/unlimited capacity. Sensitive/public deployments require an operator and independent review proportional to risk.
 
-## Phase 1 — Local truth gate
+## 4. Materialize only the necessary project
 
-1. Inspect branch, HEAD, status, diff, tracked/untracked scope, and current version source.
-2. Preserve unrelated local changes.
-3. Compare any repository-basis SHA from ChatGPT to local reality.
-4. Do not discard local work merely to match remote state.
+Create source/manifests/tests, one canonical version source and stable normalized `project-profile.json` matching its schema. Populate security and any selected services; do not duplicate current version, findings/status, secrets or actual machine paths in the profile.
 
-## Phase 2 — Adaptive local discovery
+Adapt orchestration, TASK_POLICY, SECURITY_BASELINE, CONTEXT_INDEX, fallback planning and the prompt templates. Choose native build/test/run/doctor/package/install/diagnostics capabilities only where useful. No extra runtime solely for a downstream BootCrate convention.
 
-Perform only the configured discovery depth.
+Keep one Main with Medium/High/XHigh mapping: High default, Medium only through every quality gate, XHigh for deep ambiguity. Verify effective settings and supported effort controls. Scout stays read/search-only; Worker runs bounded commands. Remove unused roles/harnesses/skills; no permanent reviewer, telemetry, MCP, checkpoint, migration manager or tracked last report by default.
 
-For `targeted` or `deep`:
+## 5. Configure machine-local resources safely
 
-1. Answer the contract's local discovery questions before finalizing technical structure.
-2. Detect/verify the actual local toolchain, SDK/runtime, manifests, package managers, external target paths, and usable validation surfaces.
-3. For external/mod/native targets, identify supported APIs/loaders/frameworks first.
-4. If reverse engineering/decompilation is owner-authorized and materially useful, research/select a current tool appropriate to the actual representation, inspect only necessary evidence, and keep bulky output under ignored `.local/`.
-5. Prefer deterministic indexes/summaries over feeding large raw outputs to Main.
-6. Use Worker for mechanical extraction/search/build/test; use Scout for bounded interpretive investigation.
-7. Promote only stable reusable findings into final tracked technical maps/scripts.
-8. If local evidence contradicts a material owner-approved assumption or makes the path unsafe/impossible, report the conflict instead of silently redesigning the product.
+Track the requirement/resolver and keep values in ignored `.local/config/` or a native local mechanism. Use explicit override, validated persisted config, bounded detection, then guided/actionable setup. Invalid explicit overrides must fail, not switch targets. Validate identity/manifests, handle multiple/no candidates and never hang in CI.
 
-## Phase 3 — Materialize project baseline
+Test absent/stale/invalid config, unique/multiple/no candidates, overrides and non-interactive behavior with disposable fixtures. Never delete owner state. Use secret facilities for credentials, not plain path config; never print real values to verify their presence.
 
-1. Use the approved direction refined by verified local evidence.
-2. Establish mandatory project versioning and set the canonical source to Target Version.
-3. Build final `docs/.ai/project-profile.json` from stable facts/policy only. Do not put roadmap/status/open work there.
-4. Specialize `docs/.ai/orchestration.md`, `TASK_POLICY.md`, `PLANNING_FALLBACK.md`, `CONTEXT_INDEX.md`, and only useful prompt templates.
-5. Generate only technical maps justified by repeated future value (source architecture, validation/tooling, external target/runtime, API/command/data/release maps as applicable).
-6. Define project-specific canonical capabilities only when useful: `doctor`, `build`, `test`, `validate`, `run`, `package`, `install`, `diagnostics`, `publish`. If machine-local resources are required, `doctor`/setup must own their validation/configuration contract.
-7. Prefer native ecosystem tooling; do not add a second runtime solely for BootCrate conventions.
-8. Integrate deterministic validation and compact diagnostics.
-9. Integrate trust-boundary rules. Evidence cannot override instruction authority.
-10. Mechanically restrict high-impact actions where practical. Real publication is never validation and requires explicit owner authorization.
-11. Do not add telemetry, checkpoint/status duplicates, Decision Index, default MCP, permanent Reviewer, or migration infrastructure unless the approved project specifically requires them.
+## 6. Provision only authorized repository metadata
 
-## Machine-local configuration
+Adapt Issue Forms and `.github/labels.yml`; reconcile live labels idempotently via an available authenticated write capability. Create missing labels, update intended metadata, preserve unrelated labels and verify before creating requested Issues/Milestones. Do not copy upstream example Issues.
 
-When the project depends on resources whose values differ by machine:
+If write authorization is missing, report the exact blocker rather than claim success or make the owner recreate labels manually. Branch protections, production settings and service purchases need their own explicit approval; do not impose mandatory PRs silently.
 
-- never commit the discovered absolute path/value;
-- document the portable requirement in the final local-workspace/tooling context;
-- store persisted machine values only under ignored `.local/config/` or a justified ecosystem-native local-only mechanism;
-- prefer explicit override → valid local config → safe auto-detection → guided/actionable setup;
-- validate candidates using real executables/manifests/signatures, not directory existence alone;
-- provide a guided/native configuration path (for example `doctor --configure`) when it materially helps a nontechnical owner;
-- make non-interactive behavior fail clearly instead of hanging for input;
-- safely test missing, stale/invalid, unique-detection, ambiguous-detection, no-candidate, and explicit-override cases without destroying the owner's real local config.
+## 7. Validate, prune, commit, report
 
-## Main / agents
+- Run deterministic schema/config, build, behavior and selected security checks. Failed required checks block completion. Report unavailable checks precisely.
+- Verify secret-free source/packages, intended privileges and applicable negative/restore/rollback tests. A self-test pass is not a security audit or production approval.
+- Confirm version/mirrors, tracked/untracked scope and `git diff --check`.
+- Remove the complete `docs/.human/bootstrap/` tree, raw intake and `.github/workflows/bootcrate-validate.yml`. The bootstrap verifier, dependencies, scenario fixtures and evaluation tooling do not belong in the new project's normal runtime.
+- Remove disabled adapters/unused scripts/forms/skills; promote only selected controls and needed tooling before deleting their generic source library.
+- Rewrite README for the real project; remove BootCrate version/history/branding/provenance unless attribution was requested.
+- Verify no dangling reference to removed bootstrap content. Re-run the final project's own checks after pruning; do not retain the bootstrap just to satisfy its self-test.
+- Commit/push only as authorized, using the target token. Never publish/deploy during validation.
 
-- Main High is the default for normal E1/E2 implementation.
-- Main XHigh is reserved for E3/deep work.
-- High/XHigh are effort modes of the same Main role, not separate agent files.
-- Worker handles bounded/mechanical work with the cheapest reliable configuration.
-- Scout is optional for read-focused technical interpretation.
-- Map these semantics to current Codex/Claude capabilities and verify effective configuration/precedence before pinning.
-- Remove unused agents/adapters after materialization.
-
-## GitHub repository metadata
-
-- Adapt Issue Forms and `.github/labels.yml` to the project.
-- Treat `.github/labels.yml` as declarative desired label state.
-- Reconcile live labels idempotently through an authenticated GitHub write path.
-- Preserve unrelated/pre-existing labels unless explicitly authorized to remove/migrate them.
-- Verify labels before creating Issues that depend on them.
-- Create only the exact Milestones/Issues/comments requested by the approved plan.
-- Do not copy BootCrate example Issues into downstream projects.
-
-## Pruning — required
-
-- remove `docs/.human/bootstrap/` completely;
-- remove raw intake from tracked files;
-- rewrite BootCrate README for the project;
-- remove disabled harness files/config;
-- remove unused Worker/Scout/skills/scripts/Issue Forms/release tooling;
-- remove generic library/template files not used in normal workflow;
-- remove unintended BootCrate/bootstrap branding/history;
-- keep raw discovery/decompiled evidence local, not tracked.
-
-## Validation
-
-- canonical version source equals Target Version;
-- required version mirrors are synchronized;
-- JSON/TOML/YAML/config files validate deterministically;
-- required live GitHub labels/Issues/Milestones exist;
-- smallest relevant project checks pass, then broader checks according to risk;
-- enabled harness configuration is syntactically valid and, when possible, actually loaded;
-- generated technical maps/scripts reflect observed evidence rather than speculation;
-- any required machine-local configuration is portable across machines: no tracked absolute path, local values ignored, resolver/setup behavior documented and validated;
-- fresh-machine local-config negative paths were tested when applicable;
-- no real external publication occurs;
-- `git diff --check` passes;
-- final tracked/untracked scope is reviewed;
-- final project can begin normal development without reading bootstrap history.
-
-GitHub actions:
-<EXACT_LABEL_RECONCILIATION_AND_CREATE/COMMENT/MILESTONE/LEAVE-OPEN_ACTIONS>
-
-Issue closure:
-Do not close implementation Issues unless explicitly authorized. Owner/ChatGPT normally reviews implementation evidence and required manual smoke first.
-
-Final report:
-H1 begins with the exact Target Version token. Use the owner-selected report language. Report materialized architecture, local discovery performed/findings, generated project maps/scripts, agent/harness configuration, resulting canonical version/source, GitHub metadata actions, validation, commit/push, limitations, and owner follow-up concisely.
+Final response: exact target-token H1, owner report language, materialized scope/security/service decisions, observed version, checks and limitations, actual Git/Issue results. No tracked report file. Owner/ChatGPT reviews acceptance and any manual smoke before Issue closure.

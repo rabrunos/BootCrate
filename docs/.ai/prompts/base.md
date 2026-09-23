@@ -1,83 +1,41 @@
 # Base Task Contract
 
-Use `../TASK_POLICY.md`. Remove every section the task does not need.
+Use `../TASK_POLICY.md`. Remove unused sections; never repeat the entire policy library in an execution prompt. For read-only work identify the observed revision instead of promising a new version.
 
-For a mutating root task, H1/version fields are mandatory. Continuations preserve the active Target Version. Strictly read-only work may identify the observed version without creating a new target.
+## Compact mutation shape
 
-## Compact shape
+```text
+# [<TARGET_VERSION>] <TITLE>
+Current version: <OBSERVED_BASELINE_VERSION>
+Target version: <TARGET_VERSION>
+Goal: <EXACT_OUTCOME>
+Scope: <TARGET_AND_DO_NOT_TOUCH>
+Validation: <CHECKS_THAT_PROVE_THE_CHANGE>
+Git / Issue actions: <ONLY_AUTHORIZED_ACTIONS>
+```
 
-# [<TARGET_VERSION>] <SHORT_TITLE>
+## Add only material deltas
 
-Current version:
-<CURRENT_ACCEPTED_VERSION>
+- Repository basis: <BRANCH/SHA used by planner>.
+- Owner decisions / verified facts / local questions / assumptions.
+- Execution: effort <E0|E1|E2|E3>, Main <medium|high|xhigh>, risk <normal|elevated>.
+- Medium eligibility: <brief evidence all gates hold; otherwise use High>.
+- Local discovery: <none|targeted|deep>, bounded questions and stopping condition.
+- Security: <changed boundaries, selected controls, negative tests, release blockers, review>.
+- Services: <approved capability/operating model/operator; provisioning authorization remains separate>.
+- Acceptance / non-goals / compatibility / required version mirrors.
+- Delegation: <omit for default none; only bounded Worker/Scout work>.
+- Commit/push and exact Issue actions; closure only when authorized.
 
-Target version:
-<TARGET_VERSION>
+## Continuation
 
-Goal:
-<EXACT_OUTCOME>
+```text
+# [<ACTIVE_TARGET_VERSION>] Continuation — <DELTA>
+<NEW_EVIDENCE_OR_SCOPE_CLARIFICATION>
+```
 
-Execution policy:
-- effort: <E0|E1|E2|E3>
-- main effort: <high|xhigh>
-- local discovery: <none|targeted|deep>
-- risk: <normal|elevated>
+Keep the same target while finishing that unaccepted work. Escalation changes effective effort, not identity.
 
-Repository basis:
-<OPTIONAL_GITHUB_BRANCH_AND_SHA_USED_BY_ORCHESTRATOR>
+## Final report contract
 
-Target / likely location:
-<ONLY_WHEN_KNOWN_AND_USEFUL>
-
-Local discovery questions:
-<OMIT_WHEN_NONE; ONLY LOCAL QUESTIONS THAT BLOCK RELIABLE EXECUTION>
-
-Scope boundary:
-<DO_NOT_TOUCH_OR_NONE>
-
-Validation:
-<MINIMUM_RELEVANT_CHECK>
-
-Git / Issue action:
-<ONLY_WHEN_REQUIRED>
-
-## Extended additions
-
-Add only as needed:
-
-Owner decisions:
-<RESOLVED_PRODUCT_OR_ARCHITECTURE_DECISIONS>
-
-Verified facts:
-<REMOTE_FACTS_ALREADY_VERIFIED>
-
-Local verification required:
-<LOCAL_ONLY_FACTS_THE_EXECUTOR_MUST_CONFIRM>
-
-Assumptions:
-<ONLY_REAL_UNVERIFIED_ASSUMPTIONS>
-
-Acceptance criteria:
-- <MEASURABLE_CRITERION>
-- canonical version source equals <TARGET_VERSION> for a mutating root task
-
-Non-goals:
-- <EXPLICIT_NON_GOAL>
-
-Delegation guidance:
-<OMIT_WHEN DEFAULT NONE; USE WORKER/SCOUT ONLY WHEN IT SAVES MAIN WORK>
-
-Task-specific constraints:
-<ONLY_CONSTRAINTS NOT ALREADY OWNED BY REPOSITORY RULES>
-
-Validation delta:
-<CHECKS BEYOND REPOSITORY BASELINE>
-
-Commit and push:
-<REQUIREMENT; MUTATING ROOT TASK COMMIT SUBJECT STARTS WITH [<TARGET_VERSION>]>
-
-GitHub Issue actions:
-<EXACT COMMENT/UPDATE/LEAVE-OPEN ACTIONS; CLOSURE ONLY WHEN EXPLICITLY AUTHORIZED>
-
-Final report:
-<PROJECT-PROFILE REPORT LANGUAGE; H1 STARTS WITH EXACT [<TARGET_VERSION>] TOKEN; concise behavior/files, version source, discovery findings promoted to project context, validation, commit/push, Issue actions, limitations/follow-up>
+Respond with H1 starting with the exact version token in the owner's report language. Include material changes, observed version, validation actually run, failures/unverified checks, security limitations, commit/push and requested Issue actions. No secrets, raw successful logs or tracked last-report file. Never claim an unavailable effort switch or an unperformed production/security test.

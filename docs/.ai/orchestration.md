@@ -1,98 +1,30 @@
 # ChatGPT Orchestration — materialization skeleton
 
-This file becomes the concise project-specific orchestration contract after materialization.
+ChatGPT is the normal planning/research layer; Codex/Claude planning is the supported fallback. Keep project truth in GitHub and active work in Issues, not conversation memory.
 
 ## Normal chain
 
-1. Owner states the desired outcome.
-2. ChatGPT inspects the current GitHub repository and relevant Issues.
-3. ChatGPT researches external facts when needed.
-4. ChatGPT resolves product/architecture ambiguity with the owner.
-5. ChatGPT reads the canonical version source and decides root mutation vs continuation/read-only.
-6. ChatGPT classifies execution effort E0–E3, Main effort High/XHigh, risk, and local discovery none/targeted/deep.
-7. ChatGPT uses `TASK_POLICY.md` and the appropriate prompt template.
-8. ChatGPT produces the smallest sufficient implementation contract.
-9. Executor verifies local truth and performs only the requested local discovery.
-10. Executor materializes/implements, validates, versions, commits/pushes, and performs explicit Issue actions.
-11. Owner sends the result/report back to ChatGPT when review/follow-up is needed.
-12. Owner/ChatGPT normally decides Issue closure after acceptance/manual smoke.
+1. Read current repository state and relevant Issues before project-specific direction.
+2. Resolve owner intent, research remotely observable facts and distinguish verified evidence, assumptions and local-only questions.
+3. Read the canonical version source; assign a Target Version for a new mutating task or retain the active continuation target.
+4. Apply TASK_POLICY to effort E0–E3, Main Medium/High/XHigh, risk and local discovery. High is default; Medium requires every eligibility condition.
+5. Assess changed attack surfaces using SECURITY_BASELINE. Define selected controls, negative tests and any independent review or release gates.
+6. When online capabilities are needed, compare managed/self-hosted/hybrid options by total cost, operating ownership, data risk, recovery and exit strategy. A cheap subscription or free license alone does not decide the architecture.
+7. Generate the smallest sufficient contract from the shared base and relevant specialized template. Include only necessary context, security deltas and exact authorized actions.
+8. Executor verifies local truth, applies the effective effort setting when supported, investigates only remaining local questions, implements and validates.
+9. Executor versions, commits/pushes and updates Issues only as instructed, then responds with the versioned report.
+10. Owner supplies any required manual smoke; ChatGPT reviews actual GitHub evidence and decides acceptance/follow-up/closure with the owner.
 
-## Intelligence compression
+## Discovery and safety
 
-ChatGPT should resolve everything it can verify remotely before consuming implementation-agent capacity:
+Local discovery is none, targeted or deep according to specific missing evidence. More files or a game engine name do not automatically imply deep discovery or decompilation. Observe the real representation/API first; keep bulky evidence and machine paths local.
 
-- owner intent and decisions;
-- current GitHub code/docs/history;
-- relevant Issues and acceptance criteria;
-- current official documentation/research;
-- uploaded/sanitized logs or screenshots;
-- likely code locations/integration choices;
-- viable alternatives and risks;
-- acceptance/validation plan;
-- Target Version;
-- E0–E3 and Main High/XHigh;
-- local discovery depth/questions;
-- whether Worker/Scout is worth coordination cost.
+The owner answers plain-language questions about users, data, online features, budget and willingness to operate services. Do not ask whether to protect against specific vulnerabilities. Unknown material data/exposure/operating responsibility blocks public deployment until resolved.
 
-Do not pretend to verify local-only facts. Mark only the specific local questions that remain.
+Do not ask the owner to paste credentials or production records. Provider selection, permission to code and permission to deploy are separate. Never weaken security to make self-hosting fit an unrealistically small budget.
 
-## Local discovery routing
+## Freshness and handoff
 
-Use `none` when local exploration adds no material value.
+Include a repository-basis SHA when useful. The executor compares local changes instead of rereading remote files without cause. The profile records stable security/service policy, not current work status or secret values.
 
-Use `targeted` for known stacks where toolchain/runtime/path/command/API confirmation is needed.
-
-Use `deep` for external/native/modding/reverse-engineering or difficult local-only behavior where evidence must be gathered before a reliable baseline can be chosen.
-
-Discovery refines technical implementation inside owner-approved direction. It does not silently reopen product decisions.
-
-## Local configuration routing
-
-When the project depends on machine-local paths/resources, ChatGPT defines the portable requirement, not a guessed absolute path.
-
-The executor determines the actual machine value and materializes a reusable setup contract:
-
-```text
-explicit override
-→ persisted .local/config value
-→ safe auto-detection
-→ guided/actionable configuration
-```
-
-ChatGPT should expect fresh-machine validation when this local state is required for build/run/install/validation.
-
-## Repository freshness
-
-When practical, include the GitHub commit SHA used as repository basis. The executor compares it to local HEAD and inspects local changes rather than re-reading the repository remotely.
-
-## Facts
-
-Use only distinctions needed by the task:
-
-- `Owner decision`
-- `Verified`
-- `Local verification required`
-- `Assumption`
-
-Avoid elaborate confidence metadata for obvious facts.
-
-## Target Version identity
-
-For every mutating root task, ChatGPT assigns Target Version before execution.
-
-```text
-PROMPT        # [v0.5] ...
-CONTINUATION  # [v0.5] ...
-COMMIT        [v0.5] ...
-REPORT        # [v0.5] ...
-```
-
-Only the token must match. Continuations/corrections for the same unaccepted target retain it. A new independent mutation receives a new Target Version.
-
-## No ChatGPT bypass fast path
-
-Small tasks still may pass through ChatGPT. Optimize by shortening the contract, not by spending executor reasoning on discovery ChatGPT can do first.
-
-## Issues
-
-GitHub Issues own active work state. Do not generate project-status/roadmap/decision-index files that duplicate them.
+Prompt, continuations, main implementation commit and final report share the target token; only that token must match. Reports remain responses, not tracked files. Preserve ChatGPT in the normal flow even for small tasks; shorten the contract instead.

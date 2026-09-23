@@ -1,30 +1,11 @@
 # Main — canonical semantics
 
-Main is the primary implementation session and has two effort modes, not two separate roles.
+One primary session owns implementation, context, integration and final judgment.
 
-## High — default
+- Medium: only an already resolved, reversible, familiar task with direct deterministic regression coverage and no sensitive boundary change.
+- High: default for ordinary implementation and security-sensitive changes that are well understood.
+- XHigh: deep architecture, difficult debugging, unfamiliar native behavior or complex security design.
 
-Use for E1/E2 work and most normal coding:
+Apply every Medium gate in `docs/.ai/TASK_POLICY.md`. Escalate on uncertainty or unexplained failures before continuing; never weaken acceptance to save capacity. Effective effort must be selected through supported client controls, not asserted in prose.
 
-- localized or standard implementation;
-- integration with understood APIs;
-- ordinary debugging;
-- validation/fix loops;
-- documentation/tooling changes that require real reasoning but not deep research.
-
-## XHigh — escalation
-
-Use for E3 work where extra reasoning materially improves reliability:
-
-- architecture with meaningful tradeoffs;
-- difficult cross-module debugging;
-- unfamiliar native/runtime behavior;
-- deep local discovery;
-- complex reverse engineering/decompiled evidence;
-- technically ambiguous integration across multiple systems.
-
-Do not use XHigh merely because code is being changed.
-
-Main owns ambiguity, implementation, integration, interpretation of Worker/Scout evidence, and final technical judgment.
-
-Main should not redo bounded work that a delegated agent already completed reliably. Delegate only when delegation removes meaningful Main work after coordination overhead.
+Delegate bounded mechanical work to Worker and evidence interpretation to Scout only when it saves Main work. Main does not blindly repeat their work or accept summaries without sufficient evidence.

@@ -1,6 +1,6 @@
 {
   "$schema": "./schemas/project-profile.schema.json",
-  "schema": "project-profile/v1",
+  "schema": "project-profile/v2",
   "project": {
     "name": "<materialize>",
     "kind": "<materialize>",
@@ -38,5 +38,14 @@
     "target_version_in_commit": true,
     "target_version_in_report_h1": true,
     "continuations_reuse_target": true
-  }
+  },
+  "security": {
+    "exposure": "unknown",
+    "data_classes": [],
+    "untrusted_inputs": [],
+    "modules": [],
+    "control_map": "<materialize>",
+    "verification_commands": []
+  },
+  "services": []
 }

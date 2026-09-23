@@ -1,11 +1,15 @@
 (() => {
   const Q = window.BOOTCRATE_QUESTIONS;
   const SECTIONS = window.BOOTCRATE_SECTIONS;
-  const BY_ID = Object.fromEntries(Q.map(q => [q.id, q]));
+  const CORE = window.BootCrateIntakeCore;
+  const core = CORE.create(Q);
   const KEY = "bootcrate-project-intake-v1";
   const SCHEMA = "bootcrate-project-intake/v1";
 
-  let lang = localStorage.getItem(KEY + "-lang") || "en";
+  let storageAvailable = true;
+  function getLocal(key) { try { return localStorage.getItem(key); } catch { storageAvailable = false; return null; } }
+  function setLocal(key, value) { try { localStorage.setItem(key, value); } catch { storageAvailable = false; } }
+  let lang = getLocal(KEY + "-lang") === "pt" ? "pt" : "en";
   let answers = {};
   let invalidIds = new Set();
   let sessionMeta = newSession();
@@ -15,69 +19,18 @@
   const nav = document.getElementById("sectionNav");
 
   function newSession() {
-    return { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), created_at: new Date().toISOString() };
+    return { id: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now()), created_at: new Date().toISOString() };
   }
 
-  function visible(q, source = answers, seen = new Set()) {
-    if (!q.condition) return true;
-    if (seen.has(q.id)) return false;
-    seen.add(q.id);
-
-    const parent = BY_ID[q.condition.id];
-    if (parent && !visible(parent, source, seen)) return false;
-
-    const value = source[q.condition.id];
-    if (q.condition.in) return q.condition.in.includes(value);
-    return true;
-  }
-
-  function visibleQuestions(source = answers) {
-    return Q.filter(q => visible(q, source));
-  }
-
-  function valuePresent(v) {
-    return Array.isArray(v) ? v.length > 0 : !(v === undefined || v === null || v === "");
-  }
-
-  function requiredMissing(source = answers) {
-    return visibleQuestions(source).filter(q => q.required && !valuePresent(source[q.id]));
-  }
-
-  function currentExportAnswers(source = answers) {
-    const out = {};
-    for (const q of visibleQuestions(source)) {
-      if (valuePresent(source[q.id])) out[q.id] = source[q.id];
-    }
-    return out;
-  }
-
-  function validateAnswerValue(q, value) {
-    if (q.type === "text" || q.type === "textarea") return typeof value === "string";
-    if (q.type === "select") {
-      return typeof value === "string" && (q.options || []).some(o => o[0] === value);
-    }
-    if (q.type === "multiselect") {
-      const allowed = new Set((q.options || []).map(o => o[0]));
-      return Array.isArray(value) && new Set(value).size === value.length && value.every(v => typeof v === "string" && allowed.has(v));
-    }
-    return false;
-  }
-
-  function validateImport(data) {
-    const errors = [];
-    if (!data || typeof data !== "object" || Array.isArray(data)) return [t("Root must be a JSON object.", "A raiz deve ser um objeto JSON.")];
-    if (data.schema !== SCHEMA) errors.push(t(`Expected schema ${SCHEMA}.`, `Schema esperado: ${SCHEMA}.`));
-    if (!data.answers || typeof data.answers !== "object" || Array.isArray(data.answers)) {
-      errors.push(t("answers must be an object.", "answers deve ser um objeto."));
-      return errors;
-    }
-    for (const [id, value] of Object.entries(data.answers)) {
-      const q = BY_ID[id];
-      if (!q) { errors.push(t(`Unknown answer id: ${id}`, `ID de resposta desconhecido: ${id}`)); continue; }
-      if (!validateAnswerValue(q, value)) errors.push(t(`Invalid value for: ${id}`, `Valor inválido para: ${id}`));
-    }
-    return errors;
-  }
+  const visible = (q, source = answers) => core.visible(q, source);
+  const visibleQuestions = (source = answers) => core.active(source);
+  const valuePresent = v => typeof v === "string" ? v.trim().length > 0 : Array.isArray(v) && v.length > 0;
+  const requiredMissing = (source = answers) => core.missing(source);
+  const currentExportAnswers = (source = answers) => core.exportAnswers(source);
+  const validateImport = data => core.validate(data).map(e => t(
+    `Invalid intake field: ${e.path} (${e.code}).`,
+    `Campo de intake inválido: ${e.path} (${e.code}).`
+  ));
 
   function inputFor(q) {
     const wrap = document.createElement("div");
@@ -100,7 +53,14 @@
       const el = document.createElement(q.type === "textarea" ? "textarea" : "input");
       if (q.type === "text") el.type = "text";
       el.value = answers[q.id] || "";
-      el.addEventListener("change", () => set(el.value.trim()));
+      el.maxLength = CORE.MAX_TEXT;
+      el.addEventListener("input", () => {
+        answers[q.id] = el.value;
+        invalidIds.delete(q.id);
+        wrap.classList.remove("invalid");
+        persist();
+        updateProgress();
+      });
       wrap.appendChild(el);
     } else if (q.type === "select") {
       const el = document.createElement("select");
@@ -187,6 +147,10 @@
       nav.appendChild(b);
     });
 
+    updateProgress();
+  }
+
+  function updateProgress() {
     const visibleQs = visibleQuestions();
     const answered = visibleQs.filter(q => valuePresent(answers[q.id])).length;
     const missing = requiredMissing();
@@ -220,18 +184,20 @@
   }
 
   function persist() {
-    localStorage.setItem(KEY, JSON.stringify({sessionMeta, answers}));
+    setLocal(KEY, JSON.stringify({sessionMeta, answers}));
   }
 
   document.getElementById("langBtn").onclick = () => {
     lang = lang === "pt" ? "en" : "pt";
-    localStorage.setItem(KEY + "-lang", lang);
+    setLocal(KEY + "-lang", lang);
     render();
   };
 
   document.getElementById("saveBtn").onclick = () => {
     persist();
-    alert(t("Draft saved locally in this browser.", "Rascunho salvo localmente neste navegador."));
+    alert(storageAvailable
+      ? t("Draft saved locally in this browser.", "Rascunho salvo localmente neste navegador.")
+      : t("Browser storage is unavailable. Keep this page open and export your intake.", "O armazenamento do navegador está indisponível. Mantenha a página aberta e exporte o intake."));
   };
 
   document.getElementById("newBtn").onclick = () => {
@@ -257,7 +223,21 @@
       return;
     }
     invalidIds = new Set();
-    const blob = new Blob([JSON.stringify(payload(), null, 2)], {type:"application/json"});
+    const invalidValues = visibleQuestions().filter(q => valuePresent(answers[q.id]) && !core.validValue(q, answers[q.id]));
+    if (invalidValues.length) {
+      invalidIds = new Set(invalidValues.map(q => q.id));
+      render();
+      alert(t("Some answers exceed their limits or have an invalid value.", "Algumas respostas excedem os limites ou possuem valor inválido."));
+      return;
+    }
+    const data = payload();
+    const exportErrors = validateImport(data);
+    if (exportErrors.length) { alert(exportErrors.slice(0, 10).join("\n")); return; }
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+    if (blob.size > CORE.MAX_FILE_BYTES) {
+      alert(t("Intake exceeds 1 MiB. Shorten the longest answers before export.", "O intake excede 1 MiB. Reduza as respostas mais longas antes de exportar."));
+      return;
+    }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     const safe = (answers.project_name || "project").replace(/[^a-z0-9_-]+/gi,"-").replace(/^-|-$/g,"");
@@ -270,15 +250,20 @@
     const f = ev.target.files[0];
     if (!f) return;
     try {
+      if (f.size > CORE.MAX_FILE_BYTES) {
+        alert(t("Intake file is too large (maximum 1 MiB).", "Intake grande demais (máximo de 1 MiB)."));
+        return;
+      }
       const data = JSON.parse(await f.text());
       const errors = validateImport(data);
       if (errors.length) {
         alert(t("Invalid intake:\n", "Intake inválido:\n") + errors.slice(0, 10).join("\n"));
         return;
       }
-      answers = data.answers || {};
-      sessionMeta = data.session || newSession();
-      if (data.language) lang = data.language.toLowerCase().startsWith("pt") ? "pt" : "en";
+      const imported = core.normalize(data);
+      answers = imported.answers;
+      sessionMeta = {...newSession(), ...(imported.session || {})};
+      lang = imported.language === "pt-BR" ? "pt" : "en";
       invalidIds = new Set();
       persist();
       render();
@@ -297,10 +282,16 @@
   };
 
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+    const saved = JSON.parse(getLocal(KEY) || "null");
     if (saved) {
-      answers = saved.answers || {};
-      sessionMeta = saved.sessionMeta || sessionMeta;
+      const storedAnswers = saved.answers && typeof saved.answers === "object" && !Array.isArray(saved.answers)
+        ? Object.fromEntries(Object.entries(saved.answers).filter(([, v]) => valuePresent(v))) : {};
+      const data = {schema: SCHEMA, answers: storedAnswers, session: saved.sessionMeta};
+      if (!core.validate(data).length) {
+        const imported = core.normalize(data);
+        answers = imported.answers;
+        sessionMeta = {...sessionMeta, ...(imported.session || {})};
+      }
     }
   } catch {}
 

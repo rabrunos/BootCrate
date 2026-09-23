@@ -1,195 +1,30 @@
 # Materialization Map
 
-This document maps what BootCrate may inspect, generate, keep, or remove. It is bootstrap-only and is deleted from downstream projects after successful materialization.
+Discover broadly, materialize narrowly. Names below are capabilities/examples, not mandatory files.
 
-## Principle
+| Layer | Possible final output | What must not carry over |
+| --- | --- | --- |
+| Product | Native source/assets/manifests, README, tests, canonical version | Generic BootCrate identity/version |
+| Execution | Enabled Codex/Claude instructions/config, useful Worker/Scout/skills | Disabled adapters or duplicate Main roles |
+| Knowledge | Profile, context routes, needed runtime/API/tooling maps | Raw intake and redundant work status |
+| Security | Selected control map and executable negative tests | Entire generic security library or compliance claims |
+| Services | Only needed clients/config, operator/recovery/exit policy | Provider catalog, unused databases or automatic purchases |
+| Tooling | doctor/build/test/validate/run/package/install/diagnostics as useful | Empty scripts, unnecessary runtime dependencies |
+| GitHub | Applicable forms/labels, requested initial work, project CI | Upstream example Issues and bootstrap-only workflow |
+| Local | Ignored resource paths, research, caches and diagnostics | Credentials/raw private data in tracked files |
 
-> Discover broadly, materialize narrowly.
+## Security selection
 
-BootCrate does not generate the same tree for every technology. ChatGPT resolves intent and remote facts; the executor inspects local reality; the materializer creates only the artifacts justified by the actual project.
+Use the universal SECURITY_BASELINE plus applicable web-api, desktop-mobile, multiplayer-native, infrastructure and sensitive-data modules. Exposure and inputs determine selection. A static site does not gain a database/login; a game with remote peers does gain network/host trust boundaries.
 
-## Materialization pipeline
+## Service selection
 
-```text
-1. owner-approved direction
-2. local truth gate
-3. local discovery: none | targeted | deep
-4. compact evidence
-5. technical specialization
-6. project baseline
-7. canonical capabilities
-8. AI harness/context
-9. GitHub metadata
-10. deterministic validation
-11. prune bootstrap/unused adapters
-12. Target Version commit + report
-```
+Resolve required online capabilities, cost ceiling, scale, operator, data risk, recovery and exit constraints before selecting current providers. No external service is a valid and often simplest result. Deployment remains separately authorized.
 
-## Final project artifacts
+## Local discovery and portability
 
-### Core project state
+Inspect real SDKs/runtimes/APIs/targets only for the contract's blocking questions. If a path varies across machines, track the resolver/validation rules and ignore the actual value. Prefer explicit overrides, validated config, bounded detection and guided setup. Keep binary/decompiled bulk evidence local; promote only compact reusable conclusions.
 
-Every materialized project normally has:
+## Finalization
 
-- one canonical version source;
-- project source/config/assets appropriate to its stack;
-- a rewritten project `README.md`;
-- `.gitignore` rules for generated/private/local state;
-- `docs/.ai/project-profile.json` with stable normalized policy/facts;
-- concise orchestration/task/context routing needed by ChatGPT and the selected implementation harness.
-
-The exact build manifest is ecosystem-specific: examples include package manifests, project files, engine metadata, extension manifests, plugin manifests, or a minimal `VERSION` for file-only projects.
-
-### Harness artifacts — conditional
-
-Keep only enabled harnesses.
-
-Codex may keep:
-
-```text
-AGENTS.md
-.codex/config.toml
-.codex/agents/*.toml
-.agents/skills/*/SKILL.md
-```
-
-Claude Code may keep:
-
-```text
-CLAUDE.md
-.claude/settings.json
-.claude/agents/*.md
-.claude/skills/*/SKILL.md
-```
-
-Worker/Scout and individual skills are removed when the project does not benefit from them.
-
-### Project knowledge generated from discovery — conditional
-
-Create small technical maps only when they save future rediscovery. Typical examples:
-
-```text
-docs/.ai/source-architecture.md
-docs/.ai/validation-tooling.md
-docs/.ai/external-target.md
-docs/.ai/runtime-lifecycle.md
-docs/.ai/api-map.md
-docs/.ai/command-cookbook.md
-docs/.ai/data-save-map.md
-docs/.ai/release-packaging.md
-```
-
-Names are examples, not required filenames. `CONTEXT_INDEX.md` points to whatever the project actually needs.
-
-Do not store active status/roadmaps in these files. Issues own active work.
-
-### Canonical capabilities/scripts — conditional
-
-Materialization may create native scripts/commands for:
-
-- `doctor`
-- `build`
-- `test`
-- `validate`
-- `run`
-- `package`
-- `install`
-- `diagnostics`
-- `publish`
-
-Only create capabilities that have real value. Prefer the project's native ecosystem instead of introducing a second runtime.
-
-For external-target/mod projects, useful project-specific capabilities may also locate the target, index symbols/resources, launch with the mod/plugin installed, or collect/sanitize runtime diagnostics.
-
-### GitHub repository metadata — conditional
-
-The final project may materialize:
-
-- Issue Forms;
-- labels reconciled from `.github/labels.yml`;
-- Milestones;
-- initial Epics/Features/Tasks/Bugs/Investigations;
-- CI workflows;
-- release workflows only if the project needs them.
-
-The owner should not manually reproduce metadata that the executor can create safely.
-
-### Machine-local configuration contract
-
-Projects that require local installations/resources should materialize a portable contract rather than a shared absolute path.
-
-Tracked artifacts may include:
-
-- specialized `docs/.ai/LOCAL_WORKSPACE.md`;
-- doctor/configure/setup behavior;
-- validation rules for required executables/manifests/SDKs;
-- auto-detection rules;
-- environment/CLI override names;
-- non-interactive failure behavior.
-
-Actual values are stored only under ignored `.local/config/` (or an ecosystem-native local-only equivalent).
-
-Example:
-
-```text
-TRACKED:
-required resource = game_root
-validation = expected executable + manifest
-detection = launcher libraries + known platform locations
-
-LOCAL:
-.local/config/project.json
-game_root = D:\...\Installed Game
-```
-
-The tracked project must remain usable when cloned on another machine with a different path.
-
-### Local-only discovery/evidence
-
-Never commit bulky/raw local evidence merely to help AI.
-
-```text
-.local/
-  config/
-  tools/
-  research/
-    raw/
-    indexes/
-    summaries/
-  logs/
-    raw/
-    sanitized/
-    summaries/
-  cache/
-  artifacts/
-  temp/
-```
-
-Examples include game binaries, SDK extracts, decompiled trees, symbol indexes, package caches, raw logs, screenshots/video, generated test artifacts, and temporary research tools.
-
-Promote only stable compact conclusions into tracked technical maps.
-
-## Examples by project kind
-
-**Game mod / external target:** inspect target version, engine/runtime, supported mod API/loader, installed assemblies/resources, lifecycle, launch/install/log flow, and authorized decompilation evidence. Generate only the maps/scripts needed to avoid repeating that work.
-
-**Game project:** detect engine/toolchain/version, project structure, headless/build/test/export paths, asset/scene conventions, persistence, packaging, and platform-specific validation.
-
-**Browser extension:** establish manifest version, package/build pipeline if any, browser test/smoke path, permissions, packaging, and store-publication boundary.
-
-**Windows/Desktop app:** establish SDK/runtime, build/test/run/package/install paths, installer/signing boundaries, platform APIs, and diagnostics.
-
-**Web/backend:** establish package manager/runtime, lockfile, typecheck/lint/test/build/run, browser/E2E when useful, schema/data migration boundaries, and deployment/publish separation.
-
-**CLI/library:** establish native package manifest, test/build/package commands, API/compatibility boundaries, and release mechanics.
-
-## Pruning
-
-Materialization is incomplete until:
-
-- bootstrap-only files are removed;
-- disabled harnesses/agents/skills are removed;
-- unused generic scripts/forms/tooling are removed;
-- raw intake is removed;
-- the README describes the actual project;
-- tracked files contain no unintended BootCrate/bootstrap residue.
+Validate relevant behavior and negative/security paths. Promote selected project rules/tests, then remove all `docs/.human/bootstrap/`, its raw intake and `.github/workflows/bootcrate-validate.yml`. Rewrite the README and remove unused adapters. Run the resulting project's own checks, confirm the target version, then perform authorized Git actions and return the ephemeral report.

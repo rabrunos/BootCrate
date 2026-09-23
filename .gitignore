@@ -5,3 +5,22 @@
 *.tmp
 .DS_Store
 Thumbs.db
+__pycache__/
+*.pyc
+.venv/
+# Local secret-bearing files; examples contain placeholders only.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+secrets.*
+credentials.*
+!secrets.example.*
+!credentials.example.*
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+id_ecdsa

@@ -1,18 +1,14 @@
 # Context Index — materialization skeleton
 
-Small mutable routing map for project knowledge.
+Replace these routes with actual project paths during materialization. This is a small knowledge map, not an active-work/status tracker.
 
-Do not store project status, roadmap, open work, or task history here. GitHub Issues own those.
+- `project-profile.json` — stable identity, constraints, versioning, security surfaces and selected services.
+- `TASK_POLICY.md` — version identity, effort eligibility, risk, delegation and compact handoff.
+- `SECURITY_BASELINE.md` — universal security rules and selected project controls; read when exposure/data/privilege boundaries change.
+- `LOCAL_WORKSPACE.md` — portable setup; real machine values remain ignored.
+- Source/runtime/API maps — only for relevant cross-module or external-target work.
+- Validation/tooling map — canonical commands and security/negative-path checks.
+- Service/operation map — only for actual services, ownership, restore/recovery and deployment boundaries.
+- Human design material — owner/planner unless a task needs a promoted subset.
 
-During materialization, replace the examples with the project's real context map:
-
-- `project-profile.json` — stable normalized project identity, constraints, toolchain, workflow/version configuration.
-- source architecture map — architecture/cross-module work.
-- validation/tooling map — build/test/dev-environment tasks.
-- external-target/native/runtime map — only for relevant integration/modding/native work.
-- API/framework map — only when repeated API discovery would otherwise consume context.
-- command cookbook — only when lifecycle/build/run/install operations are non-obvious.
-- data/save/release maps — only when the project actually has those domains.
-- human design material — ChatGPT/owner only unless an implementation task explicitly needs a promoted subset.
-
-Discovery may create these maps, but only when future tasks benefit from them. The goal is selective context loading, not documentation generation or discovery by brute force.
+Create a map only when it prevents repeated discovery. No requirement to load all maps or keep unused bootstrap modules. Issues own active risks, findings and follow-up.

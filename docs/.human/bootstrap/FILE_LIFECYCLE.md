@@ -1,61 +1,27 @@
 # File Lifecycle
 
-## Bootstrap-only — remove after successful downstream materialization
+## Bootstrap-only: remove after successful downstream materialization
 
-- `docs/.human/bootstrap/**`
-- raw `project-intake.json`
-- generic library role/skill definitions
-- BootCrate README/history/branding
+- The entire `docs/.human/bootstrap/` tree: app, heuristics, security module library, templates, self-test code/dependencies and eval fixtures.
+- `.github/workflows/bootcrate-validate.yml`.
+- Raw intake and generic BootCrate branding/history/version/provenance.
 
-## Skeleton — adapt, keep only if the materialized project uses it
+## Adapt to the real project
 
-- `AGENTS.md`
-- `CLAUDE.md`
-- `.codex/**`
-- `.agents/skills/**`
-- `.claude/**`
-- `docs/.ai/orchestration.md`
-- `docs/.ai/TASK_POLICY.md`
-- `docs/.ai/PLANNING_FALLBACK.md`
-- `docs/.ai/CONTEXT_INDEX.md`
-- `docs/.ai/LOCAL_WORKSPACE.md`
-- `docs/.ai/project-profile.json`
-- `docs/.ai/schemas/project-profile.schema.json`
-- `docs/.ai/prompts/**`
-- `.github/ISSUE_TEMPLATE/**`
-- `.github/labels.yml`
-- `scripts/README.md`
+`AGENTS.md`, `CLAUDE.md`, enabled harness directories, useful skills, orchestration, TASK_POLICY, SECURITY_BASELINE, LOCAL_WORKSPACE, CONTEXT_INDEX, project profile/schema, seven prompt-template families, applicable Issue Forms/label specification and script conventions.
 
-## Generated tracked artifacts — project-specific
+Promote only selected security/service controls and project tests before removing their generic library. Do not copy every module or keep bootstrap tests just to produce a green downstream CI run.
 
-Examples, only when useful:
+## Generate only when needed
 
-- source/build/project manifests;
-- canonical version source;
-- CI/workflows;
-- build/test/run/package/install/diagnostics/publish scripts;
-- source architecture map;
-- validation/tooling map;
-- external-target/native/runtime map;
-- API/command/data/save/release maps;
-- tests and fixtures;
-- packaging/install configuration;
-- specialized agents/skills.
+Native source/build manifests, canonical project version source, tests, project-specific CI, secure configuration schemas, doctor/setup, build/run/package/install/diagnostics, a small security/control map, external-target/runtime maps and service/operations guidance.
 
-## Local-only / generated evidence
+## Local only
 
-Use ignored `.local/` for machine-local configuration values, binaries, decompiled/extracted trees, symbol indexes, raw/sanitized logs, research tools, caches, build artifacts, screenshots/video, and temporary diagnostics.
+Ignored `.local/` may contain machine resource values, bounded research/indexes, diagnostics, caches and artifacts. Credentials need an appropriate protected secret mechanism, not plain local path configuration. Do not store real evaluation outputs, live findings or task state in the reusable template.
 
-Machine-local configuration values are disposable/recreatable per checkout and must not be required from Git history. Promote only portable configuration rules and compact stable conclusions into tracked project knowledge.
+## Permanent stable versus mutable
 
-## Permanent stable in a materialized project
+Stable: core safety/versioning/authority rules. Mutable: source, tests, tooling, selected project maps, version source and stable profile facts as the product changes. Active work/risk status remains in Issues.
 
-Only final project invariants such as harness instructions, versioning rules, safety/publication boundaries, and stable workflow rules.
-
-## Permanent mutable
-
-Source/config/tests, version source, context routing, project profile when stable facts/toolchain change, prompt templates when workflow changes, and GitHub Issues for active work/status.
-
-## Pruning rule
-
-Materialization is incomplete until irrelevant BootCrate files/adapters are deleted and tracked files contain no unintended bootstrap references.
+Pruning is part of acceptance. Check remaining links/imports and run final project validation after removing unused bootstrap artifacts.
