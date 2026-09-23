@@ -17,6 +17,8 @@ Codex keeps workspace-write with network disabled for sandbox commands, on-reque
 
 Claude's `.env` read denials include nested files and may also deny `.env.example`; a tracked non-secret config schema can describe the keys. Tool denials are not a guarantee against every shell/plugin path. Verify using synthetic canaries and do not relax the boundary to inspect a real credential.
 
+The bootstrap enables Claude Code's supported sandbox as a baseline while still allowing the normal permission system to request unsandboxed execution when necessary. During materialization, verify current client/OS support. For projects whose threat model requires a stronger boundary, disable unsandboxed-command fallback; require sandbox availability only when the selected platform actually supports it and absence of that isolation must block work. Treat these vendor keys as current adapter details, not permanent BootCrate invariants.
+
 Keep agent concurrency conservative. Unused adapters/roles must be pruned. Do not add new MCP connections just to test configuration.
 
 Primary documentation (recheck on client upgrades):
@@ -24,3 +26,4 @@ Primary documentation (recheck on client upgrades):
 - https://learn.chatgpt.com/docs/agent-configuration/subagents
 - https://code.claude.com/docs/en/settings
 - https://code.claude.com/docs/en/sub-agents
+- https://code.claude.com/docs/en/sandboxing
