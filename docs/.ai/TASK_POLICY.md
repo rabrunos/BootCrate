@@ -41,6 +41,14 @@ Unexpected ambiguity, contradictory evidence, an unexplained failing check or ne
 
 The contract describes desired effort; it cannot itself change a model setting. Verify available levels and effective settings for the selected model/client. Never fabricate a vendor option, add API spending, change subscriptions or relax permissions to achieve an effort tier.
 
+## Direct execution lane
+
+ChatGPT remains the default orchestrator when work requires discovery, product or architecture decisions, coordination, or material judgment. The owner may intentionally send E0 and eligible E1 work directly to an executor when the desired behavior and scope are already resolved and validation is deterministic.
+
+Direct execution is not eligible when work involves material research, product/architecture choice, authentication or authorization, cryptography or secrets, a changed trust boundary, destructive migration, production access, provisioning or publication. Unexpected ambiguity exits the direct lane and returns the task to normal orchestration.
+
+Direct execution does not bypass version identity, local-truth checks, security rules, validation, Git authorization or reporting. When the project's next Target Version is not deterministic from an established convention, the owner/orchestrator assigns it first. A trivial contract should remain trivial: version, goal, scope, validation and authorized Git actions are sufficient.
+
 ## Discovery and risk are separate
 
 Local discovery: `none` (normal truth gate only), `targeted` (specific known-stack checks), or `deep` (unfamiliar/native/external behavior). State blocking questions and a stopping condition. Do not repeat research already verified remotely.
