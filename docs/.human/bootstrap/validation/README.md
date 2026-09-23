@@ -21,6 +21,14 @@ python docs/.human/bootstrap/validation/validate.py --materialized-profile <prof
 
 That gate validates a profile, not the project's actual security implementation.
 
+For a disposable downstream materialization, run the post-pruning smoke verifier:
+
+```text
+python docs/.human/bootstrap/validation/verify-materialized.py <downstream-root>
+```
+
+Run it from a retained copy of the bootstrap validation tooling or before deleting the verifier itself. It checks that bootstrap-only content/workflow and generic package identity are gone, `PROJECT_GUIDE.md` survives, profile placeholders are resolved, sensitive filenames are absent and tracked text no longer points at the pruned bootstrap. It is a structural smoke check, not a build/security audit.
+
 ## CI
 
 The workflow runs on push, pull request and manual dispatch with `contents: read`, no secrets, no publishing and full-SHA-pinned setup actions. It also runs a pinned Gitleaks binary, checks its published SHA-256 before extraction and scans repository history with redacted output. Update tool pins deliberately after checking upstream changes.
