@@ -210,6 +210,7 @@ def check_adapters() -> None:
     require(set(t.strip() for t in fm["tools"].split(",")) == {"Read", "Grep", "Glob"}, "Claude Scout tool pool widened")
     settings = load_json(ROOT / ".claude/settings.json")
     require(settings["effortLevel"] == "high" and settings["permissions"]["defaultMode"] == "default", "Unsafe Claude defaults")
+    require(settings.get("sandbox", {}).get("enabled") is True, "Claude sandbox baseline disabled")
     require("Read(./**/.env)" in settings["permissions"]["deny"], "Nested env denial missing")
     for canonical in (BOOT / "library/skills").glob("*/SKILL.md"):
         relative = canonical.relative_to(BOOT / "library/skills")
