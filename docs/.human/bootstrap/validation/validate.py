@@ -187,6 +187,13 @@ def check_documents(files: list[Path]) -> None:
     version = (ROOT / "VERSION").read_text().strip()
     require(re.fullmatch(r"\d+\.\d+(?:\.\d+)?", version) is not None, "Invalid VERSION")
     require(f"BootCrate v{version}" in (ROOT / "README.md").read_text(encoding="utf-8"), "README/version mismatch")
+    guide = (ROOT / "PROJECT_GUIDE.md").read_text(encoding="utf-8")
+    require("stable entry point" in guide and "active work state" in guide, "PROJECT_GUIDE lost stable routing/authority")
+    project_instructions = (BOOT / "templates/chatgpt-project-instructions.md").read_text(encoding="utf-8")
+    require("PROJECT_GUIDE.md" in project_instructions, "ChatGPT Project instructions must route through PROJECT_GUIDE")
+    require("docs/.ai/TASK_POLICY.md" not in project_instructions and "AGENTS.md / CLAUDE.md" not in project_instructions,
+            "ChatGPT Project instructions leaked mutable internal routes")
+    require("PROJECT_GUIDE.md" in materializer and "Preserve" in materializer, "Materialization must preserve PROJECT_GUIDE")
 
 
 def check_adapters() -> None:
