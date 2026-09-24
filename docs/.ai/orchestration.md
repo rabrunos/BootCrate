@@ -12,7 +12,7 @@ ChatGPT is the normal planning/research layer; Codex/Claude planning is the supp
 6. When online capabilities are needed, compare managed/self-hosted/hybrid options by total cost, operating ownership, data risk, recovery and exit strategy. A cheap subscription or free license alone does not decide the architecture.
 7. Generate the smallest sufficient contract from the shared base and relevant specialized template. Include only necessary context, security deltas and exact authorized actions.
 8. Executor verifies local truth, applies the effective effort setting when supported, investigates only remaining local questions, implements and validates.
-9. Executor versions, commits/pushes and updates Issues only as instructed, then responds with the versioned report.
+9. Executor versions, commits/pushes and updates the relevant Issue within authorized scope, then responds with the versioned report and any blocked shared record.
 10. Owner supplies any required manual smoke; ChatGPT reviews actual GitHub evidence and decides acceptance/follow-up/closure with the owner.
 
 ## Discovery and safety
@@ -27,4 +27,4 @@ Do not ask the owner to paste credentials or production records. Provider select
 
 Include a repository-basis SHA when useful. The executor compares local changes instead of rereading remote files without cause. The profile records stable security/service policy, not current work status or secret values.
 
-Prompt, continuations, main implementation commit and final report share the target token; only that token must match. Reports remain responses, not tracked files. Preserve ChatGPT in the normal flow even for small tasks; shorten the contract instead.
+Prompt, continuations, main implementation commit and final report share the target token; only that token must match. Reports remain responses, not tracked files. ChatGPT remains the normal route; the owner's deliberate E0/eligible E1 direct lane follows TASK_POLICY without skipping Issues or gates.

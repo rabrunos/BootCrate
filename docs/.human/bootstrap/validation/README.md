@@ -11,9 +11,9 @@ python -m pip install -r docs/.human/bootstrap/validation/requirements.txt
 python docs/.human/bootstrap/validation/validate.py
 ```
 
-Checks include JSON/TOML/YAML syntax and duplicates, schema consistency, profile version/security rules, data-only questions and dependency cycles, labels/forms, skill parity, relative Markdown links, conservative adapter invariants, ignored secret/local paths, secret-pattern smoke checks and deterministic intake/grader tests.
+Checks include JSON/TOML/YAML syntax and duplicates, schema consistency, v3 profile and v2 compatibility, mandatory Issues/ChatGPT invariants, data-only questions and dependency cycles, unchanged Issue Forms/labels, skill and Console preset parity, relative Markdown links, conservative Codex/Claude adapter invariants, ignored secret/local paths, secret-pattern smoke checks and deterministic intake/adoption/delivery/upgrade/eval regressions.
 
-The validator does not fetch schemas, invoke model APIs, provision services, publish or inspect production credentials. JSON Schema validates structure; the separate finalized-profile gate rejects unresolved placeholders/exposure:
+The validator does not fetch schemas, invoke model APIs, provision services, publish or inspect production credentials. JSON Schema validates structure; the shared finalized-profile gate rejects unresolved placeholders, exposure, version and required local references:
 
 ```text
 python docs/.human/bootstrap/validation/validate.py --materialized-profile <profile.json>
@@ -21,13 +21,17 @@ python docs/.human/bootstrap/validation/validate.py --materialized-profile <prof
 
 That gate validates a profile, not the project's actual security implementation.
 
+## Browser smoke (maintenance-only)
+
+`test-browser.cjs` exercises the Setup and optional Console through `file://`, including required-field errors, old-intake confirmation and a local profile import. Use the fixed Playwright version in this directory's maintenance-only `package.json`, install a compatible browser in a disposable maintenance environment, then run `npm run test:browser`. This is not part of the downstream runtime or normal CI; if the browser cannot be installed, record the browser smoke as **not run**. Pair automation with keyboard, screen-reader, reflow/zoom and error recovery inspection before making any WCAG conformance claim.
+
 For a disposable downstream materialization, run the post-pruning smoke verifier:
 
 ```text
 python docs/.human/bootstrap/validation/verify-materialized.py <downstream-root>
 ```
 
-Run it from a retained copy of the bootstrap validation tooling or before deleting the verifier itself. It checks that bootstrap-only content/workflow and generic package identity are gone, `PROJECT_GUIDE.md` survives, profile placeholders are resolved, sensitive filenames are absent and tracked text no longer points at the pruned bootstrap. It is a structural smoke check, not a build/security audit.
+Run it from a retained copy of the bootstrap validation tooling **after** pruning. It requires a complete profile, canonical version file and selected control map, checks that bootstrap-only content/workflow and generic package identity are gone, and inventories tracked plus nonignored untracked files without reading ignored secrets. `--json` emits check IDs and `pass/fail/not_run` statuses. It returns 0 for structural success, 1 for a structural failure and 2 if the command cannot evaluate the supplied root. Product build/smoke/security checks remain `not_run` until performed by native project tools. Python is required only for this retained maintenance verifier, not the resulting product runtime.
 
 ## CI
 

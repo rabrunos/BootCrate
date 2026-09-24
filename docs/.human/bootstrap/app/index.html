@@ -15,8 +15,11 @@
     </div>
     <div class="topActions">
       <span id="saveStatus" class="saveStatus" role="status" aria-live="polite">Saved</span>
+      <label class="modeSwitch" for="modeSelect"><span id="modeLabel">View</span>
+        <select id="modeSelect" aria-label="Presentation mode"><option value="basic">Basic</option><option value="detailed">Detailed</option></select>
+      </label>
       <button id="langBtn" class="quietButton" type="button">PT-BR</button>
-      <label class="quietButton fileButton">Import JSON<input id="importInput" type="file" accept=".json,application/json"></label>
+      <label class="quietButton fileButton"><span class="fileLabel">Import JSON</span><input id="importInput" type="file" accept=".json,application/json" aria-label="Import JSON"></label>
       <button id="newBtn" class="quietButton" type="button">New</button>
     </div>
   </header>
@@ -32,8 +35,9 @@
       <p id="privacyHint" class="privacyHint">Your answers stay in this browser until you export them.</p>
     </aside>
 
-    <section class="workspace" aria-live="polite">
+    <section class="workspace">
       <div id="stepHeader" class="stepHeader"></div>
+      <div id="errorSummary" class="errorSummary" role="alert" tabindex="-1" hidden></div>
       <div id="formRoot"></div>
       <div id="inlineMessage" class="inlineMessage" role="status" aria-live="polite"></div>
       <div class="stepActions">
@@ -54,9 +58,22 @@
     </form>
   </dialog>
 
+  <dialog id="legacyDialog" aria-labelledby="legacyTitle" aria-describedby="legacyText">
+    <form method="dialog" class="dialogCard">
+      <h2 id="legacyTitle">Review older intake</h2>
+      <p id="legacyText"></p>
+      <div class="dialogActions">
+        <button id="cancelLegacyBtn" value="cancel" class="secondaryButton">Cancel</button>
+        <button id="confirmLegacyBtn" value="confirm" class="primaryButton">Adopt current method</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="questions.js"></script>
   <script src="intake-core.js"></script>
   <script src="setup-handoff.js"></script>
+  <script src="guidance.js"></script>
+  <script src="preset.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

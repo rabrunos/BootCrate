@@ -5,6 +5,7 @@
 - The entire `docs/.human/bootstrap/` tree: app, heuristics, security module library, templates, self-test code/dependencies and eval fixtures.
 - `.github/workflows/bootcrate-validate.yml`.
 - Raw intake and generic BootCrate branding/history/version/provenance.
+- The temporary managed-file manifest under ignored `.local/` and any adoption sandbox metadata/maintenance evaluation results.
 
 ## Adapt to the real project
 
@@ -15,6 +16,8 @@ Promote only selected security/service controls and project tests before removin
 ## Generate only when needed
 
 Native source/build manifests, canonical project version source, tests, project-specific CI, secure configuration schemas, doctor/setup, build/run/package/install/diagnostics, a small security/control map, external-target/runtime maps and service/operations guidance.
+
+Every integrated version receives a concise canonical changelog entry. Only a selected distribution needs candidate/receipt/renderer tools, and only an opted-in project receives the reduced static `project-console/`. No generated project inherits the upstream BootCrate changelog.
 
 ## Local only
 

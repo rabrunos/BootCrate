@@ -12,6 +12,10 @@ import sys
 import tomllib
 from typing import Any
 
+from validation_core import (require, unique_object, load_json, inventory as project_inventory,
+                             sensitive_name, secret_findings, local_refs_only, schema_check,
+                             materialized_profile, profile_schema)
+
 try:
     import yaml
     from jsonschema import Draft202012Validator
@@ -23,23 +27,6 @@ ROOT = HERE.parents[3]
 BOOT = ROOT / "docs/.human/bootstrap"
 SKIP = {".git", ".local", ".venv", "__pycache__", "node_modules", ".temp"}
 EXAMPLES = {".env.example", ".env.sample", ".env.template"}
-
-
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise ValueError(message)
-
-
-def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        require(key not in result, f"Duplicate JSON key: {key}")
-        result[key] = value
-    return result
-
-
-def load_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
 
 
 class UniqueLoader(yaml.SafeLoader):
@@ -75,67 +62,6 @@ def run(command: list[str], cwd: Path = ROOT) -> str:
     return result.stdout + result.stderr
 
 
-def inventory() -> list[Path]:
-    if (ROOT / ".git").exists():
-        names = run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"]).split("\0")
-        return sorted({ROOT / n for n in names if n and ((ROOT / n).is_file() or (ROOT / n).is_symlink())})
-    return sorted(p for p in ROOT.rglob("*") if (p.is_file() or p.is_symlink()) and not (set(p.relative_to(ROOT).parts) & SKIP))
-
-
-def sensitive_name(path: Path) -> bool:
-    name = path.name.lower()
-    if name in EXAMPLES or name.startswith(("secrets.example.", "credentials.example.")):
-        return False
-    return (name == ".env" or name.startswith((".env.", "secrets.", "credentials.")) or
-            name in {"id_rsa", "id_ed25519", "id_ecdsa"} or path.suffix.lower() in {".key", ".p12", ".pfx"})
-
-
-# Narrow smoke checks, not an exhaustive secret scanner. Never print matched values.
-SECRET_PATTERNS = [
-    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"),
-    re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
-    re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{40,}\b"),
-]
-
-
-def secret_findings(text: str) -> bool:
-    return any(p.search(text) for p in SECRET_PATTERNS)
-
-
-def local_refs_only(node: Any) -> None:
-    if isinstance(node, dict):
-        if "$ref" in node:
-            require(node["$ref"].startswith("#"), "Validation must not fetch remote schema references")
-        for value in node.values():
-            local_refs_only(value)
-    elif isinstance(node, list):
-        for value in node:
-            local_refs_only(value)
-
-
-def schema_check(schema: dict[str, Any], value: Any) -> None:
-    local_refs_only(schema)
-    Draft202012Validator.check_schema(schema)
-    errors = sorted(Draft202012Validator(schema).iter_errors(value), key=lambda e: str(e.path))
-    require(not errors, "Schema failure at " + (str(list(errors[0].path)) if errors else "root"))
-
-
-def materialized_profile(profile: dict[str, Any]) -> None:
-    """Extra completion gate; generic skeleton placeholders remain valid during bootstrap."""
-    def walk(value: Any) -> None:
-        if isinstance(value, str):
-            require("<materialize>" not in value, "Unresolved materialization placeholder")
-        elif isinstance(value, dict):
-            for child in value.values(): walk(child)
-        elif isinstance(value, list):
-            for child in value: walk(child)
-    walk(profile)
-    require(profile["security"]["exposure"] != "unknown", "Unresolved security exposure")
-    for service in profile.get("services", []):
-        require(service["operator"].strip().lower() not in {"unknown", "tbd", "none"}, "Service operator is unresolved")
-
-
 def question_data() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     source = (BOOT / "app/questions.js").read_text(encoding="utf-8")
     match = re.fullmatch(r"\s*window\.BOOTCRATE_QUESTIONS\s*=\s*(\[.*?\]);\s*window\.BOOTCRATE_SECTIONS\s*=\s*(\{.*\});\s*", source, re.S)
@@ -147,8 +73,12 @@ def check_questions() -> None:
     questions, sections = question_data()
     by_id = {q["id"]: q for q in questions}
     require(len(by_id) == len(questions), "Duplicate question ids")
-    schema = load_json(BOOT / "schemas/project-intake.schema.json")["properties"]["answers"]["properties"]
+    intake = load_json(BOOT / "schemas/project-intake.schema.json")["properties"]
+    schema = intake["answers"]["properties"]
     require(set(schema) == set(by_id), "Question/schema IDs diverged")
+    state_ids = {q["id"] for q in questions if not q.get("required") and q["type"] in {"text", "textarea"}}
+    require(set(intake["answer_states"]["properties"]) == state_ids,
+            "Explicit unknown/not-applicable fields diverged")
     for q in questions:
         require(q["section"] in sections and q.get("en") and q.get("pt"), "Question section/translation missing")
         spec = schema[q["id"]]
@@ -214,8 +144,22 @@ def check_adapters() -> None:
     require("Read(./**/.env)" in settings["permissions"]["deny"], "Nested env denial missing")
     for canonical in (BOOT / "library/skills").glob("*/SKILL.md"):
         relative = canonical.relative_to(BOOT / "library/skills")
+        content = canonical.read_text(encoding="utf-8")
+        require(content.startswith("---\n") and "\n---\n" in content[4:], "Invalid skill frontmatter")
+        frontmatter = load_yaml(content.split("---", 2)[1])
+        require(frontmatter.get("name") == canonical.parent.name and bool(frontmatter.get("description")) and
+                len(content.splitlines()) < 500, "Invalid skill name, description or length")
         for target in [ROOT / ".agents/skills", ROOT / ".claude/skills"]:
             require(canonical.read_bytes() == (target / relative).read_bytes(), "Skill semantic source drift: " + str(relative))
+    adapters = [load_json(path) for path in (BOOT / "library/adapters").glob("*.json")]
+    require({a["id"] for a in adapters} == {"codex", "claude_code"}, "Unsupported/missing executor adapter")
+    for adapter in adapters:
+        require(adapter["schema"] == "bootcrate-adapter/v1" and
+                adapter["declared"]["main_requested"] == ["medium", "high", "xhigh"] and
+                adapter["declared"]["consumption_presets"] == ["standard", "economy"],
+                "Adapter weakens common effort/preset contract")
+    require((BOOT / "app/preset.js").read_bytes() == (BOOT / "console/preset.js").read_bytes(),
+            "Setup/Console preset resolver drift")
 
 
 def check_github() -> None:
@@ -253,7 +197,8 @@ def check_ignore() -> None:
 
 
 def validate() -> None:
-    files = inventory()
+    tracked, untracked = project_inventory(ROOT)
+    files = sorted(set(tracked + untracked))
     for path in files:
         rel = path.relative_to(ROOT)
         require(not path.is_symlink() and path.resolve().is_relative_to(ROOT.resolve()), "Unexpected symlink/external path: " + str(rel))
@@ -265,8 +210,8 @@ def validate() -> None:
         if path.suffix == ".json": load_json(path)
         if path.suffix in {".yml", ".yaml"}: load_yaml(text)
         if path.suffix == ".toml": tomllib.loads(text)
-    schema = load_json(ROOT / "docs/.ai/schemas/project-profile.schema.json")
-    schema_check(schema, load_json(ROOT / "docs/.ai/project-profile.json"))
+    profile = load_json(ROOT / "docs/.ai/project-profile.json")
+    schema_check(profile_schema(ROOT / "docs/.ai/schemas", profile), profile)
     schema_check(load_json(BOOT / "schemas/project-intake.schema.json"), load_json(BOOT / "templates/project-intake.example.json"))
     check_questions()
     check_documents(files)
@@ -279,7 +224,7 @@ def validate() -> None:
     print(run(["node", "--test", str(HERE / "test-intake.cjs")]).strip())
     print(run([sys.executable, "-m", "unittest", "discover", "-s", str(HERE), "-p", "test_*.py", "-v"]).strip())
     print(f"PASS: {len(files)} candidate files; structural/configuration checks and deterministic tests.")
-    print("Not performed here: live harness enforcement, model quality evals, real materializations or penetration testing.")
+    print("Not performed here: live harness enforcement, model evals, owner projects, browser UX or penetration testing.")
 
 
 if __name__ == "__main__":
@@ -289,8 +234,8 @@ if __name__ == "__main__":
     try:
         if args.materialized_profile:
             data = load_json(args.materialized_profile)
-            schema_check(load_json(ROOT / "docs/.ai/schemas/project-profile.schema.json"), data)
-            materialized_profile(data)
+            schema_check(profile_schema(ROOT / "docs/.ai/schemas", data), data)
+            materialized_profile(data, args.materialized_profile.resolve().parents[2])
             print("PASS: finalized profile structure (not a production-security assessment)")
         else:
             validate()

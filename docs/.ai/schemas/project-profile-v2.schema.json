@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-profile.schema.json",
+  "title": "Project Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "project",
+    "owner",
+    "workflow",
+    "versioning",
+    "security"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "project-profile/v2"
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "kind",
+        "summary"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_language",
+        "report_language"
+      ],
+      "properties": {
+        "repository_language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_language": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "toolchain": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "architecture_invariants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "external_targets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "canonical_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tracking",
+        "primary_orchestrator",
+        "fallback_planners",
+        "implementation_harnesses"
+      ],
+      "properties": {
+        "tracking": {
+          "const": "github_issues"
+        },
+        "primary_orchestrator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fallback_planners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "implementation_harnesses": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "codex",
+              "claude_code"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "versioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "canonical_source",
+        "format",
+        "target_version_in_prompt_h1",
+        "target_version_in_commit",
+        "target_version_in_report_h1",
+        "continuations_reuse_target"
+      ],
+      "properties": {
+        "required": {
+          "const": true
+        },
+        "canonical_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_version_in_prompt_h1": {
+          "const": true
+        },
+        "target_version_in_commit": {
+          "const": true
+        },
+        "target_version_in_report_h1": {
+          "const": true
+        },
+        "continuations_reuse_target": {
+          "const": true
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exposure",
+        "data_classes",
+        "untrusted_inputs",
+        "modules",
+        "control_map",
+        "verification_commands"
+      ],
+      "properties": {
+        "exposure": {
+          "enum": [
+            "unknown",
+            "local",
+            "lan",
+            "internet"
+          ]
+        },
+        "data_classes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "public",
+              "internal",
+              "personal",
+              "sensitive",
+              "payments"
+            ]
+          }
+        },
+        "untrusted_inputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "modules": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "web-api",
+              "desktop-mobile",
+              "multiplayer-native",
+              "infrastructure",
+              "sensitive-data"
+            ]
+          }
+        },
+        "control_map": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_commands": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capability",
+          "operating_model",
+          "operator",
+          "rationale",
+          "security_requirements",
+          "exit_strategy"
+        ],
+        "properties": {
+          "capability": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operating_model": {
+            "enum": [
+              "managed",
+              "self-hosted",
+              "hybrid"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          },
+          "security_requirements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "exit_strategy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cost_ceiling": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -22,6 +22,14 @@ class ValidationTests(unittest.TestCase):
     def test_duplicate_yaml_rejected(self):
         with self.assertRaises(ValueError): v.load_yaml("x: 1\nx: 2")
 
+    def test_explicit_unknown_and_not_applicable_intake_schema(self):
+        schema=v.load_json(v.BOOT/'schemas/project-intake.schema.json')
+        data=v.load_json(v.BOOT/'templates/project-intake.example.json')
+        data['answer_states']={'known_risks':'unknown','must_avoid_tools':'not_applicable'}
+        v.schema_check(schema,data)
+        data['answer_states']['made_up_field']='unknown'
+        with self.assertRaises(ValueError):v.schema_check(schema,data)
+
     def test_workflow_on_is_not_boolean(self):
         self.assertIn("on", v.load_yaml("on: [push]\nvalue: true"))
 
@@ -61,6 +69,16 @@ class ValidationTests(unittest.TestCase):
         p["security"]["exposure"]="unknown"
         with self.assertRaises(ValueError): v.materialized_profile(p)
 
+    def test_distribution_requires_real_unique_targets(self):
+        p=v.load_json(v.ROOT/"docs/.ai/project-profile.json")
+        p["project"]={"name":"Example","kind":"static","summary":"Synthetic fixture"}
+        p["versioning"].update(canonical_source="VERSION",format="native")
+        p["security"].update(exposure="local",control_map="docs/.ai/SECURITY_BASELINE.md")
+        p["distribution"]={"mode":"artifact","targets":[]}
+        with self.assertRaisesRegex(ValueError,"without a destination"):v.materialized_profile(p)
+        p["distribution"]["targets"]=[{"id":"release","channel":"stable","kind":"artifact"}]*2
+        with self.assertRaisesRegex(ValueError,"Duplicate distribution"):v.materialized_profile(p)
+
     def test_scenario_rubrics(self):
         scenarios = v.load_json(v.BOOT / "evals/scenarios.json")["scenarios"]
         self.assertEqual(len(scenarios),len({s["id"] for s in scenarios}))
@@ -92,10 +110,41 @@ class ValidationTests(unittest.TestCase):
             (root/"docs/.ai").mkdir(parents=True)
             (root/"PROJECT_GUIDE.md").write_text("# Project Guide\nStable downstream context.\n")
             (root/"README.md").write_text("# Example\n")
-            (root/"docs/.ai/project-profile.json").write_text('{"project":"example"}')
+            (root/"VERSION").write_text("1.0\n")
+            (root/"docs/.ai/SECURITY_BASELINE.md").write_text("# Controls\n")
+            (root/"AGENTS.md").write_text("# Codex rules\n")
+            (root/"CLAUDE.md").write_text("# Claude rules\n")
+            p=v.load_json(v.ROOT/"docs/.ai/project-profile.json")
+            p["project"]={"name":"Example","kind":"static","summary":"Synthetic fixture"}
+            p["versioning"].update(canonical_source="VERSION",format="project convention")
+            p["security"].update(exposure="local",control_map="docs/.ai/SECURITY_BASELINE.md")
+            profile=root/"docs/.ai/project-profile.json"
+            profile.write_text(json.dumps(p))
             self.assertEqual(verify_materialized.check(root),[])
             (root/"docs/.human/bootstrap").mkdir(parents=True)
             self.assertIn("bootstrap directory remains",verify_materialized.check(root))
+
+    def test_materialized_profile_negative_cases(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); (root/"docs/.ai").mkdir(parents=True)
+            profile=root/"docs/.ai/project-profile.json"
+            self.assertIn("project profile missing",verify_materialized.check(root))
+            profile.write_text('{"schema":"project-profile/v3","schema":"project-profile/v3"}')
+            self.assertTrue(any("Duplicate JSON key" in x for x in verify_materialized.check(root)))
+            profile.write_text('{"schema":"project-profile/v9"}')
+            self.assertIn("Unsupported project profile schema",verify_materialized.check(root))
+            profile.write_text('{"project":"example"}')
+            self.assertIn("Unsupported project profile schema",verify_materialized.check(root))
+
+    def test_materialized_verifier_does_not_read_ignored_secrets(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            import subprocess
+            subprocess.run(["git","init","-q",str(root)],check=True)
+            (root/".gitignore").write_text(".env\n")
+            (root/".env").write_text("private data is never inspected")
+            tracked,untracked=v.project_inventory(root)
+            self.assertNotIn(root/".env",tracked+untracked)
 
 
 if __name__ == "__main__": unittest.main()

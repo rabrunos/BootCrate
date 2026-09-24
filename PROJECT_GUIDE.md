@@ -4,7 +4,7 @@ This file is the stable entry point for ChatGPT and other repository-aware plann
 
 ## Bootstrap state
 
-This repository is currently a BootCrate starting point. For a downstream project, use the guided Setup under `docs/.human/bootstrap/app/`, then discuss the exported intake before materialization.
+This repository is currently a BootCrate starting point. For a downstream project, use the guided Setup under `docs/.human/bootstrap/app/`, then discuss the exported intake before materialization. An existing codebase first uses an isolated Adoption Sandbox; a new repository may be empty until its approved baseline is created. The Setup does not verify GitHub access or authorize publication.
 
 For project-specific planning:
 
