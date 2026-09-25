@@ -1,6 +1,6 @@
 {
   "$schema": "./schemas/project-profile.schema.json",
-  "schema": "project-profile/v2",
+  "schema": "project-profile/v3",
   "project": {
     "name": "<materialize>",
     "kind": "<materialize>",
@@ -28,7 +28,9 @@
     "implementation_harnesses": [
       "codex",
       "claude_code"
-    ]
+    ],
+    "consumption_preset": "standard",
+    "collaboration": "single"
   },
   "versioning": {
     "required": true,
@@ -47,5 +49,13 @@
     "control_map": "<materialize>",
     "verification_commands": []
   },
-  "services": []
+  "services": [],
+  "distribution": {
+    "mode": "none",
+    "targets": []
+  },
+  "console": {
+    "enabled": false
+  },
+  "skills": []
 }

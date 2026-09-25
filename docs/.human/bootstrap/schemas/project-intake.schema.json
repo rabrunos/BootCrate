@@ -4,89 +4,679 @@
   "title": "BootCrate Project Intake",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "answers"],
+  "required": [
+    "schema",
+    "answers"
+  ],
   "properties": {
-    "schema": {"const": "bootcrate-project-intake/v1"},
-    "exported_at": {"type": "string", "maxLength": 64},
+    "schema": {
+      "const": "bootcrate-project-intake/v2"
+    },
+    "exported_at": {
+      "type": "string",
+      "maxLength": 64
+    },
     "session": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "minLength": 1, "maxLength": 128},
-        "created_at": {"type": "string", "minLength": 1, "maxLength": 128}
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
       }
     },
-    "language": {"enum": ["en", "pt-BR"]},
+    "language": {
+      "enum": [
+        "en",
+        "pt-BR"
+      ]
+    },
     "answers": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "project_name": {"type": "string", "maxLength": 20000},
-        "one_sentence": {"type": "string", "maxLength": 20000},
-        "project_kind": {"type": "string", "enum": ["game", "game_mod", "game_engine", "web_app", "desktop_app", "mobile_app", "library", "cli_tool", "service", "automation", "other"]},
-        "existing_or_new": {"type": "string", "enum": ["new", "existing_code", "external_target", "unknown"]},
-        "success": {"type": "string", "maxLength": 20000},
-        "non_goals": {"type": "string", "maxLength": 20000},
-        "owner_role": {"type": "string", "maxLength": 20000},
-        "technical_level": {"type": "string", "enum": ["nontechnical", "beginner", "intermediate", "advanced", "expert"]},
-        "report_language": {"type": "string", "enum": ["pt-BR", "en", "other"]},
-        "repo_language": {"type": "string", "enum": ["en", "pt-BR", "other"]},
-        "autonomy": {"type": "string", "enum": ["low", "medium", "high"]},
-        "target_platforms": {"type": "array", "items": {"type": "string", "enum": ["windows", "linux", "macos", "web", "android", "ios", "console", "server", "unknown"]}, "uniqueItems": true, "maxItems": 9},
-        "primary_dev_os": {"type": "string", "enum": ["windows", "linux", "macos", "unknown"]},
-        "distribution": {"type": "string", "maxLength": 20000},
-        "offline_requirement": {"type": "string", "enum": ["yes", "no", "partial", "unknown"]},
-        "language_known": {"type": "string", "enum": ["yes", "no", "preference", "unknown"]},
-        "language_value": {"type": "string", "maxLength": 20000},
-        "framework_known": {"type": "string", "enum": ["yes", "no", "preference", "unknown"]},
-        "framework_value": {"type": "string", "maxLength": 20000},
-        "dependency_constraints": {"type": "string", "maxLength": 20000},
-        "performance_constraints": {"type": "string", "maxLength": 20000},
-        "external_product_name": {"type": "string", "maxLength": 20000},
-        "official_sdk_known": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "community_tool_known": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "community_tool_value": {"type": "string", "maxLength": 20000},
-        "target_engine_known": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "target_engine_value": {"type": "string", "maxLength": 20000},
-        "binary_access": {"type": "string", "enum": ["yes", "partial", "no", "unknown"]},
-        "reverse_engineering_allowed": {"type": "string", "enum": ["yes", "no", "conditional", "unknown"]},
-        "game_engine_choice": {"type": "string", "enum": ["existing", "custom", "undecided"]},
-        "game_dimension": {"type": "string", "enum": ["2d", "3d", "hybrid", "unknown"]},
-        "multiplayer": {"type": "string", "enum": ["none", "local", "online", "maybe", "unknown"]},
-        "save_system": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "web_scope": {"type": "array", "items": {"type": "string", "enum": ["frontend", "backend", "database", "auth", "realtime", "unknown"]}, "uniqueItems": true, "maxItems": 6},
-        "hosting_known": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "hosting_value": {"type": "string", "maxLength": 20000},
-        "sensitive_data": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "secrets_needed": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "log_privacy": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "compliance": {"type": "string", "maxLength": 20000},
-        "automated_tests": {"type": "string", "enum": ["yes", "no", "recommended", "unknown"]},
-        "manual_smoke": {"type": "string", "enum": ["yes", "no", "unknown"]},
-        "ci": {"type": "string", "enum": ["yes", "no", "recommended"]},
-        "validation_priorities": {"type": "string", "maxLength": 20000},
-        "single_or_team": {"type": "string", "enum": ["single", "small_team", "team"]},
-        "issues_tracking": {"type": "string", "enum": ["yes", "no", "custom"]},
-        "commit_push_policy": {"type": "string", "enum": ["yes", "ask", "no"]},
-        "issue_closure_owner": {"type": "string", "enum": ["orchestrator", "codex", "human"]},
-        "release_approval": {"type": "string", "enum": ["owner_only", "task_explicit", "custom"]},
-        "primary_orchestration": {"type": "string", "enum": ["chatgpt", "local_planner", "custom"]},
-        "claude_code": {"type": "string", "enum": ["yes", "no", "maybe"]},
-        "planning_fallback": {"type": "array", "items": {"type": "string", "enum": ["codex_plan", "claude_plan", "none"]}, "uniqueItems": true, "maxItems": 3},
-        "codex_local": {"type": "string", "enum": ["yes", "no", "maybe"]},
-        "codex_cloud": {"type": "string", "enum": ["yes", "no", "maybe"]},
-        "agent_budget": {"type": "string", "enum": ["main_worker", "main_worker_scout", "recommend"]},
-        "model_constraints": {"type": "string", "maxLength": 20000},
-        "local_memory": {"type": "string", "enum": ["yes", "no", "research"]},
-        "local_large_data": {"type": "array", "items": {"type": "string", "enum": ["logs", "binaries", "decompile", "screenshots", "datasets", "build_artifacts", "none", "unknown"]}, "uniqueItems": true, "maxItems": 8},
-        "diagnostic_reduction": {"type": "string", "enum": ["yes", "no", "recommend"]},
-        "must_have_tools": {"type": "string", "maxLength": 20000},
-        "must_avoid_tools": {"type": "string", "maxLength": 20000},
-        "known_risks": {"type": "string", "maxLength": 20000},
-        "research_requests": {"type": "string", "maxLength": 20000},
-        "anything_else": {"type": "string", "maxLength": 20000}
+        "project_name": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "one_sentence": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "project_kind": {
+          "type": "string",
+          "enum": [
+            "game",
+            "game_mod",
+            "game_engine",
+            "web_app",
+            "desktop_app",
+            "mobile_app",
+            "library",
+            "cli_tool",
+            "service",
+            "automation",
+            "other"
+          ]
+        },
+        "existing_or_new": {
+          "type": "string",
+          "enum": [
+            "new",
+            "existing_code",
+            "unknown"
+          ]
+        },
+        "success": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "non_goals": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "owner_role": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "technical_level": {
+          "type": "string",
+          "enum": [
+            "nontechnical",
+            "beginner",
+            "intermediate",
+            "advanced",
+            "expert"
+          ]
+        },
+        "report_language": {
+          "type": "string",
+          "enum": [
+            "pt-BR",
+            "en",
+            "other"
+          ]
+        },
+        "repo_language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "pt-BR",
+            "other"
+          ]
+        },
+        "autonomy": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "target_platforms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "windows",
+              "linux",
+              "macos",
+              "web",
+              "android",
+              "ios",
+              "console",
+              "server",
+              "unknown"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 9
+        },
+        "primary_dev_os": {
+          "type": "string",
+          "enum": [
+            "windows",
+            "linux",
+            "macos",
+            "unknown"
+          ]
+        },
+        "distribution": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "offline_requirement": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "partial",
+            "unknown"
+          ]
+        },
+        "language_known": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "preference",
+            "unknown"
+          ]
+        },
+        "language_value": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "framework_known": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "preference",
+            "unknown"
+          ]
+        },
+        "framework_value": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "dependency_constraints": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "performance_constraints": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "external_product_name": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "official_sdk_known": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "community_tool_known": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "community_tool_value": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "target_engine_known": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "target_engine_value": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "binary_access": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "partial",
+            "no",
+            "unknown"
+          ]
+        },
+        "reverse_engineering_allowed": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "conditional",
+            "unknown"
+          ]
+        },
+        "game_engine_choice": {
+          "type": "string",
+          "enum": [
+            "existing",
+            "custom",
+            "undecided"
+          ]
+        },
+        "game_dimension": {
+          "type": "string",
+          "enum": [
+            "2d",
+            "3d",
+            "hybrid",
+            "unknown"
+          ]
+        },
+        "multiplayer": {
+          "type": "string",
+          "enum": [
+            "none",
+            "local",
+            "online",
+            "maybe",
+            "unknown"
+          ]
+        },
+        "save_system": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "web_scope": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "frontend",
+              "backend",
+              "database",
+              "auth",
+              "realtime",
+              "unknown"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 6
+        },
+        "hosting_known": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "hosting_value": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "sensitive_data": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "secrets_needed": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "log_privacy": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "compliance": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "automated_tests": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "recommended",
+            "unknown"
+          ]
+        },
+        "manual_smoke": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "ci": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "recommended"
+          ]
+        },
+        "validation_priorities": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "single_or_team": {
+          "type": "string",
+          "enum": [
+            "single",
+            "small_team",
+            "team"
+          ]
+        },
+        "commit_push_policy": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "ask",
+            "no"
+          ]
+        },
+        "issue_closure_owner": {
+          "type": "string",
+          "enum": [
+            "orchestrator",
+            "codex",
+            "human"
+          ]
+        },
+        "release_approval": {
+          "type": "string",
+          "enum": [
+            "owner_only",
+            "task_explicit",
+            "custom"
+          ]
+        },
+        "claude_code": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "maybe"
+          ]
+        },
+        "planning_fallback": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex_plan",
+              "claude_plan",
+              "none"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 3
+        },
+        "codex_local": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "maybe"
+          ]
+        },
+        "codex_cloud": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "maybe"
+          ]
+        },
+        "model_constraints": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "local_memory": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "research"
+          ]
+        },
+        "local_large_data": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "logs",
+              "binaries",
+              "decompile",
+              "screenshots",
+              "datasets",
+              "build_artifacts",
+              "none",
+              "unknown"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 8
+        },
+        "diagnostic_reduction": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "recommend"
+          ]
+        },
+        "must_have_tools": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "must_avoid_tools": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "known_risks": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "research_requests": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "anything_else": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "external_integration": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "repository_state": {
+          "type": "string",
+          "enum": [
+            "none",
+            "empty",
+            "bootstrap",
+            "existing",
+            "local_only",
+            "unknown"
+          ]
+        },
+        "distribution_mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "artifact",
+            "deployment",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "distribution_targets": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "consumption_preset": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "economy"
+          ]
+        },
+        "project_console": {
+          "type": "string",
+          "enum": [
+            "no",
+            "yes"
+          ]
+        }
       }
     },
-    "interpretation_rules": {"type": "object", "additionalProperties": {"type": "boolean"}, "maxProperties": 32}
+    "interpretation_rules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "maxProperties": 32
+    },
+    "answer_states": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "non_goals": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "owner_role": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "distribution": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "distribution_targets": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "language_value": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "framework_value": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "dependency_constraints": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "performance_constraints": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "external_product_name": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "community_tool_value": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "target_engine_value": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "hosting_value": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "compliance": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "validation_priorities": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "model_constraints": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "must_have_tools": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "must_avoid_tools": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "known_risks": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "research_requests": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "anything_else": {
+          "enum": [
+            "unknown",
+            "not_applicable"
+          ]
+        }
+      }
+    }
   }
 }

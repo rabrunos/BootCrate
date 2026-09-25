@@ -1,10 +1,10 @@
 ---
 name: concise-report
-description: Produce a compact owner-facing implementation report with verifiable results.
+description: Summarize a project implementation, validation or requested execution result concisely, with the exact observed Git/Issue actions and remaining checks. Use for a final task report, not to create a tracked status document.
 ---
 
-Use the active contract's exact Target Version token at the start of the report H1. The rest of the title/body uses the project-profile report language.
+For a tracked implementation, start the report H1 with its assigned `[<TARGET_VERSION>]` token and use the configured report language. For read-only work, do not invent a Target Version or claim an implementation happened.
 
-Report changed behavior, observed version, checks actually run, failed/unverified items, requested Issue actions and the actual commit/push result. For security work identify the scope verified and remaining limitations without leaking secrets or personal data. Never label structural validation as a penetration test or production approval.
+State the changed behavior, observed version/commit, checks actually run (with failures, blocked or not-run checks distinct), remaining manual smoke, and actual Git/Issue outcomes. Say what still needs acceptance; a successful structural check is not proof of product behavior or security review. Sanitize logs and paths; do not paste secrets or private records.
 
-Respond after the requested Git operations. Do not create a tracked last-report file, repeat raw successful logs, or duplicate project work state.
+Return the report as a response after the authorized actions. Do not create a tracked last-report file or duplicate active Issue state.

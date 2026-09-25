@@ -10,6 +10,7 @@ Current version: <OBSERVED_BASELINE_VERSION>
 Target version: <TARGET_VERSION>
 Goal: <EXACT_OUTCOME>
 Scope: <TARGET_AND_DO_NOT_TOUCH>
+Relevant Issue: <ISSUE_URL_OR_EXACT_ACCESS_BLOCKER>
 Validation: <CHECKS_THAT_PROVE_THE_CHANGE>
 Git / Issue actions: <ONLY_AUTHORIZED_ACTIONS>
 ```
@@ -19,11 +20,13 @@ Git / Issue actions: <ONLY_AUTHORIZED_ACTIONS>
 - Repository basis: <BRANCH/SHA used by planner>.
 - Owner decisions / verified facts / local questions / assumptions.
 - Execution: effort <E0|E1|E2|E3>, Main <medium|high|xhigh>, risk <normal|elevated>.
+- Consumption preset <standard|economy> and override source when relevant; it never lowers required effort.
 - Medium eligibility: <brief evidence all gates hold; otherwise use High>.
 - Local discovery: <none|targeted|deep>, bounded questions and stopping condition.
 - Security: <changed boundaries, selected controls, negative tests, release blockers, review>.
 - Services: <approved capability/operating model/operator; provisioning authorization remains separate>.
 - Acceptance / non-goals / compatibility / required version mirrors.
+- Delivery candidate/destinations/changelog/receipt boundaries only when the project distributes.
 - Delegation: <omit for default none; only bounded Worker/Scout work>.
 - Commit/push and exact Issue actions; closure only when authorized.
 

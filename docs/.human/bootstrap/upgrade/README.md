@@ -1,0 +1,7 @@
+# Managed bootstrap updates
+
+This is a temporary, local mechanism for files **explicitly** managed during bootstrap. It is not an updater for projects after materialization. The manifest stays ignored at `.local/bootcrate-managed.json` and is removed with bootstrap. It contains a format version, source revision, relative paths and base byte digests, never secrets or absolute machine paths.
+
+After approving which new files BootCrate owns, use `python managed.py init <bootstrap-root> --revision <source-SHA> <path>...`. No pre-existing file becomes managed merely because its name matches. To compare a later source checkout, use `python managed.py preview <bootstrap-root> <new-source-root> [--new-path <approved-new-path>]`; review actions and conflicts. Apply only the reviewed digest with `python managed.py apply <bootstrap-root> <new-source-root> --approved-plan-digest <digest> --revision <new-source-SHA> [--new-path ...]`.
+
+The three-way comparison checks installed base `B`, current bytes `C` and new source `N`. Unchanged local files may update/remove; identical desired files need no write; a local customization stays if upstream did not change; dual edits, deletions, occupied new paths and unknown bases block. Path escapes, symlinks, oversized files and a missing bootstrap block. Apply rechecks the reviewed plan and recovers only its own writes when still untouched. Reconcile concurrent edits manually. Materialized products own their files; do not reconstruct this manifest after pruning.

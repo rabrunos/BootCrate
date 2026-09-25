@@ -11,19 +11,20 @@
   function parseRepository(value) {
     const raw = String(value || "").trim();
     const short = raw.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
-    if (short) return short[1] + "/" + short[2];
+    const valid = (owner, repo) => /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner) &&
+      /^[A-Za-z0-9._-]{1,100}$/.test(repo) && ![".",".."].includes(repo) && !repo.endsWith(".git.git");
+    if (short) return valid(short[1],short[2]) ? short[1] + "/" + short[2] : "";
     try {
       const url = new URL(raw);
       if (url.protocol !== "https:" || url.hostname !== "github.com") return "";
       const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/");
       if (parts.length !== 2 || !parts.every(Boolean)) return "";
-      return parts[0] + "/" + parts[1].replace(/\.git$/, "");
+      const repo = parts[1].replace(/\.git$/, "");
+      return valid(parts[0],repo) ? parts[0] + "/" + repo : "";
     } catch { return ""; }
   }
   function githubCreateUrl(input) {
     const url = new URL("https://github.com/new");
-    url.searchParams.set("template_owner", "rabrunos");
-    url.searchParams.set("template_name", "BootCrate");
     const name = slugify(input && input.name);
     if (name) url.searchParams.set("name", name);
     const description = String(input && input.description || "").trim().slice(0, 350);
@@ -37,7 +38,7 @@
     return [
       "Repository: " + repo + ".",
       "For project-specific work, inspect the current repository first.",
-      "Read PROJECT_GUIDE.md as the stable entry point for the project's current workflow and context.",
+      "Read PROJECT_GUIDE.md as the stable entry point if it exists; an empty repository still needs materialization.",
       "GitHub is the remotely observable source of truth; Issues own active work state.",
       "Implementation agents verify local execution state before changing files.",
       "Do not ask the owner to reconstruct information recoverable from the repository."
@@ -45,8 +46,8 @@
   }
   function initialMessage(language) {
     return language === "pt-BR"
-      ? "Este é o intake inicial do projeto. Leia PROJECT_GUIDE.md e inspecione o estado atual do repositório. Use minhas respostas como intenção e restrições, não como decisões técnicas finais. Pesquise fatos externos relevantes e discuta comigo decisões materiais antes da implementação. Não implemente, provisione ou publique nada antes de definirmos o escopo de materialização."
-      : "This is the project's initial intake. Read PROJECT_GUIDE.md and inspect the current repository state. Treat my answers as intent and constraints, not final technical decisions. Research material external facts and discuss consequential decisions with me before implementation. Do not implement, provision, or publish anything until we agree on the materialization scope.";
+      ? "Este é o intake inicial do projeto. Verifique o repositório informado e leia PROJECT_GUIDE.md se ele já existir. Se houver código de produto, prepare uma Adoption Sandbox isolada e um delta revisável antes de qualquer aplicação ao original. Use minhas respostas como intenção e restrições, não como decisões técnicas finais. Confirme Issues, permissões, decisões e escopo antes da implementação; não publique por consequência da validação."
+      : "This is the initial project intake. Verify the indicated repository and read PROJECT_GUIDE.md if it exists. If it contains a product, prepare an isolated Adoption Sandbox and a reviewable delta before applying anything to the original. Treat my answers as intent and constraints, not final technical decisions. Confirm Issues, access, decisions and scope before implementation; validation does not authorize publication.";
   }
   return {slugify, parseRepository, githubCreateUrl, projectInstructions, initialMessage};
 });

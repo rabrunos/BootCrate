@@ -1,5 +1,5 @@
 {
-  "schema": "bootcrate-project-intake/v1",
+  "schema": "bootcrate-project-intake/v2",
   "language": "pt-BR",
   "answers": {
     "project_name": "Example Project",
@@ -10,7 +10,9 @@
     "report_language": "pt-BR",
     "repo_language": "en",
     "single_or_team": "single",
-    "issues_tracking": "yes",
-    "primary_orchestration": "chatgpt"
+    "repository_state": "none",
+    "distribution_mode": "none",
+    "consumption_preset": "standard",
+    "project_console": "no"
   }
 }

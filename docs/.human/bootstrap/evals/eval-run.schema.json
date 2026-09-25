@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bootcrate-eval-run.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "identity", "environment", "observations", "checks", "outcome", "interventions", "metrics"],
+  "properties": {
+    "schema": {"const": "bootcrate-eval-run/v1"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_id", "bootcrate_revision", "scenario_id", "scenario_revision", "evaluator_revision", "modality", "executor", "surface"],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "bootcrate_revision": {"type": "string", "minLength": 1},
+        "scenario_id": {"type": "string", "minLength": 1},
+        "scenario_revision": {"type": "string", "minLength": 1},
+        "evaluator_revision": {"type": "string", "minLength": 1},
+        "modality": {"enum": ["L1", "L2", "L3", "L4"]},
+        "executor": {"enum": ["codex", "claude_code", "human", "none"]},
+        "surface": {"type": "string", "minLength": 1}
+      }
+    },
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["os", "model", "requested_effort", "effective_effort", "fixture_baseline"],
+      "properties": {
+        "os": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "requested_effort": {"type": ["string", "null"]},
+        "effective_effort": {"type": ["string", "null"]},
+        "fixture_baseline": {"type": ["string", "null"]}
+      }
+    },
+    "observations": {"type": "array", "items": {"type": "object", "required": ["kind", "summary"], "properties": {"kind": {"type": "string"}, "summary": {"type": "string"}, "artifact_ref": {"type": ["string", "null"]}}}},
+    "checks": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "status", "evidence_ref"], "properties": {"id": {"type": "string"}, "status": {"enum": ["pass", "fail", "blocked", "not_run", "not_applicable"]}, "evidence_ref": {"type": ["string", "null"]}}}},
+    "outcome": {"enum": ["completed", "correctly_blocked", "failed", "inconclusive"]},
+    "interventions": {"type": "array", "items": {"type": "string"}},
+    "metrics": {"type": "object", "additionalProperties": {"type": ["number", "null"]}}
+  }
+}

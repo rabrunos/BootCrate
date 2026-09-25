@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Project Console</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <header><h1>Project Console</h1><p>Local configuration viewer. Imported files are snapshots, not proof of live GitHub or deployment state.</p></header>
+    <p id="status" role="status" aria-live="polite">Import the project's stable profile to begin.</p>
+    <section aria-labelledby="inputs"><h2 id="inputs">Import local information</h2>
+      <label>Project profile JSON <input id="profile" type="file" accept=".json,application/json"></label>
+      <label>Local preset override JSON (optional) <input id="override" type="file" accept=".json,application/json"></label>
+      <label>Version source text (optional) <input id="version" type="file" accept=".txt,.json,.toml,.xml,.yaml,.yml"></label>
+      <label>CHANGELOG.md (optional) <input id="history" type="file" accept=".md,text/markdown"></label>
+      <label>Delivery preflight JSON (optional) <input id="preflight" type="file" accept=".json,application/json"></label>
+    </section>
+    <section aria-labelledby="configuration"><h2 id="configuration">Observed configuration</h2><dl id="details"></dl></section>
+    <section aria-labelledby="actions"><h2 id="actions">Local actions</h2>
+      <label for="presetSelect">Local consumption override</label>
+      <select id="presetSelect"><option value="">Use project default</option><option value="standard">Standard</option><option value="economy">Economy</option></select>
+      <button id="exportPreset" type="button">Download local override</button>
+      <p>Place the downloaded file at <code>.local/config/preset.json</code> in your project using your normal file tool. This page does not write to the project directory. Reimport the file to see its effective value.</p>
+      <button id="validateLocal" type="button">Check imported configuration</button>
+      <p id="localCheck" role="status">No local check run. Use the project's native validator for full profile and product verification.</p>
+      <button id="exportSnapshot" type="button">Download sanitized snapshot</button>
+    </section>
+    <section aria-labelledby="historyTitle"><h2 id="historyTitle">Version history</h2><pre id="historyNotes">No changelog imported; history unknown.</pre></section>
+    <section aria-labelledby="delivery"><h2 id="delivery">Delivery preview</h2><pre id="notes">No preflight imported. Remote status unknown.</pre></section>
+    <p>For active work, consult <a href="../PROJECT_GUIDE.md">the project guide</a> and GitHub Issues. Building and publishing require their own approved tools and checks.</p>
+  </main>
+  <script src="preset.js"></script>
+  <script src="console.js"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@
   else root.BootCrateIntakeCore = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  const SCHEMA = "bootcrate-project-intake/v1";
+  const SCHEMA = "bootcrate-project-intake/v2";
   const MAX_FILE_BYTES = 1024 * 1024;
   const MAX_TEXT = 20000;
   const object = v => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -47,7 +47,7 @@
       const errors = [];
       const add = (code, path) => errors.push({code, path});
       if (!object(data)) return [{code: "object", path: "root"}];
-      const allowed = new Set(["schema", "exported_at", "session", "language", "answers", "interpretation_rules"]);
+      const allowed = new Set(["schema", "exported_at", "session", "language", "answers", "answer_states", "interpretation_rules"]);
       for (const key of Object.keys(data)) if (!allowed.has(key)) add("unknown", key);
       if (data.schema !== SCHEMA) add("schema", "schema");
       if (data.language !== undefined && !["en", "pt-BR"].includes(data.language)) add("value", "language");
@@ -68,6 +68,15 @@
         if (!q) add("unknown", "answers." + id);
         else if (!validValue(q, value)) add("value", "answers." + id);
       }
+      if (data.answer_states !== undefined) {
+        if (!object(data.answer_states)) add("object", "answer_states");
+        else for (const [id, state] of Object.entries(data.answer_states)) {
+          const q = byId.get(id);
+          if (!q || q.required || !["text", "textarea"].includes(q.type) ||
+              !["unknown", "not_applicable"].includes(state) || present(data.answers?.[id]))
+            add("value", "answer_states." + id);
+        }
+      }
       return errors;
     }
     function exportAnswers(answers) {
@@ -79,14 +88,55 @@
       }
       return out;
     }
+    function exportStates(states, answers) {
+      const out = {};
+      for (const q of active(answers)) if (states[q.id]) out[q.id] = states[q.id];
+      if (validate({schema:SCHEMA,answers:exportAnswers(answers),answer_states:out}).length)
+        throw new Error("Invalid answer states");
+      return out;
+    }
     function normalize(data) {
       const errors = validate(data);
       if (errors.length) throw new Error("Invalid intake envelope");
       const answers = {};
       for (const [id, value] of Object.entries(data.answers)) answers[id] = typeof value === "string" ? value.trim() : [...value];
-      return {answers, language: data.language || "en", session: data.session ? {...data.session} : null};
+      return {answers, states:{...(data.answer_states || {})}, language: data.language || "en", session: data.session ? {...data.session} : null};
     }
-    return {visible, active, missing, validValue, validate, exportAnswers, normalize};
+    function upgradeLegacy(data) {
+      if (!object(data) || data.schema !== "bootcrate-project-intake/v1" || !object(data.answers))
+        throw new Error("Not a legacy intake");
+      const old = data.answers;
+      const conflicts = [];
+      const retired = {
+        issues_tracking: ["yes", "no", "custom"],
+        primary_orchestration: ["chatgpt", "local_planner", "custom"],
+        agent_budget: ["main_worker_scout", "main_worker", "recommend"]
+      };
+      for (const [id, value] of Object.entries(old)) {
+        if (!byId.has(id) && (!Object.hasOwn(retired, id) || !retired[id].includes(value)))
+          throw new Error("Unknown or invalid legacy answer: " + id);
+      }
+      if (old.issues_tracking && old.issues_tracking !== "yes") conflicts.push("github_issues_required");
+      if (old.primary_orchestration && old.primary_orchestration !== "chatgpt") conflicts.push("chatgpt_primary_required");
+      const answers = {};
+      for (const [id, value] of Object.entries(old)) {
+        const q = byId.get(id);
+        if (q && validValue(q, value)) answers[id] = value;
+        else if (q && id !== "existing_or_new") throw new Error("Invalid legacy answer: " + id);
+      }
+      if (old.existing_or_new === "external_target") {
+        answers.existing_or_new = "unknown";
+        answers.external_integration = "yes";
+        conflicts.push("legacy_product_stage_unknown");
+      } else if (old.existing_or_new && !validValue(byId.get("existing_or_new"), old.existing_or_new)) {
+        throw new Error("Invalid legacy project stage");
+      }
+      // Topology is not a cost preset; the owner must select it separately.
+      const converted = {schema: SCHEMA, answers, language: data.language, session: data.session};
+      if (validate(converted).length) throw new Error("Invalid converted intake");
+      return {converted, conflicts};
+    }
+    return {visible, active, missing, validValue, validate, exportAnswers, exportStates, normalize, upgradeLegacy};
   }
   return {SCHEMA, MAX_FILE_BYTES, MAX_TEXT, create};
 });

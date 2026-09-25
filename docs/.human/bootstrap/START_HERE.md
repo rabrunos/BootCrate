@@ -1,12 +1,14 @@
 # Start Here — BootCrate Project Bootstrap
 
-The normal starting point is the guided **BootCrate Setup** at `app/index.html`. It keeps the intake local, adapts visible questions, provides review, opens GitHub's template-repository creation flow, and generates the repository-specific ChatGPT handoff. This document is the detailed fallback/reference.
+The normal starting point is the guided **BootCrate Setup** at `app/index.html`. It keeps the intake local, adapts visible questions, provides review, opens GitHub's repository creation page when needed, and generates the repository-specific ChatGPT handoff. The page records intent; it cannot verify a GitHub session or product behavior. This document is the detailed fallback/reference.
 
 This guide starts a new downstream project. It does not instruct maintainers to turn BootCrate itself into an application.
 
 ## 1. Prepare the real project repository
 
-Create the GitHub repository that will become your product, using a template, fork or file copy. Put the BootCrate baseline there, commit/push it and keep a matching local checkout whose remote points to that repository. Do not build the downstream product in the upstream BootCrate repository.
+Identify the GitHub repository that will become your product. If it does not exist, open GitHub's creation page, sign in there and return with its URL. As of this version BootCrate's upstream repository is **not configured as a GitHub template**, so the Setup opens an ordinary new-repository form. Creating an empty repository does not copy BootCrate into it. After checking the actual destination, the approved materialization transfers only the necessary starting files. Do not build the downstream product in the upstream BootCrate repository.
+
+If the repository already contains product code, use an [Adoption Sandbox](adoption/README.md): fix the original baseline, create a separate clone with the product at its own root, inventory the old method and useful capabilities, then implement/validate the complete selected configuration there. Only after the delta is approved should Apply Adoption transfer it to the original and repeat the checks. A branch alone in the owner's active checkout is not an isolated sandbox. Product code existing only on one computer needs a reviewed, secret-free GitHub destination before the normal shared workflow can proceed.
 
 The expected solo workflow keeps GitHub current so ChatGPT can inspect it. The executor uses the local checkout and checks branch, HEAD, status and diff before editing. Local changes are never discarded just to match a remote assumption.
 
@@ -26,15 +28,15 @@ Use Codex, Claude Code or both. Local/IDE execution uses the checkout; optional 
 
 Starter surfaces are `AGENTS.md`, `.codex/`, `.agents/skills/`, `CLAUDE.md` and `.claude/`. Materialization adapts enabled harnesses and removes the rest. Do not enable every tool or create another permanent work-state system just because an adapter exists.
 
-ChatGPT remains the normal planner. Codex/Claude planning is the fallback when it is unavailable or intentionally bypassed.
+ChatGPT remains the normal planner. Codex/Claude planning is a fallback; a deliberately chosen direct E0/eligible E1 task still uses a relevant Issue, assigned version when mutating, checks and acceptance.
 
 ## 4. Complete the offline intake
 
 Open `app/index.html` locally. Use the guided sections, review screen and completion handoff. Select English or Portuguese and answer what you know. Unknown is valid; do not research technical details merely to fill the form. The app collects intent, preferences and constraints, not architecture.
 
-Save a draft in the browser if available, or import a previously exported intake. Final export requires visible mandatory answers and omits hidden conditional answers. Keep the JSON outside tracked files or under ignored local storage, then upload it to the ChatGPT Project. Do not put passwords, API keys or real private records into answers.
+Use Basic for the short intent questions and Detailed to add optional technical context; both use the same answers. For optional text questions, explicitly choose "I don't know yet" or "Does not apply" when that is what you mean; a blank field remains unanswered. Save a draft in the browser if available, or import a previously exported intake. Final export requires visible mandatory answers and omits hidden conditional answers and their states. Keep the JSON outside tracked files or under ignored local storage, then upload it to the ChatGPT Project. Do not put passwords, API keys or real private records into answers.
 
-The question set will be redesigned separately. For now ChatGPT supplements it with relevant questions from [discovery coverage](knowledge/discovery-coverage.md).
+The current questions distinguish code maturity, external integration, repository situation and distribution. GitHub Issues/ChatGPT are part of the method, while Padrão/Econômico and an optional Project Console are real choices. An old intake with conflicting options requires visible confirmation; its original file is not overwritten. ChatGPT supplements it with relevant questions from [discovery coverage](knowledge/discovery-coverage.md).
 
 ## 5. Resolve the project with ChatGPT
 
@@ -60,7 +62,7 @@ It defines the new project's Target Version and one canonical source, preferably
 
 Main has Medium / High / XHigh effort, not three agents. High is default. Medium requires resolved scope, familiar boundaries, strong direct tests and no sensitive security change. Deep ambiguity uses XHigh or a verified supported equivalent. A prompt does not itself switch the client's setting.
 
-The contract identifies only necessary local questions, selected security/service decisions, tooling and exact authorized Git/Issue actions. See [materialization map](MATERIALIZATION_MAP.md) for possible outputs, not a list of mandatory files.
+The contract identifies the relevant Issue, necessary local questions, selected security/service decisions, tooling and exact authorized Git/Issue actions. See [materialization map](MATERIALIZATION_MAP.md) for possible outputs, not a list of mandatory files. Concurrent work gets exclusive targets and serialized integration. Every integrated version has a short canonical changelog entry, including versions never published; destinations receive independent confirmed receipts and notes intervals. See [delivery](delivery/README.md).
 
 ## 7. Execute and validate
 
@@ -70,19 +72,20 @@ For machine-dependent resources, it generates portable resolver/setup behavior i
 
 The executor adapts Issue Forms and `.github/labels.yml`, reconciles actual GitHub labels idempotently, verifies them, then creates only approved Issues/Milestones. Missing write authorization is reported precisely; the owner may authenticate a tool, but should not recreate every label manually.
 
-Run the project's applicable build/behavior/security checks. Do not confuse a compiled scaffold or the bootstrap self-test with a security audit. Sensitive internet-facing systems require independent review and an operating plan before real users/data. No validation step publishes or deploys by default.
+Run the project's applicable build/behavior/security checks. Mix automatic and manual smoke according to the real capability and risk, with bounded evidence and explicit not-run checks. Do not confuse a compiled scaffold or bootstrap self-test with a security audit. Sensitive internet-facing systems require independent review and an operating plan before real users/data. No validation step publishes or deploys by default.
 
 ## 8. Prune and finish
 
-The executor promotes only relevant project controls/tests, removes `docs/.human/bootstrap/`, raw intake, `.github/workflows/bootcrate-validate.yml`, disabled harnesses and unused roles/skills/forms/tooling, and rewrites the README for the product. Bootstrap validation/eval dependencies must not become the product's permanent requirements.
+The executor promotes only relevant project controls/tests, removes `docs/.human/bootstrap/`, raw intake, `.github/workflows/bootcrate-validate.yml`, disabled harnesses and unused roles/skills/forms/tooling, and rewrites the README for the product. The separate small [Project Console](console/README.md) survives only when selected; bootstrap validation/eval dependencies must not become the product's permanent requirements.
 
-Check remaining links/imports, run the final project's own validation and confirm its target version. Then perform requested commit/push actions and return the report in the owner's configured language. The report remains a response, not a tracked last-report file.
+Check remaining links/imports, run the [structural verifier](validation/README.md) from retained external tools and the final project's own checks, and confirm its target version. For an adoption, repeat applicable checks in the original. Then perform authorized Git/Issue actions and return the report in the owner's configured language. The report remains a response, not a tracked last-report file.
 
 Owner/ChatGPT reviews the report and current GitHub evidence, performs required manual smoke and decides acceptance/Issue closure. A continuation fixes the same unaccepted target; later independent changes receive a new version. Publication is separate and explicitly authorized.
 
 ## Completion checklist
 
 - [ ] Correct project repository and authorized GitHub access.
+- [ ] Relevant Issue identified; existing code preserved in a separate Adoption Sandbox if applicable.
 - [ ] ChatGPT Project instructions point to that repository.
 - [ ] Intake discussed; architecture, data exposure and operating responsibility resolved.
 - [ ] Target Version and canonical source defined for this product.
@@ -91,6 +94,7 @@ Owner/ChatGPT reviews the report and current GitHub evidence, performs required 
 - [ ] Selected security controls have implementation/verification evidence.
 - [ ] Required live labels/Issues/Milestones reconciled as authorized.
 - [ ] Bootstrap-only content/workflow and unused adapters removed.
+- [ ] Selected Console/delivery capabilities actually work; no unselected uploader or UI remains.
 - [ ] Final project validation and version checks passed, or limitations are explicitly reported.
 - [ ] Authorized commit/push completed; owner/ChatGPT reviewed acceptance.
 

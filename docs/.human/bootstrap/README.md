@@ -7,6 +7,10 @@ This directory is reusable creation material, not the normal working context of 
 - [knowledge/security-and-trust.md](knowledge/security-and-trust.md): security-module selection.
 - [knowledge/service-selection.md](knowledge/service-selection.md): hosting/services decisions.
 - [knowledge/discovery-coverage.md](knowledge/discovery-coverage.md): question coverage for future intake design.
+- [adoption/README.md](adoption/README.md): separate sandbox, preservation and approved-delta transfer.
+- [delivery/README.md](delivery/README.md): version, candidate, changelog and destination receipts.
+- [console/README.md](console/README.md): optional static Project Console output.
+- [upgrade/README.md](upgrade/README.md): conservative managed-file update before pruning.
 - [validation/README.md](validation/README.md): deterministic self-tests.
 - [evals/README.md](evals/README.md): scenario evaluation without automatic model spending.
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "project-profile.schema.json",
+  "$id": "project-profile-v3.schema.json",
   "title": "Project Profile",
   "type": "object",
   "additionalProperties": false,
@@ -10,14 +10,16 @@
     "owner",
     "workflow",
     "versioning",
-    "security"
+    "security",
+    "distribution",
+    "console"
   ],
   "properties": {
     "$schema": {
       "type": "string"
     },
     "schema": {
-      "const": "project-profile/v2"
+      "const": "project-profile/v3"
     },
     "project": {
       "type": "object",
@@ -120,20 +122,24 @@
         "tracking",
         "primary_orchestrator",
         "fallback_planners",
-        "implementation_harnesses"
+        "implementation_harnesses",
+        "consumption_preset",
+        "collaboration"
       ],
       "properties": {
         "tracking": {
           "const": "github_issues"
         },
         "primary_orchestrator": {
-          "type": "string",
-          "minLength": 1
+          "const": "chatgpt"
         },
         "fallback_planners": {
           "type": "array",
           "items": {
-            "type": "string"
+            "enum": [
+              "codex_plan",
+              "claude_plan"
+            ]
           },
           "uniqueItems": true
         },
@@ -147,6 +153,18 @@
           },
           "minItems": 1,
           "uniqueItems": true
+        },
+        "consumption_preset": {
+          "enum": [
+            "standard",
+            "economy"
+          ]
+        },
+        "collaboration": {
+          "enum": [
+            "single",
+            "coordinated"
+          ]
         }
       }
     },
@@ -311,6 +329,72 @@
           }
         }
       }
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "targets"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "none",
+            "artifact",
+            "deployment",
+            "mixed"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "channel",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "channel": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "enum": [
+                  "artifact",
+                  "deployment"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
     }
   }
 }

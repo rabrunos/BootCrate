@@ -85,23 +85,42 @@ window.BOOTCRATE_QUESTIONS = [
     "section": "identity",
     "type": "select",
     "required": true,
-    "en": "Is this a new project or work on an existing codebase/product?",
-    "pt": "É um projeto novo ou trabalho sobre um código/produto existente?",
+    "en": "Is there already code for this project?",
+    "pt": "Já existe código para este projeto?",
     "options": [
       [
         "new",
-        "New",
-        "Novo"
+        "No, start a new project",
+        "Não, iniciar projeto novo"
       ],
       [
         "existing_code",
-        "Existing codebase",
-        "Código existente"
+        "Yes, adapt existing code",
+        "Sim, adaptar código existente"
       ],
       [
-        "external_target",
-        "Extension/mod/integration with external product",
-        "Extensão/mod/integração com produto externo"
+        "unknown",
+        "Not sure",
+        "Não sei"
+      ]
+    ]
+  },
+  {
+    "id": "external_integration",
+    "section": "identity",
+    "type": "select",
+    "en": "Does this project extend or integrate with another product?",
+    "pt": "Este projeto estende ou integra outro produto?",
+    "options": [
+      [
+        "yes",
+        "Yes",
+        "Sim"
+      ],
+      [
+        "no",
+        "No",
+        "Não"
       ],
       [
         "unknown",
@@ -220,8 +239,8 @@ window.BOOTCRATE_QUESTIONS = [
     "id": "autonomy",
     "section": "owner",
     "type": "select",
-    "en": "How much implementation autonomy should agents have?",
-    "pt": "Quanta autonomia de implementação os agentes devem ter?",
+    "en": "How much implementation discretion is useful within the approved scope? Publication still needs explicit authorization.",
+    "pt": "Quanto espaço para decisões de implementação é útil dentro do escopo aprovado? Publicar ainda exige autorização explícita.",
     "options": [
       [
         "low",
@@ -329,6 +348,56 @@ window.BOOTCRATE_QUESTIONS = [
     "type": "textarea",
     "en": "How do you expect users to receive/run the project?",
     "pt": "Como você espera que os usuários recebam/executem o projeto?"
+  },
+  {
+    "id": "distribution_mode",
+    "section": "platform",
+    "type": "select",
+    "required": true,
+    "en": "How will the product be delivered?",
+    "pt": "Como o produto será entregue?",
+    "options": [
+      [
+        "none",
+        "No external distribution",
+        "Sem distribuição externa"
+      ],
+      [
+        "artifact",
+        "Downloadable package or file",
+        "Pacote ou arquivo para baixar"
+      ],
+      [
+        "deployment",
+        "Site or service deployment",
+        "Deploy de site ou serviço"
+      ],
+      [
+        "mixed",
+        "Both package and deployment",
+        "Pacote e deploy"
+      ],
+      [
+        "unknown",
+        "Not sure yet",
+        "Ainda não sei"
+      ]
+    ]
+  },
+  {
+    "id": "distribution_targets",
+    "section": "platform",
+    "type": "textarea",
+    "en": "Which destinations, channels or environments need separate delivery?",
+    "pt": "Quais destinos, canais ou ambientes precisam de entrega separada?",
+    "condition": {
+      "id": "distribution_mode",
+      "in": [
+        "artifact",
+        "deployment",
+        "mixed"
+      ]
+    }
   },
   {
     "id": "offline_requirement",
@@ -464,9 +533,9 @@ window.BOOTCRATE_QUESTIONS = [
     "section": "external",
     "type": "text",
     "condition": {
-      "id": "existing_or_new",
+      "id": "external_integration",
       "in": [
-        "external_target"
+        "yes"
       ]
     },
     "en": "What external product/game/system is being extended or modified?",
@@ -477,9 +546,9 @@ window.BOOTCRATE_QUESTIONS = [
     "section": "external",
     "type": "select",
     "condition": {
-      "id": "existing_or_new",
+      "id": "external_integration",
       "in": [
-        "external_target"
+        "yes"
       ]
     },
     "en": "Is there an official SDK/modding API/plugin system?",
@@ -507,9 +576,9 @@ window.BOOTCRATE_QUESTIONS = [
     "section": "external",
     "type": "select",
     "condition": {
-      "id": "existing_or_new",
+      "id": "external_integration",
       "in": [
-        "external_target"
+        "yes"
       ]
     },
     "en": "Are there community loaders/frameworks/tools?",
@@ -550,9 +619,9 @@ window.BOOTCRATE_QUESTIONS = [
     "section": "external",
     "type": "select",
     "condition": {
-      "id": "existing_or_new",
+      "id": "external_integration",
       "in": [
-        "external_target"
+        "yes"
       ]
     },
     "en": "Do you know the external product's engine/runtime?",
@@ -593,9 +662,9 @@ window.BOOTCRATE_QUESTIONS = [
     "section": "external",
     "type": "select",
     "condition": {
-      "id": "existing_or_new",
+      "id": "external_integration",
       "in": [
-        "external_target"
+        "yes"
       ]
     },
     "en": "Will the local environment have access to installed binaries/assets/logs?",
@@ -628,9 +697,9 @@ window.BOOTCRATE_QUESTIONS = [
     "section": "external",
     "type": "select",
     "condition": {
-      "id": "existing_or_new",
+      "id": "external_integration",
       "in": [
-        "external_target"
+        "yes"
       ]
     },
     "en": "May the project use local inspection/decompilation/reverse-engineering tools when legally/technically appropriate?",
@@ -971,8 +1040,8 @@ window.BOOTCRATE_QUESTIONS = [
     "id": "automated_tests",
     "section": "validation",
     "type": "select",
-    "en": "Do you expect automated tests from the beginning?",
-    "pt": "Você espera testes automatizados desde o início?",
+    "en": "Are there automated tests already, or should we identify useful ones?",
+    "pt": "Já existem testes automáticos ou devemos identificar os que serão úteis?",
     "options": [
       [
         "yes",
@@ -1000,8 +1069,8 @@ window.BOOTCRATE_QUESTIONS = [
     "id": "manual_smoke",
     "section": "validation",
     "type": "select",
-    "en": "Will some important behavior require human/manual smoke testing?",
-    "pt": "Algum comportamento importante exigirá teste manual/humano?",
+    "en": "Can you run a real-world smoke test when a relevant check needs your environment?",
+    "pt": "Você consegue executar um teste rápido real quando uma verificação precisar do seu ambiente?",
     "options": [
       [
         "yes",
@@ -1024,8 +1093,8 @@ window.BOOTCRATE_QUESTIONS = [
     "id": "ci",
     "section": "validation",
     "type": "select",
-    "en": "Should CI run on GitHub when useful?",
-    "pt": "CI deve rodar no GitHub quando útil?",
+    "en": "Can GitHub CI run checks for this repository? Required checks still need another path if unavailable.",
+    "pt": "O CI do GitHub poderá executar verificações neste repositório? Checks obrigatórios precisam de outra forma se não puder.",
     "options": [
       [
         "yes",
@@ -1077,27 +1146,42 @@ window.BOOTCRATE_QUESTIONS = [
     ]
   },
   {
-    "id": "issues_tracking",
+    "id": "repository_state",
     "section": "workflow",
     "type": "select",
     "required": true,
-    "en": "Use GitHub Issues as the operational source for plans, bugs, decisions, acceptance and follow-up?",
-    "pt": "Usar GitHub Issues como fonte operacional para planos, bugs, decisões, aceitação e follow-up?",
+    "en": "What do you know about the GitHub repository?",
+    "pt": "O que você sabe sobre o repositório GitHub?",
     "options": [
       [
-        "yes",
-        "Yes",
-        "Sim"
+        "none",
+        "No repository yet",
+        "Ainda não há repositório"
       ],
       [
-        "no",
-        "No",
-        "Não"
+        "empty",
+        "Already exists and is empty",
+        "Já existe e está vazio"
       ],
       [
-        "custom",
-        "Custom approach",
-        "Abordagem personalizada"
+        "bootstrap",
+        "Already contains BootCrate",
+        "Já contém o BootCrate"
+      ],
+      [
+        "existing",
+        "Already contains the product",
+        "Já contém o produto"
+      ],
+      [
+        "local_only",
+        "The product exists only on my computer",
+        "O produto está só no meu computador"
+      ],
+      [
+        "unknown",
+        "Not sure",
+        "Não sei"
       ]
     ]
   },
@@ -1105,8 +1189,8 @@ window.BOOTCRATE_QUESTIONS = [
     "id": "commit_push_policy",
     "section": "workflow",
     "type": "select",
-    "en": "After a validated implementation task, should Codex normally commit and push?",
-    "pt": "Após uma tarefa validada, o Codex deve normalmente fazer commit e push?",
+    "en": "When authorized, should the selected executor normally commit and push validated work?",
+    "pt": "Quando autorizado, o executor escolhido deve normalmente fazer commit e push do trabalho validado?",
     "options": [
       [
         "yes",
@@ -1153,8 +1237,8 @@ window.BOOTCRATE_QUESTIONS = [
     "id": "release_approval",
     "section": "workflow",
     "type": "select",
-    "en": "Who may authorize a real external release/publish?",
-    "pt": "Quem pode autorizar uma publicação/release externa real?",
+    "en": "Who may explicitly approve each real external release or deployment?",
+    "pt": "Quem pode aprovar explicitamente cada publicação ou deploy real?",
     "options": [
       [
         "owner_only",
@@ -1165,31 +1249,6 @@ window.BOOTCRATE_QUESTIONS = [
         "task_explicit",
         "Explicit approved task",
         "Tarefa explicitamente aprovada"
-      ],
-      [
-        "custom",
-        "Custom",
-        "Personalizado"
-      ]
-    ]
-  },
-  {
-    "id": "primary_orchestration",
-    "section": "ai",
-    "type": "select",
-    "required": true,
-    "en": "What should be the normal primary orchestration workflow?",
-    "pt": "Qual deve ser o fluxo normal principal de orquestração?",
-    "options": [
-      [
-        "chatgpt",
-        "ChatGPT orchestrates; implementation runs in Codex/Claude",
-        "ChatGPT orquestra; implementação roda no Codex/Claude"
-      ],
-      [
-        "local_planner",
-        "Codex/Claude planning is primary",
-        "Planejamento do Codex/Claude é principal"
       ],
       [
         "custom",
@@ -1295,26 +1354,22 @@ window.BOOTCRATE_QUESTIONS = [
     ]
   },
   {
-    "id": "agent_budget",
+    "id": "consumption_preset",
     "section": "ai",
     "type": "select",
-    "en": "Preferred agent topology?",
-    "pt": "Topologia de agentes preferida?",
+    "required": true,
+    "en": "Which consumption preset do you prefer? Quality and required checks stay the same.",
+    "pt": "Qual perfil de consumo você prefere? A qualidade e os checks obrigatórios são os mesmos.",
     "options": [
       [
-        "main_worker",
-        "Main + low-cost Worker",
-        "Main + Worker de baixo custo"
+        "standard",
+        "Standard — recommended",
+        "Padrão — recomendado"
       ],
       [
-        "main_worker_scout",
-        "Main + Worker + Scout",
-        "Main + Worker + Scout"
-      ],
-      [
-        "recommend",
-        "Let bootstrap research/recommend",
-        "Deixar bootstrap pesquisar/recomendar"
+        "economy",
+        "Economy — fewer optional calls",
+        "Econômico — menos chamadas opcionais"
       ]
     ]
   },
@@ -1449,6 +1504,26 @@ window.BOOTCRATE_QUESTIONS = [
     "type": "textarea",
     "en": "What do you explicitly want the orchestrator to research before proposing architecture?",
     "pt": "O que você quer explicitamente que o orquestrador pesquise antes de propor a arquitetura?"
+  },
+  {
+    "id": "project_console",
+    "section": "final",
+    "type": "select",
+    "required": true,
+    "en": "Include an optional small local Project Console after setup?",
+    "pt": "Incluir um pequeno Project Console local e opcional após a preparação?",
+    "options": [
+      [
+        "no",
+        "No, keep the project minimal",
+        "Não, manter o projeto mínimo"
+      ],
+      [
+        "yes",
+        "Yes, include the local console",
+        "Sim, incluir o painel local"
+      ]
+    ]
   },
   {
     "id": "anything_else",

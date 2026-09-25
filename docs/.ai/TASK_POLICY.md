@@ -2,6 +2,16 @@
 
 Vendor-neutral execution policy. Quality and safety take priority over marginal savings.
 
+## Mandatory work record and acceptance
+
+Every executable project task has a relevant GitHub Issue. Reuse it for investigation,
+continuation, failed smoke, repair and acceptance; do not create an Issue per command or
+a parallel status file. Record material decisions, Target Version for tracked changes,
+commit, observed checks and remaining smoke there. A delivery awaiting required smoke
+remains open. The owner/ChatGPT accepts against evidence; an executor closes only with
+explicit authorization after the criteria are met. If GitHub is unavailable, report the
+blocked shared record rather than inventing one locally.
+
 ## Version identity
 
 Every materialized project has one canonical project version source, including static sites, documentation and tooling projects. Prefer native metadata; use a minimal `VERSION` only when needed.
@@ -13,6 +23,28 @@ State the observed baseline version and repository-basis SHA when available. The
 Continuations and corrective work for the same unaccepted target retain that target. Abandoned targets are not reassigned to different work; record assignments/abandonment in the existing task/Issue history when needed, not a new registry. Accepted or externally distributed artifacts are not silently replaced: subsequent changes receive a new version. Commits distinguish intermediate revisions within an unfinished target.
 
 Read-only investigation, discussion, local setup and Issue-only actions do not bump version. Persisting tracked findings is a mutation. Versioning never authorizes publication.
+
+An Issue may span versions. A Target Version identifies one independent root change;
+the integrated version and each destination's confirmed publication are distinct facts.
+For simultaneous contributors, a coordinator assigns exclusive work targets compatible
+with the native version format and serializes integration on a freshly checked remote HEAD.
+If exclusive prereleases are unsupported, reserve numeric targets centrally. Never
+force-push to resolve a race or rename earlier commit tokens. Integration records the
+relationship between work tokens and the integrated target.
+
+Every integrated version, including internal and unpublished ones, has a concise
+canonical changelog entry describing the observed effect. Parallel contributors may
+write fragments by Issue; then the rendered changelog is generated rather than another
+manual source. Do not infer notes from commit titles or claim a reverted feature shipped.
+
+Publishing consumes a validated, identified candidate; preparation and checks never
+authorize it. Confirm each destination/resource/channel independently and retain a
+structured receipt with candidate, package and notes digests plus native evidence in
+the project's chosen shared record (normally the Release Issue). Identical confirmed
+bytes are skipped; different bytes, unknown outcomes, divergent baselines and unapproved
+rollbacks block automated retry. Receipt-only updates may be exempt from version bumps
+only under an approved path allowlist that cannot change product bytes or changelog.
+No publisher is installed when the product has no distribution.
 
 ## Main: three effort levels, one role
 
@@ -41,9 +73,20 @@ Unexpected ambiguity, contradictory evidence, an unexplained failing check or ne
 
 The contract describes desired effort; it cannot itself change a model setting. Verify available levels and effective settings for the selected model/client. Never fabricate a vendor option, add API spending, change subscriptions or relax permissions to achieve an effort tier.
 
+## Consumption presets
+
+`standard` (Padrão) is the default. `economy` (Econômico) reduces redundant
+research, optional delegation/concurrency and context consumption. Both retain the
+same E0–E3 class, Main Medium/High/XHigh requirement, security gates, evidence
+standard and release permissions. Resolve `task override > ignored local override >
+project default > standard` and report the source. Project default changes are
+tracked mutations; local overrides are not. If required effort is unavailable,
+report or block the affected work rather than silently lowering it. Role defaults
+remain Main High, Scout Medium/read-only and Worker Low/bounded when supported.
+
 ## Direct execution lane
 
-ChatGPT remains the default orchestrator when work requires discovery, product or architecture decisions, coordination, or material judgment. The owner may intentionally send E0 and eligible E1 work directly to an executor when the desired behavior and scope are already resolved and validation is deterministic.
+ChatGPT remains the default orchestrator when work requires discovery, product or architecture decisions, coordination, or material judgment. The owner may intentionally send E0 and eligible E1 work directly to an executor when the relevant Issue is identified, desired behavior and scope are resolved and validation is deterministic.
 
 Direct execution is not eligible when work involves material research, product/architecture choice, authentication or authorization, cryptography or secrets, a changed trust boundary, destructive migration, production access, provisioning or publication. Unexpected ambiguity exits the direct lane and returns the task to normal orchestration.
 
@@ -76,3 +119,13 @@ Use the smallest sufficient contract. A compact mutation contract needs version 
 Extended contracts add verified facts, local questions, non-goals, compatibility, acceptance, security controls/tests, service/operation constraints and review requirements only as needed.
 
 The final report is an ephemeral response after the requested Git actions. Include the exact target token, changed behavior, checks actually run, failures/unverified items, commit/push result and explicit Issue actions. Do not generate a tracked last-report or parallel work-state file.
+
+## Smoke selection
+
+Choose automatic, manual or hybrid verification for each relevant journey by risk,
+frequency, available control, expected signal and cost. Test real product logic
+directly when possible; add bounded end-to-end checks when they answer a new question.
+A screenshot or debug marker proves only what it shows. State preconditions, action,
+expected result, verifier, environment, run limits and owner of a manual step.
+Report `not_run` or `blocked` when required evidence was not observed. Economy does
+not make required validation optional. Reassess affected evidence after a code change.

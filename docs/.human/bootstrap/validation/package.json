@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "name": "bootcrate-browser-validation-only",
+  "version": "0.9.0",
+  "scripts": {
+    "test:browser": "node --test test-browser.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

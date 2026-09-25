@@ -1,0 +1,16 @@
+{
+  "schema": "bootcrate-adapter/v1",
+  "id": "codex",
+  "surfaces": ["cli", "ide", "cloud"],
+  "instructions": ["AGENTS.md"],
+  "skills": [".agents/skills/"],
+  "settings": [".codex/config.toml", ".codex/agents/"],
+  "declared": {
+    "main_default": "high",
+    "main_requested": ["medium", "high", "xhigh"],
+    "consumption_presets": ["standard", "economy"],
+    "scout": "read-only",
+    "worker": "bounded"
+  },
+  "verification": "Check the installed client, loaded project settings, available reasoning levels, tool permissions and sandbox coverage in the actual surface. Report unknown if unavailable."
+}

@@ -14,6 +14,9 @@ Version source/convention: <NATIVE_SOURCE_OR_MINIMAL_VERSION>
 Security: <EXPOSURE_DATA_INPUTS_SELECTED_MODULES_REVIEW_REQUIREMENTS>
 Services: <MINIMAL_CAPABILITIES_OPERATING_MODEL_OPERATOR_COST_AND_EXIT_CONSTRAINTS_OR_NONE>
 Authorized GitHub/Git actions: <EXACT_LABEL/ISSUE/MILESTONE/COMMIT/PUSH_ACTIONS_OR_NONE>
+Relevant Issue: <URL_OR_EXACT_BLOCKER>
+Consumption preset: <standard|economy>; Console: <yes|no>
+Distribution: <none|selected_destination_AND_FIELD_CONTRACTS>
 
 ## 1. Verify local truth
 
@@ -35,11 +38,13 @@ Use `knowledge/service-selection.md` from this bootstrap directory to resolve re
 
 ## 4. Materialize only the necessary project
 
-Create source/manifests/tests, one canonical version source and stable normalized `project-profile.json` matching its schema. Rewrite the root `PROJECT_GUIDE.md` for the real project and preserve that path as the stable ChatGPT entry point. Populate security and any selected services; do not duplicate current version, findings/status, secrets or actual machine paths in the profile.
+Create source/manifests/tests, one canonical version source and stable normalized `project-profile.json` matching its schema (v3 for a new materialization). Rewrite the root `PROJECT_GUIDE.md` for the real project and preserve that path as the stable ChatGPT entry point. Populate security and any selected services; do not duplicate current version, findings/status, secrets or actual machine paths in the profile. Keep GitHub Issues and ChatGPT as fixed method values; select only Codex/Claude Code as executors. Resolve the chosen consumption preset separately from Main effort.
 
 Adapt orchestration, TASK_POLICY, SECURITY_BASELINE, CONTEXT_INDEX, fallback planning and the prompt templates. Choose native build/test/run/doctor/package/install/diagnostics capabilities only where useful. No extra runtime solely for a downstream BootCrate convention.
 
 Keep one Main with Medium/High/XHigh mapping: High default, Medium only through every quality gate, XHigh for deep ambiguity. Verify effective settings and supported effort controls. Scout stays read/search-only; Worker runs bounded commands. Remove unused roles/harnesses/skills; no permanent reviewer, telemetry, MCP, checkpoint, migration manager or tracked last report by default.
+
+Create a concise canonical changelog entry for the first integrated project version. Do not inherit BootCrate's `VERSION` or `CHANGELOG.md` as the product's own history. When distribution is selected, define candidate identity, actual destinations/channels, field formats, shared receipts and a preflight/confirmation path. Materialize provider-specific operations only after validating their actual API/surface; a product without distribution receives no uploader or receipt ledger. If the owner selected the Project Console, copy only `docs/.human/bootstrap/console/{index.html,styles.css,console.js,preset.js}` to `project-console/` and verify it still runs by local file. Otherwise omit it entirely.
 
 ## 5. Configure machine-local resources safely
 
@@ -49,7 +54,7 @@ Test absent/stale/invalid config, unique/multiple/no candidates, overrides and n
 
 ## 6. Provision only authorized repository metadata
 
-Adapt Issue Forms and `.github/labels.yml`; reconcile live labels idempotently via an available authenticated write capability. Create missing labels, update intended metadata, preserve unrelated labels and verify before creating requested Issues/Milestones. Do not copy upstream example Issues.
+Keep the existing BootCrate Issue Forms unchanged unless a separately scoped change is requested. Reconcile `.github/labels.yml` idempotently via an available authenticated write capability. Create missing labels, update intended metadata, preserve unrelated labels and verify before creating requested Issues/Milestones. Do not copy upstream example Issues.
 
 If write authorization is missing, report the exact blocker rather than claim success or make the owner recreate labels manually. Branch protections, production settings and service purchases need their own explicit approval; do not impose mandatory PRs silently.
 
@@ -57,11 +62,11 @@ If write authorization is missing, report the exact blocker rather than claim su
 
 - Run deterministic schema/config, build, behavior and selected security checks. Failed required checks block completion. Report unavailable checks precisely.
 - Verify secret-free source/packages, intended privileges and applicable negative/restore/rollback tests. A self-test pass is not a security audit or production approval.
-- Confirm version/mirrors, tracked/untracked scope and `git diff --check`.
+- Confirm version/mirrors, canonical changelog entry, tracked/untracked scope and `git diff --check`.
 - Preserve and validate the rewritten root `PROJECT_GUIDE.md`. Remove the complete `docs/.human/bootstrap/` tree, raw intake and `.github/workflows/bootcrate-validate.yml`. The bootstrap verifier, dependencies, scenario fixtures and evaluation tooling do not belong in the new project's normal runtime.
 - Remove disabled adapters/unused scripts/forms/skills; promote only selected controls and needed tooling before deleting their generic source library.
 - Rewrite README for the real project; remove BootCrate version/history/branding/provenance unless attribution was requested.
-- Verify no dangling reference to removed bootstrap content. Re-run the final project's own checks after pruning; do not retain the bootstrap just to satisfy its self-test.
+- Verify no dangling reference to removed bootstrap content. Run `verify-materialized.py <downstream-root>` from a retained copy of validation tooling and then the final project's own checks after pruning; do not retain bootstrap just to satisfy its self-test. Structural success does not certify behavior or production readiness.
 - Commit/push only as authorized, using the target token. Never publish/deploy during validation.
 
 Final response: exact target-token H1, owner report language, materialized scope/security/service decisions, observed version, checks and limitations, actual Git/Issue results. No tracked report file. Owner/ChatGPT reviews acceptance and any manual smoke before Issue closure.
