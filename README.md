@@ -43,6 +43,8 @@ Worker handles bounded mechanical execution; Scout interprets scoped read-only e
 
 The Padrão (`standard`) and Econômico (`economy`) consumption presets select how much optional delegation/context to use. They preserve the same Main effort, security, validation and authorization. A task override precedes an ignored local override, then the project's default, then Padrão. The selected executor must verify its effective settings; a requested XHigh is not proof the client applied it.
 
+Technical execution permissions are a fourth independent dimension. `protected_manual` is the safe default; `protected_auto` keeps the sandbox while a supported client reviewer handles eligible elevations; `full_access` is an explicit highest-risk request. The selected adapter reports requested and effective values separately. None of these profiles authorize push, publication, production changes, purchases or access to secrets.
+
 ## Security by attack surface
 
 [SECURITY_BASELINE](docs/.ai/SECURITY_BASELINE.md) supplies a small universal core. Discovery selects only relevant web/API, desktop/mobile, multiplayer/native, infrastructure and sensitive-data controls. The owner describes users/data/operations, not vulnerability names.
@@ -87,7 +89,7 @@ Issue Forms cover Epic, Feature, Task, Bug, Investigation, Refactor and Release.
 
 [Scenario evals](docs/.human/bootstrap/evals/README.md) distinguish deterministic fixture/grader tests, actual model-plan evaluation and real isolated materialization. Passing the first layer does not prove the latter two or certify security.
 
-The intake now records repository situation, separate external integration, distribution, consumption preset and optional Console. It removes choices that could turn off the method. An imported v1 intake that conflicts with required Issues/ChatGPT needs visible confirmation; the file itself is not rewritten. Missing security/hosting intentions are resolved in conversation using the [coverage guide](docs/.human/bootstrap/knowledge/discovery-coverage.md).
+The intake now records one canonical repository identity, separate external integration, distribution, consumption preset, execution-permission request and optional Console. It removes choices that could turn off the method. An imported v1 intake that conflicts with required Issues/ChatGPT needs visible confirmation; old intake data defaults to protected/manual rather than inferring broader permissions. Missing security/hosting intentions are resolved in conversation using the [coverage guide](docs/.human/bootstrap/knowledge/discovery-coverage.md).
 
 ## Pruning and boundaries
 

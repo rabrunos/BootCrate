@@ -5,6 +5,7 @@ Issue receipts into a temporary JSON file and reconcile with the actual provider
 """
 from __future__ import annotations
 import argparse
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -14,7 +15,6 @@ from typing import Any
 
 ENTRY = re.compile(r"^## v([^\s]+) — (.+)$")
 META = re.compile(r"^<!-- change:([A-Za-z0-9_.#/-]+) audience:(public|maintainers) -->$")
-LINK = re.compile(r"\[([^\[\]\n]+)\]\((https://[^\s)]+)\)")
 ALLOWED = re.compile(r"^[^\x00-\x08\x0b-\x1f<>]+$")
 
 
@@ -48,6 +48,7 @@ def changelog(text: str) -> list[dict]:
             content=line[2:].strip()
             if not content or not ALLOWED.fullmatch(content):
                 raise ValueError("Unsupported or unsafe note at line " + str(number))
+            inline_tokens(content)
             change_id,audience=pending if pending else (current["version"]+"/"+str(len(current["changes"])+1),"public")
             if change_id in seen_changes: raise ValueError("Duplicate change identity")
             seen_changes.add(change_id)
@@ -60,9 +61,42 @@ def changelog(text: str) -> list[dict]:
     return versions
 
 
+def inline_tokens(text: str) -> list[tuple[str,str,str | None]]:
+    """Tokenize the documented inline subset before any renderer rewrites it."""
+    tokens=[];plain=[];index=0
+    def flush():
+        if plain:tokens.append(("text","".join(plain),None));plain.clear()
+    while index < len(text):
+        if text[index] == "\\" and index + 1 < len(text) and text[index+1] in r"\\`*[]()":
+            plain.append(text[index+1]);index += 2;continue
+        if text[index] == "`":
+            end=text.find("`",index+1)
+            if end < 0:raise ValueError("Unclosed inline code")
+            flush();tokens.append(("code",text[index+1:end],None));index=end+1;continue
+        if text.startswith("**",index) or text[index] == "*":
+            marker="**" if text.startswith("**",index) else "*"
+            end=text.find(marker,index+len(marker))
+            if end < 0:raise ValueError("Unclosed emphasis")
+            inner=text[index+len(marker):end]
+            if not inner:raise ValueError("Empty emphasis")
+            flush();tokens.append(("strong" if marker=="**" else "emphasis",inner,None));index=end+len(marker);continue
+        if text[index] == "[":
+            close=text.find("](",index+1)
+            if close >= 0:
+                end=text.find(")",close+2)
+                if end < 0:raise ValueError("Unclosed Markdown link")
+                label=text[index+1:close];url=text[close+2:end]
+                if label and re.fullmatch(r"https://[^\s()]+",url):
+                    flush();tokens.append(("link",label,url));index=end+1;continue
+        plain.append(text[index]);index += 1
+    flush();return tokens
+
+
 def plain_inline(text: str) -> str:
-    text=LINK.sub(lambda m: m.group(1)+" ("+m.group(2)+")",text)
-    return re.sub(r"\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`",lambda m: next(x for x in m.groups() if x is not None),text)
+    pieces=[]
+    for kind,value,url in inline_tokens(text):
+        pieces.append(value + (" ("+url+")" if kind=="link" else ""))
+    return "".join(pieces)
 
 
 def render(entries: list[dict], field: str, audience: str = "public") -> str:
@@ -97,22 +131,80 @@ def identity(candidate: dict) -> str:
     return digest(canonical(candidate))
 
 
+def _observed_time(value: Any) -> datetime:
+    if not isinstance(value,str) or len(value)>64:raise ValueError("Invalid receipt observation time")
+    try:
+        parsed=datetime.fromisoformat(value.replace("Z","+00:00"))
+    except ValueError as error:
+        raise ValueError("Invalid receipt observation time") from error
+    if parsed.tzinfo is None:raise ValueError("Receipt observation time needs a timezone")
+    return parsed
+
+
+def _receipt_identity(receipt: dict) -> tuple:
+    required=("attempt_id","destination","channel","version","candidate_id","artifact_sha256")
+    if any(not isinstance(receipt.get(key),str) or not receipt[key] for key in required):
+        raise ValueError("Receipt attempt identity is incomplete")
+    if not re.fullmatch(r"[0-9a-f]{64}",receipt["candidate_id"]):
+        raise ValueError("Receipt candidate identity is invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}",receipt["artifact_sha256"]):
+        raise ValueError("Receipt artifact digest is invalid")
+    if not isinstance(receipt.get("integration_order"),int) or receipt["integration_order"]<0:
+        raise ValueError("Receipt integration order missing")
+    changes=receipt.get("included_changes")
+    if not isinstance(changes,list) or any(not isinstance(item,str) for item in changes) or len(changes)!=len(set(changes)):
+        raise ValueError("Receipt change identity list is invalid")
+    return tuple(receipt[key] for key in required)+(receipt["integration_order"],tuple(changes))
+
+
+def reduce_receipts(receipts: list[dict]) -> tuple[list[dict] | None,str | None]:
+    """Project event history without letting a later error erase a confirmation."""
+    attempts={}
+    for index,receipt in enumerate(receipts):
+        if (not isinstance(receipt,dict) or receipt.get("schema")!="bootcrate-receipt/v1" or
+            receipt.get("status") not in {"confirmed","failed","pending","unknown"} or
+            not isinstance(receipt.get("observed_by"),str) or not receipt["observed_by"] or
+            not isinstance(receipt.get("evidence_ref"),str) or not receipt["evidence_ref"]):
+            return None,"Receipt lacks identified evidence or has unknown format"
+        try:
+            identity_value=_receipt_identity(receipt);observed=_observed_time(receipt.get("observed_at"))
+        except ValueError as error:
+            return None,str(error)
+        attempt=receipt["attempt_id"]
+        if attempt in attempts and attempts[attempt]["identity"]!=identity_value:
+            return None,"Attempt identity changed across receipt events"
+        row=attempts.setdefault(attempt,{"identity":identity_value,"events":[]})
+        row["events"].append((observed,index,receipt))
+    reduced=[]
+    for row in attempts.values():
+        ordered=[item[2] for item in sorted(row["events"],key=lambda item:(item[0],item[1]))]
+        definitive={event["status"] for event in ordered if event["status"] in {"confirmed","failed"}}
+        if definitive=={"confirmed","failed"}:
+            return None,"Contradictory confirmed/failed events require reconciliation"
+        if "confirmed" in definitive:
+            reduced.append(next(event for event in reversed(ordered) if event["status"]=="confirmed"))
+        elif ordered[-1]["status"] in {"pending","unknown"}:
+            reduced.append(ordered[-1])
+        elif "failed" in definitive:
+            reduced.append(next(event for event in reversed(ordered) if event["status"]=="failed"))
+        else:
+            reduced.append(ordered[-1])
+    return reduced,None
+
+
 def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict]) -> dict:
     """Return READY, SKIP or BLOCK; no provider mutation or ledger state is inferred."""
     cid=identity(candidate)
     key=(target["id"],target["channel"])
     if key[0] not in candidate["artifacts"]: raise ValueError("Target artifact absent from candidate")
     if target["field"] not in {"markdown","plain","bbcode"}: raise ValueError("Destination field must be verified")
-    events=[r for r in receipts if (r.get("destination"),r.get("channel"))==key]
-    for receipt in events:
-        if (receipt.get("schema") != "bootcrate-receipt/v1" or
-            receipt.get("status") not in {"confirmed","failed","pending","unknown"} or
-            not receipt.get("attempt_id") or not receipt.get("observed_by") or
-            not receipt.get("evidence_ref") or not receipt.get("observed_at")):
-            return {"status":"BLOCK","reason":"Receipt lacks identified evidence or has unknown format"}
+    if not isinstance(receipts,list) or len(receipts)>10000:
+        raise ValueError("Expected a bounded receipt event list")
+    # Validate attempts globally so one ID cannot be reused for another destination/channel.
+    reduced,problem=reduce_receipts(receipts)
+    if problem:return {"status":"BLOCK","reason":problem}
+    matches=[r for r in reduced if (r.get("destination"),r.get("channel"))==key]
     # The caller must additionally check Issue authorship and the provider's actual state.
-    last_by_attempt={r["attempt_id"]:r for r in events}
-    matches=list(last_by_attempt.values())
     if any(r.get("status") in {"unknown","pending"} for r in matches):
         return {"status":"BLOCK","reason":"Reconcile pending/unknown remote outcome before retry"}
     confirmed=[r for r in matches if r.get("status")=="confirmed"]
@@ -137,6 +229,12 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
         already=set(baseline["included_changes"])
     else:
         baseline=None;already=set()
+    version_entry=next((entry for entry in entries if entry.get("version")==candidate["version"]),None)
+    if version_entry is None:
+        return {"status":"BLOCK","reason":"Candidate version has no canonical changelog entry"}
+    version_changes={change["id"] for change in version_entry["changes"]}
+    if not version_changes <= set(candidate["included_changes"]):
+        return {"status":"BLOCK","reason":"Candidate omits a change from its formalized version entry"}
     selected=[];selected_ids=[]
     for entry in reversed(entries): # newest-first source to oldest-first delivery interval
         changes=[]

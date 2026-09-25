@@ -12,5 +12,28 @@
     "scout": "read-only",
     "worker": "bounded"
   },
+  "execution_permissions": {
+    "safe_default": "protected_manual",
+    "profiles": {
+      "protected_manual": {
+        "surfaces": {"cli": "supported", "ide": "unknown"},
+        "cli_args": ["--permission-mode", "default"],
+        "native_settings": {"permissions": {"defaultMode": "default"}, "sandbox": {"enabled": true}},
+        "limits": "Normal permission prompts, sandbox boundaries, deny rules, hooks and managed policy remain in force."
+      },
+      "protected_auto": {
+        "surfaces": {"cli": "unknown", "ide": "unknown"},
+        "cli_args": ["--permission-mode", "auto"],
+        "native_settings": {"permissions": {"defaultMode": "auto"}, "sandbox": {"enabled": true}},
+        "limits": "Auto mode is surface/account/model dependent. Unknown support blocks activation and never falls through to Full Access."
+      },
+      "full_access": {
+        "surfaces": {"cli": "supported", "ide": "unknown"},
+        "cli_args": ["--dangerously-skip-permissions"],
+        "native_settings": {"permissions": {"defaultMode": "bypassPermissions"}, "sandbox": {"enabled": false}},
+        "limits": "Highest-risk request. Deny rules, hooks, managed policy, OS limits and external authorization can still block actions."
+      }
+    }
+  },
   "verification": "Confirm loaded project settings, effective effort/model controls, skill discovery, permission behavior and the actual sandbox coverage for this OS and surface. Report unknown/unsupported when not exposed."
 }

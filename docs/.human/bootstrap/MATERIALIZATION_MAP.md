@@ -6,12 +6,12 @@ Discover broadly, materialize narrowly. Names below are capabilities/examples, n
 | --- | --- | --- |
 | Product | Native source/assets/manifests, README, tests, canonical version | Generic BootCrate identity/version |
 | History/delivery | Concise canonical changelog for every integrated version; candidate/receipt tools only for selected destinations | Example providers, fictitious publication cursors or package scripts from another product |
-| Execution | Enabled Codex/Claude instructions/config, useful Worker/Scout/skills | Disabled adapters or duplicate Main roles |
+| Execution | Enabled Codex/Claude instructions/config, useful Worker/Scout/skills, protected/manual permission default and selected adapter mappings | Disabled adapters, duplicate Main roles or a broader permission inferred from autonomy/effort/consumption |
 | Knowledge | Profile, context routes, needed runtime/API/tooling maps | Raw intake and redundant work status |
 | Security | Selected control map and executable negative tests | Entire generic security library or compliance claims |
 | Services | Only needed clients/config, operator/recovery/exit policy | Provider catalog, unused databases or automatic purchases |
 | Tooling | doctor/build/test/validate/run/package/install/diagnostics as useful | Empty scripts, unnecessary runtime dependencies |
-| Optional Console | Static `project-console/` only if selected, with shared preset resolver and sanitized imports | Setup/questions/materializer or requirement to install a new runtime |
+| Optional Console | Static `project-console/` only if selected, with shared consumption/execution resolvers and sanitized allowlisted imports | Setup/questions/materializer, raw profile snapshot or requirement to install a new runtime |
 | GitHub | Applicable forms/labels, requested initial work, project CI | Upstream example Issues and bootstrap-only workflow |
 | Local | Ignored resource paths, research, caches and diagnostics | Credentials/raw private data in tracked files |
 

@@ -16,14 +16,18 @@ class MaterializationExamples(unittest.TestCase):
         (root/'docs/.ai').mkdir(parents=True)
         for name,body in [('PROJECT_GUIDE.md','# Project guide\n'),('README.md','# Product\n'),
                           ('AGENTS.md','# Codex task rules\n'),('VERSION','1.0\n'),
+                          ('CHANGELOG.md','# Changelog\n\n## v1.0 — Initial\n\n- Added the fixture.\n'),
+                          ('.codex/config.toml','model_reasoning_effort = "high"\n'),
                           ('docs/.ai/SECURITY_BASELINE.md','# Selected local controls\n')]:
-            (root/name).write_text(body)
+            (root/name).parent.mkdir(parents=True,exist_ok=True)
+            (root/name).write_text(body,encoding='utf-8')
         profile=v.load_json(v.ROOT/'docs/.ai/project-profile.json')
         profile['project']={'name':'Synthetic '+kind,'kind':kind,'summary':'Disposable check'}
-        profile['versioning'].update(canonical_source='VERSION',format='native')
+        profile['versioning'].update(canonical_source='VERSION',reader='plain',format='native',
+                                     history_source='CHANGELOG.md',history_format='markdown-headings',mirrors=[])
         profile['security'].update(exposure='local',control_map='docs/.ai/SECURITY_BASELINE.md')
         profile['workflow']['implementation_harnesses']=['codex']
-        (root/'docs/.ai/project-profile.json').write_text(json.dumps(profile))
+        (root/'docs/.ai/project-profile.json').write_text(json.dumps(profile),encoding='utf-8')
 
     def test_static_site_without_services_or_build(self):
         with tempfile.TemporaryDirectory() as td:

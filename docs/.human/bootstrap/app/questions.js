@@ -1374,6 +1374,48 @@ window.BOOTCRATE_QUESTIONS = [
     ]
   },
   {
+    "id": "execution_profile",
+    "section": "ai",
+    "type": "select",
+    "required": true,
+    "en": "Which technical execution-permission profile should be requested? This does not authorize publishing, production changes, purchases, or secret access.",
+    "pt": "Qual perfil técnico de permissões de execução deve ser solicitado? Isso não autoriza publicação, mudanças em produção, compras ou acesso a segredos.",
+    "options": [
+      ["protected_manual", "Protected — user approval (recommended)", "Protegido — aprovação do usuário (recomendado)"],
+      ["protected_auto", "Protected — automatic review", "Protegido — revisão automática"],
+      ["full_access", "Full Access — no confirmations (advanced)", "Acesso Total — sem confirmações (avançado)"]
+    ],
+    "option_details": {
+      "protected_manual": {
+        "en": "Workspace/sandbox filesystem and its network policy; the user reviews eligible elevation requests. Managed policy and deny rules still apply.",
+        "pt": "Filesystem do workspace/sandbox e sua política de rede; o usuário revisa pedidos elegíveis de elevação. Política gerenciada e regras de negação continuam valendo."
+      },
+      "protected_auto": {
+        "en": "Workspace/sandbox remains active; a supported client reviewer may allow or deny eligible elevation requests. Unsupported clients must block, never widen to Full Access.",
+        "pt": "O workspace/sandbox permanece ativo; um revisor compatível do cliente pode permitir ou negar elevações elegíveis. Clientes sem suporte devem bloquear, nunca ampliar para Acesso Total."
+      },
+      "full_access": {
+        "en": "Broad filesystem and network access with no approval prompts where the client permits. Highest risk and explicit opt-in; managed policy, OS limits and deny rules still prevail.",
+        "pt": "Acesso amplo a filesystem e rede sem prompts de aprovação onde o cliente permitir. Maior risco e opt-in explícito; políticas gerenciadas, limites do SO e regras de negação ainda prevalecem."
+      }
+    }
+  },
+  {
+    "id": "full_access_acknowledgement",
+    "section": "ai",
+    "type": "select",
+    "required": true,
+    "en": "Confirm the Full Access risk: broad technical access does not authorize push, publication, production changes, purchases, or secret access.",
+    "pt": "Confirme o risco do Acesso Total: acesso técnico amplo não autoriza push, publicação, mudanças em produção, compras ou acesso a segredos.",
+    "options": [
+      ["acknowledged", "I understand and explicitly opt in", "Entendo e faço opt-in explícito"]
+    ],
+    "condition": {
+      "id": "execution_profile",
+      "in": ["full_access"]
+    }
+  },
+  {
     "id": "model_constraints",
     "section": "ai",
     "type": "textarea",
