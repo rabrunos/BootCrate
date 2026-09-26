@@ -335,6 +335,24 @@ class WindowsMutator:
             finally:
                 _close(handle)
 
+    def move(self, source: Path | str, destination: Path | str) -> None:
+        """Rename the current leaf to a transaction name without replacement."""
+        with self._parent(source) as (source_parent, source_name):
+            handle = _nt_open(source_parent, source_name,
+                              _DELETE | _SYNCHRONIZE,
+                              _FILE_OPEN, directory=False, share=_SHARE_READ)
+            try:
+                with self._parent(destination) as (destination_parent, destination_name):
+                    info = _relative_info(destination_parent, destination_name, replace=False)
+                    status_block = _IoStatusBlock()
+                    status = _native.NtSetInformationFile(handle, ctypes.byref(status_block),
+                                                           info, len(info),
+                                                           _FILE_RENAME_INFORMATION_CLASS)
+                    if status != 0:
+                        raise _nt_error("NtSetInformationFile move", status)
+            finally:
+                _close(handle)
+
     def unlink(self, relative: Path | str, *, missing_ok: bool = False) -> None:
         with self._parent(relative) as (parent, basename):
             try:

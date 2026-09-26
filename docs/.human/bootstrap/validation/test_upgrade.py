@@ -51,6 +51,11 @@ class UpgradeTests(unittest.TestCase):
         else:
             self.fail('Expected the injected directory link or junction')
 
+    def atomic_owner_replace(self, target, data):
+        replacement=target.with_name(target.name+'.owner-replacement')
+        replacement.write_bytes(data)
+        os.replace(replacement,target)
+
     def test_swapped_parent_cannot_redirect_update_or_add(self):
         for action in ('update', 'add'):
             with self.subTest(action=action), tempfile.TemporaryDirectory() as td:
@@ -99,7 +104,7 @@ class UpgradeTests(unittest.TestCase):
                     moved_after=None
                     if moved.exists():
                         if action=='update':
-                            moved_after=(moved/'file.txt').read_bytes()
+                            moved_after=(moved/'file.txt').exists()
                         else:
                             moved_after=((moved/'file.txt').exists(),(moved/'keep.txt').read_bytes())
                     if parent.is_symlink() or (os.name=='nt' and parent.is_junction()):
@@ -111,7 +116,11 @@ class UpgradeTests(unittest.TestCase):
                 self.assertEqual(outside_after,b'external sentinel')
                 if moved_after is not None:
                     if action=='update':
-                        self.assertEqual(moved_after,b'approved old bytes')
+                        self.assertFalse(moved_after)
+                        recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+                        self.assertEqual(len(recoveries),1)
+                        self.assertEqual((recoveries[0].parent/'displaced-0').read_bytes(),
+                                         b'approved old bytes')
                     else:
                         self.assertEqual(moved_after,(False,b'original directory sentinel'))
                 self.assertEqual(m.read(root)['source_revision'],'rev1')
@@ -127,14 +136,14 @@ class UpgradeTests(unittest.TestCase):
             outside=home/'outside';outside.mkdir()
             outside_target=outside/'file.txt';outside_target.write_bytes(b'external sentinel')
             moved=home/'moved-original'
-            original_unlink=m._unlink_file
+            original_displace=m._displace_file
             attempted=False
             injected=False
             rename_blocked=False
 
-            def swap_immediately_before_unlink(destination, *args, **kwargs):
+            def swap_immediately_before_displace(destination, retained):
                 nonlocal attempted,injected,rename_blocked
-                if Path(destination)==target and not attempted:
+                if destination==target and not attempted:
                     attempted=True
                     try:
                         parent.rename(moved)
@@ -143,10 +152,10 @@ class UpgradeTests(unittest.TestCase):
                         raise
                     self.directory_link(parent,outside,force_junction=os.name=='nt')
                     injected=True
-                return original_unlink(destination,*args,**kwargs)
+                return original_displace(destination,retained)
 
             try:
-                with patch.object(m,'_unlink_file',side_effect=swap_immediately_before_unlink):
+                with patch.object(m,'_displace_file',side_effect=swap_immediately_before_displace):
                     with self.assertRaises((OSError,ValueError,RuntimeError)):
                         m.apply(root,source,plan['digest'],'rev2')
             finally:
@@ -288,6 +297,277 @@ class UpgradeTests(unittest.TestCase):
             self.assertEqual((root/'b.txt').read_text(),'owner concurrent edit')
             self.assertEqual(m.read(root)['source_revision'],'rev1')
 
+    def test_owner_atomic_replace_before_update_or_remove_is_retained(self):
+        for action in ('update', 'remove'):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as td:
+                root,source=self.setup_roots(Path(td))
+                target=root/'update.txt'
+                m.create(root,'rev1',['update.txt'])
+                if action=='update':
+                    (source/'update.txt').write_bytes(b'approved replacement')
+                plan=m.preview(root,source,m.read(root))
+                original=m._displace_file
+                edited=False
+
+                def edit_before_mutation(path,retained):
+                    nonlocal edited
+                    if path==target and retained.name=='displaced-0' and not edited:
+                        self.atomic_owner_replace(target,b'owner edit at mutation boundary')
+                        edited=True
+                    return original(path,retained)
+
+                with patch.object(m,'_displace_file',side_effect=edit_before_mutation):
+                    with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                        m.apply(root,source,plan['digest'],'rev2')
+                self.assertTrue(edited)
+                self.assertEqual(m.read(root)['source_revision'],'rev1')
+                self.assertEqual(target.read_bytes(),b'base')
+                recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+                self.assertEqual(len(recoveries),1)
+                self.assertIn('recovery_incomplete',recoveries[0].read_text())
+                self.assertEqual((recoveries[0].parent/'displaced-0').read_bytes(),
+                                 b'owner edit at mutation boundary')
+
+    def test_displacement_never_overwrites_an_occupied_transaction_name(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            target=root/'update.txt'
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            original=m._displace_file
+            collision_observed=False
+
+            def occupy_destination(path,retained):
+                nonlocal collision_observed
+                if path==target and retained.name=='displaced-0':
+                    retained.write_bytes(b'owner transaction sentinel')
+                    try:
+                        return original(path,retained)
+                    except OSError:
+                        collision_observed=(retained.read_bytes()==b'owner transaction sentinel')
+                        retained.unlink()
+                        raise
+                return original(path,retained)
+
+            with patch.object(m,'_displace_file',side_effect=occupy_destination):
+                with self.assertRaises(OSError):
+                    m.apply(root,source,plan['digest'],'rev2')
+            self.assertTrue(collision_observed)
+            self.assertEqual(target.read_bytes(),b'base')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+
+    def test_error_reported_after_displacement_keeps_owner_bytes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            target=root/'update.txt'
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            original=m._displace_file
+
+            def move_then_report_failure(path,retained):
+                if path==target and retained.name=='displaced-0':
+                    self.atomic_owner_replace(target,b'owner atomic replacement')
+                    original(path,retained)
+                    raise OSError('failure reported after physical move')
+                return original(path,retained)
+
+            with patch.object(m,'_displace_file',side_effect=move_then_report_failure):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertEqual((recoveries[0].parent/'displaced-0').read_bytes(),
+                             b'owner atomic replacement')
+            self.assertEqual(target.read_bytes(),b'base')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+
+    def test_owner_add_immediately_before_install_is_not_replaced(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            m.create(root,'rev1',['update.txt'])
+            (source/'new.txt').write_bytes(b'approved new file')
+            plan=m.preview(root,source,m.read(root),['new.txt'])
+            original=m._replace_file
+            target=root/'new.txt'
+            edited=False
+
+            def create_before_install(staged,destination,*args,**kwargs):
+                nonlocal edited
+                if destination==target and not edited:
+                    target.write_bytes(b'owner created file')
+                    edited=True
+                return original(staged,destination,*args,**kwargs)
+
+            with patch.object(m,'_replace_file',side_effect=create_before_install):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2',['new.txt'])
+            self.assertTrue(edited)
+            self.assertEqual(target.read_bytes(),b'owner created file')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+
+    def test_failure_reported_after_publish_rolls_back_add_and_update(self):
+        for action in ('add','update'):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as td:
+                root,source=self.setup_roots(Path(td))
+                target=root/('new.txt' if action=='add' else 'update.txt')
+                m.create(root,'rev1',['update.txt'])
+                (source/target.name).write_bytes(b'approved replacement')
+                new_paths=['new.txt'] if action=='add' else []
+                plan=m.preview(root,source,m.read(root),new_paths)
+                original=m._replace_file
+
+                def publish_then_report_failure(staged,destination):
+                    original(staged,destination)
+                    if destination==target and staged.name.startswith('approved-'):
+                        raise OSError('failure reported after publication')
+
+                with patch.object(m,'_replace_file',side_effect=publish_then_report_failure):
+                    with self.assertRaisesRegex(OSError,'after publication'):
+                        m.apply(root,source,plan['digest'],'rev2',new_paths)
+                self.assertEqual(target.read_bytes() if target.exists() else None,
+                                 None if action=='add' else b'base')
+                self.assertEqual(m.read(root)['source_revision'],'rev1')
+                recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+                self.assertEqual(len(recoveries),1)
+                self.assertIn('rolled_back',recoveries[0].read_text())
+
+    def test_committed_and_rolled_back_displaced_bytes_remain_available(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            result=m.apply(root,source,plan['digest'],'rev2')
+            evidence=root/result['retained_evidence']
+            self.assertIn('committed',(evidence/'recovery.json').read_text())
+            displaced=evidence/'displaced-0'
+            displaced.write_bytes(b'owner late write through displaced inode')
+            self.assertEqual(displaced.read_bytes(),b'owner late write through displaced inode')
+            self.assertEqual((root/'update.txt').read_bytes(),b'approved replacement')
+            self.assertEqual(m.read(root)['source_revision'],'rev2')
+
+        with tempfile.TemporaryDirectory() as td:
+            root,source,plan=self.two_file_upgrade(Path(td))
+            original=m._replace_file
+
+            def fail_second(staged,target):
+                if target==root/'b.txt' and staged.name=='approved-1':
+                    raise OSError('synthetic second publication failure')
+                return original(staged,target)
+
+            with patch.object(m,'_replace_file',side_effect=fail_second):
+                with self.assertRaisesRegex(OSError,'second publication failure'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertIn('rolled_back',recoveries[0].read_text())
+            displaced=recoveries[0].parent/'displaced-0'
+            displaced.write_bytes(b'owner late write after rollback')
+            self.assertEqual(displaced.read_bytes(),b'owner late write after rollback')
+            self.assertEqual((root/'a.txt').read_bytes(),b'original-a.txt')
+            self.assertEqual((root/'b.txt').read_bytes(),b'original-b.txt')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+
+    def test_owner_replacement_after_publish_is_preserved_on_reported_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            target=root/'new.txt'
+            m.create(root,'rev1',['update.txt'])
+            (source/'new.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root),['new.txt'])
+            original=m._replace_file
+
+            def publish_owner_replace_then_fail(staged,destination):
+                original(staged,destination)
+                if destination==target and staged.name.startswith('approved-'):
+                    self.atomic_owner_replace(target,b'owner file after publication')
+                    raise OSError('failure reported after publication')
+
+            with patch.object(m,'_replace_file',side_effect=publish_owner_replace_then_fail):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2',['new.txt'])
+            self.assertEqual(target.read_bytes(),b'owner file after publication')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+
+    def test_owner_edit_immediately_before_rollback_restore_is_retained(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source,plan=self.two_file_upgrade(Path(td))
+            original_replace=m._replace_file
+            original_displace=m._displace_file
+
+            def edit_during_rollback(staged,target,*args,**kwargs):
+                if target==root/'b.txt' and staged.name=='approved-1':
+                    raise OSError('synthetic second write failure')
+                return original_replace(staged,target,*args,**kwargs)
+
+            def edit_before_rollback_displacement(target,retained):
+                if target==root/'a.txt' and retained.name=='rollback-displaced-0':
+                    self.atomic_owner_replace(target,b'owner edit at rollback boundary')
+                return original_displace(target,retained)
+
+            with patch.object(m,'_replace_file',side_effect=edit_during_rollback), \
+                 patch.object(m,'_displace_file',side_effect=edit_before_rollback_displacement):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertEqual((recoveries[0].parent/'rollback-displaced-0').read_bytes(),
+                             b'owner edit at rollback boundary')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+            self.assertEqual((root/'a.txt').read_bytes(),b'original-a.txt')
+            self.assertEqual((root/'b.txt').read_bytes(),b'original-b.txt')
+
+    def test_owner_manifest_edit_at_commit_is_retained(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            original=m._displace_file
+            owner_manifest=b'owner manifest edit at commit boundary'
+
+            def edit_before_manifest_displacement(target,retained):
+                if target==root/m.MANIFEST and retained.name=='manifest-displaced':
+                    self.atomic_owner_replace(target,owner_manifest)
+                return original(target,retained)
+
+            with patch.object(m,'_displace_file',side_effect=edit_before_manifest_displacement):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertEqual((recoveries[0].parent/'manifest-displaced').read_bytes(),
+                             owner_manifest)
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+            self.assertEqual((root/'update.txt').read_bytes(),b'base')
+
+    def test_owner_manifest_replace_after_publish_blocks_file_rollback(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            original=m._replace_file
+            owner_manifest=b'owner manifest after publication'
+
+            def replace_published_manifest(staged,target):
+                original(staged,target)
+                if target==root/m.MANIFEST and staged.name=='manifest-after':
+                    self.atomic_owner_replace(target,owner_manifest)
+
+            with patch.object(m,'_replace_file',side_effect=replace_published_manifest):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            self.assertEqual((root/m.MANIFEST).read_bytes(),owner_manifest)
+            self.assertEqual((root/'update.txt').read_bytes(),b'approved replacement')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertIn('recovery_incomplete',recoveries[0].read_text())
+
     def test_source_bytes_are_frozen_before_first_write(self):
         with tempfile.TemporaryDirectory() as td:
             root,source,plan=self.two_file_upgrade(Path(td))
@@ -312,7 +592,7 @@ class UpgradeTests(unittest.TestCase):
             original_replace=m._replace_file
 
             def tamper_before_replace(staged,target):
-                if target==root/'update.txt':
+                if target==root/'update.txt' and staged.name=='approved-0':
                     staged.write_bytes(b'tampered bytes')
                 return original_replace(staged,target)
 
@@ -332,9 +612,9 @@ class UpgradeTests(unittest.TestCase):
                     manifest=root/m.MANIFEST
                     manifest.write_bytes(manifest.read_bytes()+b'\n')
             with patch.object(m,'_replace_file',side_effect=change_manifest):
-                with self.assertRaisesRegex(ValueError,'Manifest changed'):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
                     m.apply(root,source,plan['digest'],'rev2')
-            self.assertEqual((root/'a.txt').read_text(),'original-a.txt')
+            self.assertEqual((root/'a.txt').read_text(),'approved-a.txt')
             self.assertEqual((root/'b.txt').read_text(),'original-b.txt')
             self.assertTrue((root/m.MANIFEST).read_bytes().endswith(b'\n\n'))
 
@@ -342,7 +622,7 @@ class UpgradeTests(unittest.TestCase):
             root,source,plan=self.two_file_upgrade(Path(td))
             original_replace=m._replace_file
             def fail_second(staged,target):
-                if target==root/'b.txt':
+                if target==root/'b.txt' and staged.name=='approved-1':
                     raise OSError('synthetic second write failure')
                 original_replace(staged,target)
             with patch.object(m,'_replace_file',side_effect=fail_second):
@@ -371,7 +651,7 @@ class UpgradeTests(unittest.TestCase):
             root,source,plan=self.two_file_upgrade(Path(td))
             original_replace=m._replace_file
             def edit_during_failure(staged,target):
-                if target==root/'b.txt':
+                if target==root/'b.txt' and staged.name=='approved-1':
                     (root/'a.txt').write_text('owner edit during recovery')
                     raise OSError('synthetic failure after owner edit')
                 original_replace(staged,target)

@@ -19,6 +19,33 @@ CLAUDE_CREDENTIAL_DENY_RULES = frozenset({
 })
 
 
+ALLOWED_CODEX_CONFIG_KEYS = {
+    "model_reasoning_effort": None,
+    "approval_policy": None,
+    "approvals_reviewer": None,
+    "sandbox_mode": None,
+    "agents": {"enabled", "max_concurrent_threads_per_session", "interrupt_message"},
+    "sandbox_workspace_write": {"network_access", "writable_roots"},
+    "shell_environment_policy": {"inherit", "ignore_default_excludes"},
+}
+
+
+def reject_unselected_codex_config(settings: dict) -> None:
+    """Reject v3 native settings outside the selected protected baseline."""
+    require(isinstance(settings, dict), "Codex configuration must be a TOML table")
+    for key, value in settings.items():
+        require(key in ALLOWED_CODEX_CONFIG_KEYS,
+                f"Unselected Codex configuration key: {key}")
+        allowed_children = ALLOWED_CODEX_CONFIG_KEYS[key]
+        if allowed_children is None:
+            require(not isinstance(value, dict), f"Unexpected Codex configuration table: {key}")
+            continue
+        require(isinstance(value, dict), f"Codex configuration table required: {key}")
+        for child in value:
+            require(child in allowed_children,
+                    f"Unselected Codex configuration key: {key}.{child}")
+
+
 def valid_claude_credential_denials(value: Any) -> bool:
     return (isinstance(value, list) and all(isinstance(rule, str) for rule in value)
             and CLAUDE_CREDENTIAL_DENY_RULES.issubset(value))
@@ -141,6 +168,36 @@ def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dic
     return source, versioning["mirrors"], versioning["history_source"], versioning["history_format"]
 
 
+def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
+    """Find a history heading outside Markdown fences and HTML comments."""
+    fence: str | None = None
+    in_comment = False
+    for raw_line in markdown.splitlines():
+        if fence is not None:
+            if re.fullmatch(r" {0,3}" + re.escape(fence[0]) +
+                            "{" + str(len(fence)) + r",}[ \t]*", raw_line):
+                fence = None
+            continue
+        if in_comment:
+            end = raw_line.find("-->")
+            if end < 0:
+                continue
+            in_comment = False
+            # A heading after a comment terminator on the same line is not
+            # a standalone Markdown heading.
+            continue
+        line, marker, rest = raw_line.partition("<!--")
+        if marker and "-->" not in rest:
+            in_comment = True
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if opening and (opening[1][0] == "~" or "`" not in opening[2]):
+            fence = opening[1]
+            continue
+        if heading.match(line):
+            return True
+    return False
+
+
 def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None:
     if profile["schema"] == "project-profile/v2":
         # v2 did not declare a reader, value path, history source or mirrors.
@@ -156,9 +213,8 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
     require(history_format == "markdown-headings", "Unsupported canonical history reader")
     require(history.stat().st_size <= 2 * 1024 * 1024, "Canonical version history is too large")
     token = re.escape(version)
-    heading = re.compile(r"^##[ \t]+(?:\[v?" + token + r"\]|v?" + token + r")(?=[ \t]|$)",
-                         re.MULTILINE)
-    require(heading.search(history.read_text(encoding="utf-8")) is not None,
+    heading = re.compile(r"^##[ \t]+(?:\[v?" + token + r"\]|v?" + token + r")(?=[ \t]|$)")
+    require(_history_has_heading(history.read_text(encoding="utf-8"), heading),
             "Canonical history has no entry for integrated version " + version)
     return version
 

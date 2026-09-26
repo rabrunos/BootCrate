@@ -15,6 +15,7 @@ from typing import Any
 from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_object, load_json,
                              inventory as project_inventory, sensitive_name,
                              secret_findings, local_refs_only, schema_check,
+                             reject_unselected_codex_config,
                              materialized_profile, profile_schema,
                              valid_claude_credential_denials)
 
@@ -140,6 +141,7 @@ def check_documents(files: list[Path]) -> None:
 
 def check_adapters() -> None:
     codex = tomllib.loads((ROOT / ".codex/config.toml").read_text(encoding="utf-8"))
+    reject_unselected_codex_config(codex)
     require(codex["model_reasoning_effort"] == "high", "Main default must remain High")
     require(codex["approval_policy"] == "on-request" and codex["sandbox_mode"] == "workspace-write" and
             codex["approvals_reviewer"] == "user", "Unsafe Codex defaults")

@@ -16,7 +16,8 @@ from urllib.parse import unquote, urlsplit
 
 from validation_core import (inventory, load_json, materialized_profile,
                              profile_schema, schema_check, secret_findings,
-                             sensitive_name, valid_claude_credential_denials)
+                             sensitive_name, valid_claude_credential_denials,
+                             reject_unselected_codex_config)
 
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".yml", ".yaml", ".txt", ".py", ".js", ".cjs", ".html", ".css"}
 SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
@@ -147,6 +148,7 @@ def inspect(root: Path) -> list[dict]:
                     native = root / ".codex/config.toml"
                     require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Codex configuration is too large")
                     settings = tomllib.loads(native.read_text(encoding="utf-8"))
+                    reject_unselected_codex_config(settings)
                     require(settings.get("model_reasoning_effort") == "high",
                             "Enabled Codex Main default must remain High")
                     require(settings.get("sandbox_mode") == "workspace-write" and

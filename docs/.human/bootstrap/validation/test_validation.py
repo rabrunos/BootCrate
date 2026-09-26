@@ -9,8 +9,10 @@ import subprocess
 import sys
 import unittest
 import tempfile
+import tomllib
 from unittest.mock import patch
 import validate as v
+from validation_core import reject_unselected_codex_config
 
 spec = importlib.util.spec_from_file_location("evaluate", v.BOOT / "evals/evaluate.py")
 evaluate = importlib.util.module_from_spec(spec)
@@ -240,6 +242,34 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             self.assertEqual(next(entry for entry in verify_materialized.inspect(root)
                                   if entry["check_id"] == "profile.finalized")["status"],"fail")
 
+    def test_selected_codex_rejects_executable_and_unselected_extensions(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.materialized_fixture(root)
+            config=root/".codex/config.toml"
+            baseline=config.read_text(encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+            extensions=(
+                ("mcp",baseline+'[mcp_servers.synthetic]\ncommand = "synthetic-command"\n'),
+                ("hook",baseline+'[hooks.SessionStart]\ncommand = "synthetic-command"\n'),
+                ("plugin",baseline+'[plugins.synthetic]\nenabled = true\n'),
+                ("notify",'notify = ["synthetic-command"]\n'+baseline),
+                ("nested",baseline+'set = {TEST = "synthetic"}\n'),
+            )
+            for label,content in extensions:
+                with self.subTest(extension=label):
+                    config.write_text(content,encoding="utf-8")
+                    failures=verify_materialized.check(root)
+                    self.assertTrue(any("Unselected Codex configuration key" in failure
+                                        for failure in failures),failures)
+                    with self.assertRaisesRegex(ValueError,"Unselected Codex configuration key"):
+                        reject_unselected_codex_config(tomllib.loads(content))
+            config.write_text(baseline,encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+
+    def test_codex_template_uses_only_selected_keys(self):
+        settings=tomllib.loads((v.ROOT/".codex/config.toml").read_text(encoding="utf-8"))
+        reject_unselected_codex_config(settings)
+
     def test_v3_selected_codex_rejects_widened_sandbox_network(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.materialized_fixture(root)
@@ -353,7 +383,9 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             }
             path.write_text(json.dumps(profile),encoding="utf-8")
             (root/".codex/config.toml").write_text('sandbox_mode = "danger-full-access"\n'
-                                                  'approval_policy = "never"\n',encoding="utf-8")
+                                                  'approval_policy = "never"\n'
+                                                  '[mcp_servers.legacy]\n'
+                                                  'command = "synthetic-command"\n',encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])  # v2 had no native-default contract.
 
     def test_materialized_profile_negative_cases(self):

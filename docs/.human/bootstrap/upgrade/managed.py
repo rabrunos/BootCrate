@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 from contextvars import ContextVar
+import ctypes
 import hashlib
 import importlib.util
 import json
@@ -35,6 +36,15 @@ class _PosixMutator:
         required = (os.open, os.mkdir, os.unlink, os.rmdir, os.rename, os.link)
         if not all(operation in os.supports_dir_fd for operation in required):
             raise RuntimeError("Managed update requires directory-relative filesystem operations")
+        if not sys.platform.startswith("linux"):
+            raise RuntimeError("Managed update requires an anchored no-overwrite rename capability")
+        self._rename_no_replace = getattr(ctypes.CDLL(None, use_errno=True), "renameat2", None)
+        if self._rename_no_replace is None:
+            raise RuntimeError("Managed update requires an anchored no-overwrite rename capability")
+        self._rename_no_replace.argtypes = (
+            ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint,
+        )
+        self._rename_no_replace.restype = ctypes.c_int
         self.root = root
         self.descriptor = None
 
@@ -97,15 +107,17 @@ class _PosixMutator:
                     raise ValueError("Managed control file exceeds its read limit")
                 return data
 
-    def replace(self, source: Path, target: Path, *, expected_digest: str) -> None:
-        if hash_bytes(self.read(source)) != expected_digest:
-            raise ValueError("Frozen staged bytes changed before replace")
+    def move(self, source: Path, target: Path) -> None:
+        """Displace the entry present at the anchored source name, not an earlier inode."""
         with self._parent(source) as (source_parent, source_name):
             with self._parent(target) as (target_parent, target_name):
-                os.replace(
-                    source_name, target_name,
-                    src_dir_fd=source_parent, dst_dir_fd=target_parent,
+                result = self._rename_no_replace(
+                    source_parent, os.fsencode(source_name),
+                    target_parent, os.fsencode(target_name), 1,  # RENAME_NOREPLACE
                 )
+                if result != 0:
+                    number = ctypes.get_errno()
+                    raise OSError(number, os.strerror(number), str(source))
 
     def unlink(self, relative: Path, *, missing_ok: bool = False) -> None:
         with self._parent(relative) as (parent, name):
@@ -346,10 +358,33 @@ def _replace_file(staged: Path, target: Path) -> None:
     expected_digest = active.frozen.get(source_relative)
     if expected_digest is None:
         raise RuntimeError("Replace source is not a frozen staged file")
-    active.replace(source_relative, target_relative, expected_digest=expected_digest)
-    active.created.discard(source_relative)
-    active.frozen.pop(source_relative)
+    # Publication never replaces a name created after displacement or preview.
+    active.link(source_relative, target_relative, expected_digest=expected_digest)
     active.created.add(target_relative)
+
+
+def _retained_matches(path: Path, expected_digest: str) -> bool:
+    try:
+        return hash_bytes(_mutator().read(_relative(path))) == expected_digest
+    except (OSError, ValueError):
+        return False
+
+
+def _same_file(first: Path, second: Path) -> bool:
+    try:
+        return first.samefile(second)
+    except (OSError, ValueError):
+        return False
+
+
+def _displace_file(source: Path, retained: Path) -> None:
+    """Move the actual destination entry into the transaction at the mutation syscall."""
+    active = _mutator()
+    relative_source, relative_retained = _relative(source), _relative(retained)
+    active.move(relative_source, relative_retained)
+    active.created.discard(relative_source)
+    active.frozen.pop(relative_source, None)
+    active.created.add(relative_retained)
 
 
 def _unlink_file(target: Path, *, missing_ok: bool = False) -> None:
@@ -491,7 +526,14 @@ def _journal(path: Path, status: str, details: dict) -> None:
     data = _manifest_bytes({"schema": "bootcrate-upgrade-recovery/v1", "status": status, **details})
     staged = path / ("journal-" + secrets.token_hex(8))
     _write_file(staged, data)
-    _replace_file(staged, path / "recovery.json")
+    current = path / "recovery.json"
+    if _lexists(current):
+        expected = hash_bytes(_mutator().read(_relative(current)))
+        displaced = path / ("journal-prior-" + secrets.token_hex(8))
+        _displace_file(current, displaced)
+        if not _retained_matches(displaced, expected):
+            raise ValueError("Recovery journal changed during mutation; displaced bytes were retained")
+    _replace_file(staged, current)
 
 
 def apply(
@@ -515,8 +557,11 @@ def apply(
         transaction = control / ("bootcrate-upgrade-txn-" + secrets.token_hex(12))
         _mutator().mkdir(_relative(transaction))
         written: dict[str, str | None] = {}
+        publishing: set[str] = set()
+        retained: dict[str, tuple[Path, str]] = {}
         created_dirs: list[Path] = []
         manifest_after: bytes | None = None
+        manifest_displaced: Path | None = None
         manifest_written = False
         try:
             for index, item in enumerate(changes):
@@ -537,14 +582,22 @@ def apply(
                 if not _same_content(root, name, item["current"]):
                     raise ValueError("Managed destination changed before write: " + name)
                 target = resolve(root, name)
+                if item["current"] is not None:
+                    displaced = transaction / ("displaced-" + str(index))
+                    retained[name] = (displaced, item["current"])
+                    _displace_file(target, displaced)
+                    if not _retained_matches(displaced, item["current"]):
+                        raise ValueError("Managed destination changed during displacement: " + name)
                 if item["action"] == "remove":
-                    _unlink_file(target)
                     written[name] = None
                 else:
                     created_dirs.extend(_prepare_parent(root, target))
                     staged = transaction / ("approved-" + str(index))
+                    publishing.add(name)
                     _replace_file(staged, target)
                     written[name] = item["new"]
+                if name in retained and not _retained_matches(*retained[name]):
+                    raise ValueError("Managed destination changed during mutation: " + name)
                 if not _same_content(root, name, written[name]):
                     raise ValueError("Managed destination changed at write boundary: " + name)
 
@@ -553,6 +606,8 @@ def apply(
             for name, digest in written.items():
                 if not _same_content(root, name, digest):
                     raise ValueError("Managed destination changed before manifest commit: " + name)
+                if name in retained and not _retained_matches(*retained[name]):
+                    raise ValueError("Displaced managed bytes changed before manifest commit: " + name)
 
             next_manifest = json.loads(json.dumps(manifest))
             for item in plan["actions"]:
@@ -566,43 +621,114 @@ def apply(
             _write_file(staged_manifest, manifest_after)
             if not _same_manifest(root, manifest_before):
                 raise ValueError("Manifest changed at commit boundary")
+            manifest_displaced = transaction / "manifest-displaced"
+            _displace_file(_control_path(root, MANIFEST), manifest_displaced)
+            if not _retained_matches(manifest_displaced, hash_bytes(manifest_before)):
+                raise ValueError("Manifest changed during displacement; displaced bytes were retained")
             _replace_file(staged_manifest, _control_path(root, MANIFEST))
             manifest_written = True
+            if not _retained_matches(manifest_displaced, hash_bytes(manifest_before)):
+                raise ValueError("Manifest changed during commit; displaced bytes were retained")
             if not _same_manifest(root, manifest_after):
                 raise RuntimeError("Committed manifest could not be verified")
             for name, digest in written.items():
                 if not _same_content(root, name, digest):
                     raise ValueError("Managed destination changed during manifest commit: " + name)
             _journal(transaction, "committed", {"paths": list(written), "revision": new_revision})
+            for name, displaced in retained.items():
+                if not _retained_matches(*displaced):
+                    raise ValueError("Displaced managed bytes changed before cleanup: " + name)
+            if not _retained_matches(manifest_displaced, hash_bytes(manifest_before)):
+                raise ValueError("Displaced manifest bytes changed before cleanup")
         except BaseException as error:
             incomplete = []
+            manifest_rollback_safe = False
+            manifest_path = _control_path(root, MANIFEST)
             if manifest_written:
+                if manifest_displaced is not None and not _retained_matches(
+                    manifest_displaced, hash_bytes(manifest_before)
+                ):
+                    incomplete.append(MANIFEST.as_posix())
                 if manifest_after is not None and _same_manifest(root, manifest_after):
                     try:
+                        rollback_displaced = transaction / "manifest-rollback-displaced"
+                        _displace_file(manifest_path, rollback_displaced)
+                        if not _retained_matches(rollback_displaced, hash_bytes(manifest_after)):
+                            incomplete.append(MANIFEST.as_posix())
                         staged = transaction / "manifest-restore"
                         _write_file(staged, manifest_before)
-                        _replace_file(staged, _control_path(root, MANIFEST))
+                        _replace_file(staged, manifest_path)
+                        manifest_rollback_safe = _same_manifest(root, manifest_before)
                     except (OSError, ValueError, RuntimeError):
                         incomplete.append(MANIFEST.as_posix())
                 else:
                     incomplete.append(MANIFEST.as_posix())
-            for index in range(len(changes) - 1, -1, -1):
+            elif manifest_displaced is not None and _lexists(manifest_displaced):
+                if not _retained_matches(manifest_displaced, hash_bytes(manifest_before)):
+                    incomplete.append(MANIFEST.as_posix())
+                if _same_manifest(root, manifest_before):
+                    manifest_rollback_safe = True
+                elif not _lexists(manifest_path):
+                    try:
+                        staged = transaction / "manifest-restore"
+                        _write_file(staged, manifest_before)
+                        _replace_file(staged, manifest_path)
+                        manifest_rollback_safe = _same_manifest(root, manifest_before)
+                    except (OSError, ValueError, RuntimeError):
+                        incomplete.append(MANIFEST.as_posix())
+                else:
+                    incomplete.append(MANIFEST.as_posix())
+            else:
+                manifest_rollback_safe = _same_manifest(root, manifest_before)
+                if not manifest_rollback_safe:
+                    incomplete.append(MANIFEST.as_posix())
+            if not manifest_rollback_safe:
+                incomplete.append(MANIFEST.as_posix())
+            for index in range(len(changes) - 1, -1, -1) if manifest_rollback_safe else ():
                 item = changes[index]
                 name = item["path"]
-                if name not in written:
+                if name not in written and name not in retained and name not in publishing:
                     continue
-                if not _same_content(root, name, written[name]):
+                if name in publishing and name not in written:
+                    target = resolve(root, name)
+                    if _same_content(root, name, item["new"]) and _same_file(
+                        target, transaction / ("approved-" + str(index))
+                    ):
+                        # Publication succeeded physically before its wrapper reported failure.
+                        written[name] = item["new"]
+                    elif not _same_content(root, name, None):
+                        incomplete.append(name)
+                        continue
+                if name in retained and not _lexists(retained[name][0]):
+                    if name not in written and _same_content(root, name, item["current"]):
+                        # The native move failed before moving the destination.
+                        continue
+                    incomplete.append(name)
+                    continue
+                if name in retained and not _retained_matches(*retained[name]):
+                    incomplete.append(name)
+                if name in written and not _same_content(root, name, written[name]):
+                    incomplete.append(name)
+                    continue
+                if name not in written and not _same_content(root, name, None):
                     incomplete.append(name)
                     continue
                 try:
                     target = resolve(root, name)
                     old = before[name]
-                    if old is None:
-                        _unlink_file(target, missing_ok=True)
-                    else:
+                    if name in written and written[name] is not None:
+                        rollback_displaced = transaction / ("rollback-displaced-" + str(index))
+                        _displace_file(target, rollback_displaced)
+                        if not _retained_matches(rollback_displaced, written[name]) or not _same_file(
+                            rollback_displaced, transaction / ("approved-" + str(index))
+                        ):
+                            incomplete.append(name)
+                    if old is not None:
                         staged = transaction / ("restore-" + str(index))
                         _write_file(staged, old)
                         _replace_file(staged, target)
+                    if not _same_content(root, name, hash_bytes(old) if old is not None else None):
+                        incomplete.append(name)
                 except (OSError, ValueError, RuntimeError):
                     incomplete.append(name)
             for directory in reversed(created_dirs):
@@ -623,10 +749,36 @@ def apply(
                     "Recovery incomplete; concurrent data and transaction evidence were preserved in "
                     + transaction.name
                 ) from error
-            _cleanup_transaction(transaction)
+            # A displaced inode can still be written through an already-open owner
+            # handle. Keep it locally after rollback; conditional unlink is not
+            # available across the supported filesystems.
+            transaction_relative = _relative(transaction)
+            displaced_evidence = any(
+                entry.parent == transaction_relative and (
+                    entry.name.startswith(("displaced-", "rollback-displaced-"))
+                    or entry.name.startswith(("manifest-displaced", "manifest-rollback-displaced"))
+                )
+                for entry in _mutator().created
+            )
+            if displaced_evidence:
+                try:
+                    _journal(transaction, "rolled_back", {"paths": list(written)})
+                except (OSError, ValueError, RuntimeError) as journal_error:
+                    raise RuntimeError(
+                        "Rollback evidence was retained but could not be journaled in "
+                        + transaction.name
+                    ) from journal_error
+            else:
+                _cleanup_transaction(transaction)
             raise
-        _cleanup_transaction(transaction)
-    return {"status": "applied", "paths": [item["path"] for item in changes], "revision": new_revision}
+        # Committed displaced inodes remain writable through owner-held handles.
+        # Keep the existing committed journal and all local transaction evidence.
+    return {
+        "status": "applied",
+        "paths": [item["path"] for item in changes],
+        "revision": new_revision,
+        "retained_evidence": transaction.relative_to(root).as_posix(),
+    }
 
 
 def main() -> int:
