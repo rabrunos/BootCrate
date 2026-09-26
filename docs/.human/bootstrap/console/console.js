@@ -14,9 +14,17 @@
         new Set(value).size !== value.length || (allowed && value.some(x => !allowed.has(x)))) throw new Error("Invalid " + name);
     return [...value];
   }
+  function sensitiveName(name) {
+    const lower=name.toLowerCase();
+    if([".env.example",".env.sample",".env.template"].includes(lower) ||
+        lower.startsWith("secrets.example.") || lower.startsWith("credentials.example."))return false;
+    return lower===".env" || [".env.","secrets.","credentials."].some(prefix=>lower.startsWith(prefix)) ||
+      ["id_rsa","id_ed25519","id_ecdsa"].includes(lower) || [".key",".p12",".pfx"].some(suffix=>lower.endsWith(suffix));
+  }
   function safePath(value, name) {
     const source = text(value,name,500);
-    if (source.startsWith("/") || source.includes("\\") || source.split("/").some(x => ["..",".local",".git",".env"].includes(x)))
+    if (source.startsWith("/") || source.includes("\\") || source.split("/").some(x =>
+        ["..",".local",".git"].includes(x.toLowerCase()) || sensitiveName(x)))
       throw new Error("Unsafe " + name);
     return source;
   }
@@ -108,5 +116,5 @@
   $("exportExecution").onclick=()=>{try{const profile=$("executionSelect").value,risk=$("fullRisk").checked,value={schema:"bootcrate-execution-profile-override/v1",profile};if(profile==="full_access")value.risk_acknowledged=risk;Execution.parseOverride(value);download("execution-profile.json",value);status("Downloaded an execution request for ignored .local/config/execution-profile.json; native application still needs verification.");}catch(error){status("Execution override not exported: "+error.message+".");}};
   $("clearExecution").onclick=()=>{commit({...state,executionOverride:null});$("executionOverride").value="";$("executionSelect").value="protected_manual";$("fullRisk").checked=false;$("fullRiskRow").hidden=true;status("Imported override cleared from this view. Remove .local/config/execution-profile.json with the normal file tool (or the adapter resolver --clear-local option) to restore the protected/manual safe default.");};
   $("executionSelect").onchange=()=>{$("fullRiskRow").hidden=$("executionSelect").value!=="full_access";};
-  $("exportSnapshot").onclick=()=>{if(!state.profile){status("Import a profile first.");return;}const p=state.profile,preset=Preset.resolve({local:state.presetOverride?.preset,project:p.workflow.consumption_preset||"standard"}),execution=Execution.resolve({local:state.executionOverride?.profile});const observations=p.workflow.implementation_harnesses.map(executor=>Execution.observation(execution,{executor,surface:"not_observed",status:"unknown",effective:null,reason:"Import-only Console cannot observe the executor."}));download("project-snapshot.json",{schema:"bootcrate-console-snapshot/v2",project:{name:p.project.name,kind:p.project.kind},version:{source:p.versioning.canonical_source,imported:state.version},consumption:preset,execution:observations,executors:[...p.workflow.implementation_harnesses],skills:[...(p.skills||[])],canonical_capabilities:[...(p.validation?.canonical_capabilities||[])],control_summary:{exposure:p.security?.exposure||"unknown",modules:[...(p.security?.modules||[])],control_map:p.security?.control_map||null},distribution:{mode:p.distribution?.mode||null,targets_count:Array.isArray(p.distribution?.targets)?p.distribution.targets.length:null},observation:{source:"local_imports",timestamp:new Date().toISOString()},remote_state:"not_observed",product_checks:"not_run"});status("Sanitized allowlisted snapshot downloaded. It is a local observation, not shared project status.");};
+  $("exportSnapshot").onclick=()=>{if(!state.profile){status("Import a profile first.");return;}const p=state.profile,preset=Preset.resolve({local:state.presetOverride?.preset,project:p.workflow.consumption_preset||"standard"}),execution=Execution.resolve({local:state.executionOverride?.profile});const observations=p.workflow.implementation_harnesses.map(executor=>Execution.observation(execution,{executor,surface:"not_observed",status:"unknown",effective:null,reason:"Import-only Console cannot observe the executor."}));download("project-snapshot.json",{schema:"bootcrate-console-snapshot/v2",project:{name:p.project.name,kind:p.project.kind},version:{source:p.versioning.canonical_source},consumption:preset,execution:observations,executors:[...p.workflow.implementation_harnesses],skills:[...(p.skills||[])],canonical_capabilities:[...(p.validation?.canonical_capabilities||[])],control_summary:{exposure:p.security?.exposure||"unknown",modules:[...(p.security?.modules||[])],control_map:p.security?.control_map||null},distribution:{mode:p.distribution?.mode||null,targets_count:Array.isArray(p.distribution?.targets)?p.distribution.targets.length:null},observation:{source:"local_imports",timestamp:new Date().toISOString()},remote_state:"not_observed",product_checks:"not_run"});status("Sanitized allowlisted snapshot downloaded. It is a local observation, not shared project status.");};
 })();

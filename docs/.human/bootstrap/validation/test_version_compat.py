@@ -81,6 +81,33 @@ class VersionCompatibilityTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, message):
                         v.materialized_profile(profile, root)
 
+    def test_sensitive_version_metadata_names_are_rejected_in_v2_and_v3(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.support_files(root)
+            self.write(root, "VERSION", "1.0\n")
+            self.write(root, "HISTORY.md", "# History\n\n## v1.0 - Release\n")
+            for name in (".env.production", "credentials.json", "secrets.toml", "private.key"):
+                with self.subTest(name=name):
+                    self.write(root, name, "1.0\n")
+                    legacy = self.v2_profile(name)
+                    with self.assertRaisesRegex(ValueError, "Sensitive canonical version reference"):
+                        self.schema_and_finalization(root, legacy)
+                    for field in ("canonical_source", "mirror", "history_source"):
+                        with self.subTest(field=field):
+                            profile = self.v3_profile("VERSION", "plain", "")
+                            profile["versioning"].pop("value_path", None)
+                            if field == "mirror":
+                                profile["versioning"]["mirrors"] = [{"path": name, "reader": "plain"}]
+                            else:
+                                profile["versioning"][field] = name
+                            with self.assertRaisesRegex(ValueError, "Sensitive .* reference"):
+                                self.schema_and_finalization(root, profile)
+            nested = "nested/secrets.data/VERSION"
+            self.write(root, nested, "1.0\n")
+            with self.assertRaisesRegex(ValueError, "Sensitive canonical version reference"):
+                self.schema_and_finalization(root, self.v2_profile(nested))
+
     def test_v3_json_path_history_and_mirror_remain_strict(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

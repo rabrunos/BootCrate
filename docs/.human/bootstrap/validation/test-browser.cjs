@@ -164,6 +164,8 @@ test('file-mode optional Console imports a profile without claiming remote proof
   assert.deepEqual(parsed.skills,[]);
   assert.deepEqual(parsed.canonical_capabilities,['test']);
   assert.equal(parsed.control_summary.control_map,'baseline');
+  assert.deepEqual(parsed.version,{source:'VERSION'});
+  assert.equal(snapshotText.includes('"imported"'),false);
   assert.equal(parsed.profile,undefined);
   assert.equal(parsed.code,undefined);
   const jsonProfile={...profile,versioning:{canonical_source:'package.json',reader:'json',value_path:'/meta/release~1version',history_source:'HISTORY.md',history_format:'markdown-headings'}};
@@ -193,6 +195,43 @@ test('file-mode optional Console imports a profile without claiming remote proof
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
   assert.match(await page.locator('#details').innerText(),/Legacy profile/);
   assert.match(await page.locator('#details').innerText(),/protected_manual \(safe_default\)/);
+  await page.close();
+});
+
+test('file-mode Console rejects sensitive profile sources and preserves its previous view',async () => {
+  const page=await browser.newPage();
+  await page.goto(consoleUrl);
+  const profile={schema:'project-profile/v3',project:{name:'Safe preview',kind:'static'},
+    workflow:{tracking:'github_issues',primary_orchestrator:'chatgpt',implementation_harnesses:['codex']},
+    execution_permissions:{safe_default:'protected_manual'},
+    versioning:{canonical_source:'VERSION',reader:'plain',history_source:'CHANGELOG.md',history_format:'markdown-headings'}};
+  const select=async value=>page.locator('#profile').setInputFiles({
+    name:'profile.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(value))});
+  await select(profile);
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
+  await page.locator('#version').setInputFiles({name:'VERSION',mimeType:'text/plain',buffer:Buffer.from('1.2\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version source imported'));
+  const before=await page.locator('#details').innerText();
+  for(const source of ['credentials.json','config/secrets.json','config/.env.production','config/PRIVATE.KEY',
+    'config/id_ed25519','config/cert.p12','config/cert.pfx']) {
+    await page.evaluate(()=>{document.querySelector('#status').textContent='pending';});
+    await select({...profile,versioning:{...profile.versioning,canonical_source:source}});
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile import failed: Unsafe version source'));
+    assert.match(await page.locator('#status').innerText(),/Previous state was preserved/);
+    assert.equal(await page.locator('#details').innerText(),before);
+  }
+  for(const historySource of ['secrets.md','config/credentials.json','config/.env.production']) {
+    await page.evaluate(()=>{document.querySelector('#status').textContent='pending';});
+    await select({...profile,versioning:{...profile.versioning,history_source:historySource}});
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile import failed: Unsafe history source'));
+    assert.equal(await page.locator('#details').innerText(),before);
+  }
+  for(const example of ['.env.example','config/secrets.example.json','config/credentials.example.json']) {
+    await page.evaluate(()=>{document.querySelector('#status').textContent='pending';});
+    await select({...profile,versioning:{...profile.versioning,canonical_source:example}});
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
+    assert.match(await page.locator('#details').innerText(),/Safe preview/);
+  }
   await page.close();
 });
 

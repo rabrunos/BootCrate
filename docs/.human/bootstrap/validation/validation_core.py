@@ -91,7 +91,7 @@ def _value_at(value: Any, pointer: str, label: str) -> Any:
 
 def version_value(root: Path, source: dict[str, Any], label: str = "canonical version") -> str:
     """Read a version declaratively; never execute a command from the profile."""
-    path = project_file(root, source.get("path", ""), label)
+    path = version_source_file(root, source.get("path", ""), label)
     reader = source.get("reader")
     require(reader in {"plain", "json", "toml"}, f"Unsupported {label} reader")
     require(path.stat().st_size <= 1024 * 1024, f"{label.capitalize()} source is too large")
@@ -109,6 +109,14 @@ def version_value(root: Path, source: dict[str, Any], label: str = "canonical ve
     return token
 
 
+def version_source_file(root: Path, relative: str, label: str) -> Path:
+    """Keep version metadata away from credential and private-key file names."""
+    path = project_file(root, relative, label)
+    require(not any(sensitive_name(Path(part)) for part in Path(relative).parts),
+            f"Sensitive {label} reference: {relative}")
+    return path
+
+
 def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], str, str]:
     """Return the declarative version contract available only in profile v3."""
     versioning = profile["versioning"]
@@ -122,14 +130,14 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
     if profile["schema"] == "project-profile/v2":
         # v2 did not declare a reader, value path, history source or mirrors.
         # Check the local file safely without claiming its version was parsed.
-        project_file(root, profile["versioning"]["canonical_source"], "canonical version")
+        version_source_file(root, profile["versioning"]["canonical_source"], "canonical version")
         return None
     source, mirrors, history_source, history_format = _version_contract(profile)
     version = version_value(root, source)
     for mirror in mirrors:
         require(version_value(root, mirror, "version mirror") == version,
                 "Canonical version and mirror diverge: " + mirror["path"])
-    history = project_file(root, history_source, "canonical version history")
+    history = version_source_file(root, history_source, "canonical version history")
     require(history_format == "markdown-headings", "Unsupported canonical history reader")
     require(history.stat().st_size <= 2 * 1024 * 1024, "Canonical version history is too large")
     heading = re.compile(
