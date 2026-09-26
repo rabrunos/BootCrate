@@ -20,7 +20,8 @@ class MaterializationExamples(unittest.TestCase):
                           ('.codex/config.toml','model_reasoning_effort = "high"\n'
                                                 'sandbox_mode = "workspace-write"\n'
                                                 'approval_policy = "on-request"\n'
-                                                'approvals_reviewer = "user"\n'),
+                                                'approvals_reviewer = "user"\n'
+                                                '[sandbox_workspace_write]\nnetwork_access = false\n'),
                           ('docs/.ai/SECURITY_BASELINE.md','# Selected local controls\n')]:
             (root/name).parent.mkdir(parents=True,exist_ok=True)
             (root/name).write_text(body,encoding='utf-8')

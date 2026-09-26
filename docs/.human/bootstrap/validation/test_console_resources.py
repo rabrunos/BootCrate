@@ -45,7 +45,8 @@ class ConsoleResourceTests(unittest.TestCase):
             ".codex/config.toml": ('model_reasoning_effort = "high"\n'
                                    'sandbox_mode = "workspace-write"\n'
                                    'approval_policy = "on-request"\n'
-                                   'approvals_reviewer = "user"\n'),
+                                   'approvals_reviewer = "user"\n'
+                                   '[sandbox_workspace_write]\nnetwork_access = false\n'),
         }.items():
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)

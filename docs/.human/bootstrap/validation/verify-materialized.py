@@ -150,6 +150,9 @@ def inspect(root: Path) -> list[dict]:
                             settings.get("approval_policy") == "on-request" and
                             settings.get("approvals_reviewer") == "user",
                             "Enabled Codex protected manual defaults are not configured")
+                    workspace = settings.get("sandbox_workspace_write")
+                    require(isinstance(workspace, dict) and workspace.get("network_access") is False,
+                            "Enabled Codex protected manual sandbox network must be disabled")
                 elif harness == "claude_code":
                     native = root / ".claude/settings.json"
                     require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Claude configuration is too large")
