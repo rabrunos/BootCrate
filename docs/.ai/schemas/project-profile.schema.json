@@ -9,6 +9,7 @@
     "project",
     "owner",
     "workflow",
+    "execution_permissions",
     "versioning",
     "security",
     "distribution",
@@ -112,6 +113,14 @@
             "type": "string"
           },
           "uniqueItems": true
+        },
+        "required_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
         }
       }
     },
@@ -168,13 +177,27 @@
         }
       }
     },
+    "execution_permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["safe_default"],
+      "properties": {
+        "safe_default": {
+          "const": "protected_manual"
+        }
+      }
+    },
     "versioning": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "required",
         "canonical_source",
+        "reader",
         "format",
+        "history_source",
+        "history_format",
+        "mirrors",
         "target_version_in_prompt_h1",
         "target_version_in_commit",
         "target_version_in_report_h1",
@@ -188,9 +211,56 @@
           "type": "string",
           "minLength": 1
         },
+        "reader": {
+          "enum": [
+            "plain",
+            "json",
+            "toml"
+          ]
+        },
+        "value_path": {
+          "type": "string",
+          "pattern": "^/"
+        },
         "format": {
           "type": "string",
           "minLength": 1
+        },
+        "history_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "history_format": {
+          "const": "markdown-headings"
+        },
+        "mirrors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "reader"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reader": {
+                "enum": [
+                  "plain",
+                  "json",
+                  "toml"
+                ]
+              },
+              "value_path": {
+                "type": "string",
+                "pattern": "^/"
+              }
+            }
+          }
         },
         "target_version_in_prompt_h1": {
           "const": true

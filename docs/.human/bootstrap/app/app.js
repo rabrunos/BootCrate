@@ -2,7 +2,7 @@
   "use strict";
   const Q = window.BOOTCRATE_QUESTIONS, S = window.BOOTCRATE_SECTIONS;
   const C = window.BootCrateIntakeCore, H = window.BootCrateHandoff;
-  const G = window.BootCrateGuidance, Preset = window.BootCratePreset;
+  const G = window.BootCrateGuidance, Preset = window.BootCratePreset, Execution = window.BootCrateExecutionProfile;
   const core = C.create(Q), KEY = "bootcrate-project-intake-v2";
   const $ = id => document.getElementById(id);
   let storage = true, lang = "en", mode = "basic", answers = {}, states = {}, invalid = new Set(), step = 0, repository = "";
@@ -19,24 +19,29 @@
     "report_language","repo_language","target_platforms","distribution_mode","distribution_targets",
     "language_known","language_value","framework_known","framework_value",
     "sensitive_data","secrets_needed","automated_tests","manual_smoke","ci",
-    "single_or_team","repository_state","claude_code","codex_local","codex_cloud","consumption_preset",
+    "single_or_team","repository_state","claude_code","codex_local","codex_cloud","consumption_preset","execution_profile","full_access_acknowledgement",
     "must_have_tools","must_avoid_tools","known_risks","project_console","anything_else"
   ]);
   try {
     const draft = JSON.parse(get(KEY) || "null");
-    const envelope = {schema:C.SCHEMA, answers:draft?.answers, answer_states:draft?.answer_states, session:draft?.sessionMeta};
+    const envelope = {schema:C.SCHEMA, answers:draft?.answers, answer_states:draft?.answer_states, session:draft?.sessionMeta,
+      repository:draft?.repository, bootstrap_source:draft?.bootstrap_source};
     if (draft && !core.validate(envelope).length) {
       const normalized = core.normalize(envelope);
       answers = normalized.answers;
       states = normalized.states;
+      repository = normalized.repository;
       session = {...session, ...(normalized.session || {})};
     } else {
       const old = JSON.parse(get("bootcrate-project-intake-v1") || "null");
       if (old?.answers) pendingLegacy = core.upgradeLegacy({schema:"bootcrate-project-intake/v1", answers:old.answers, session:old.sessionMeta});
     }
   } catch { /* Invalid local data never overwrites a valid draft. */ }
+  if (!answers.execution_profile) answers.execution_profile = "protected_manual";
 
   const shown = q => core.visible(q, answers) && (mode === "detailed" || q.required || BASIC.has(q.id) || present(answers[q.id]) || states[q.id]);
+  const requestedExecution = () => answers.execution_profile === "full_access" && answers.full_access_acknowledgement !== "acknowledged"
+    ? "protected_manual" : (answers.execution_profile || "protected_manual");
   const sections = () => Object.keys(S).filter(id => Q.some(q => q.section === id && shown(q)));
   const steps = () => [...sections(), "__review", "__finish"];
   function title(id) {
@@ -52,16 +57,19 @@
       : t("Add precise constraints and context where useful. Unanswered optional questions stay open.", "Adicione restrições e contexto técnico quando úteis. Perguntas opcionais sem resposta permanecem abertas.");
   }
   function save() {
-    const ok = set(KEY, JSON.stringify({sessionMeta:session, answers, answer_states:states}));
+    const ok = set(KEY, JSON.stringify({sessionMeta:session, repository, bootstrap_source:H.BOOTSTRAP_SOURCE, answers, answer_states:states}));
     $("saveStatus").textContent = ok ? t("Saved locally", "Salvo neste navegador") : t("Local save unavailable: export before leaving", "Não foi possível salvar: exporte antes de sair");
   }
   function payload() {
-    return {schema:C.SCHEMA, exported_at:new Date().toISOString(), session,
+    const value = {schema:C.SCHEMA, exported_at:new Date().toISOString(), session,
       language:lang === "pt" ? "pt-BR" : "en", answers:core.exportAnswers(answers),
+      bootstrap_source:H.BOOTSTRAP_SOURCE,
       answer_states:core.exportStates(states, answers),
       interpretation_rules:{owner_explicit_answers_are_not_to_be_overwritten:true,
         unknown_requires_research_when_material:true, preferences_are_not_hard_constraints_unless_owner_says_so:true,
         app_does_not_choose_architecture:true, hidden_conditional_answers_are_not_exported:true}};
+    if (repository) value.repository = repository;
+    return value;
   }
   function progress() {
     const qs = Q.filter(shown), n = qs.filter(q => present(answers[q.id]) || states[q.id]).length;
@@ -116,6 +124,16 @@
       control.oninput = () => { answers[q.id] = control.value; clear(); };
       wrapper.appendChild(control);
     } else if (q.type === "select") {
+      if (q.option_details) {
+        const details = document.createElement("ul"); details.className = "optionDetails";
+        (q.options || []).forEach(([value,en,pt]) => {
+          const item = document.createElement("li"), name = document.createElement("strong");
+          name.textContent = (lang === "pt" ? pt : en) + ": ";
+          item.append(name, lang === "pt" ? q.option_details[value].pt : q.option_details[value].en);
+          details.appendChild(item);
+        });
+        wrapper.appendChild(details);
+      }
       control = document.createElement("select"); control.id = id; control.required = Boolean(q.required);
       const blank = document.createElement("option"); blank.value = ""; blank.textContent = t("Choose…", "Escolha…");
       control.appendChild(blank);
@@ -240,8 +258,14 @@
     const issues = document.createElement("p"); issues.className = "statusNote";
     issues.textContent = t("GitHub Issues, version identity, checks and acceptance are part of the method. Setup cannot verify repository access or grant publication permission.", "GitHub Issues, versão, verificações e aceite fazem parte do método. O Setup não verifica acesso ao repositório nem concede permissão para publicar.");
     const guide = G.resolve(answers); const next = document.createElement("p"); next.className = "statusNote";
-    next.textContent = t("Next check: ", "Próxima verificação: ") + guide.next.action + " (" + guide.next.owner + ").";
+    next.textContent = guide.next ? t("Next check: ", "Próxima verificação: ") + guide.next.action + " (" + guide.next.owner + ")."
+      : t("No actionable next check was derived; preserve open decisions for the orchestrator.", "Nenhuma próxima verificação acionável foi derivada; preserve as decisões abertas para o orquestrador.");
     card.append(heading, info, issues, next);
+    if (answers.execution_profile === "full_access" && answers.full_access_acknowledgement !== "acknowledged") {
+      const warning=document.createElement("p");warning.className="statusNote";
+      warning.textContent=t("Full Access was not explicitly confirmed, so the handoff remains protected/manual.","Acesso Total não foi confirmado explicitamente; o handoff permanece protegido/manual.");
+      card.appendChild(warning);
+    }
     const label = document.createElement("label"); label.htmlFor = "repoInput";
     label.textContent = t("GitHub repository URL or owner/name", "URL do repositório GitHub ou owner/name");
     const row = document.createElement("div"); row.className = "repoRow";
@@ -270,8 +294,18 @@
     const button = document.createElement("button"); button.type = "button"; button.className = "primaryButton";
     button.textContent = t("Download intake JSON", "Baixar intake JSON"); button.onclick = download; card.appendChild(button);
     root.replaceChildren(card);
-    const refresh = () => { repository = input.value; instructions.value = H.projectInstructions(repository);
-      message.value = H.initialMessage(lang === "pt" ? "pt-BR" : "en"); };
+    const refresh = () => {
+      const raw = input.value.trim(), parsed = H.parseRepository(raw);
+      if (!raw || parsed) {
+        if (repository !== parsed) { repository = parsed; save(); }
+        instructions.value = H.projectInstructions(repository, answers.repository_state, requestedExecution());
+        $("inlineMessage").textContent = "";
+      } else {
+        instructions.value = "";
+        $("inlineMessage").textContent = t("Enter a valid GitHub repository as owner/name or an https://github.com/owner/name URL.", "Informe um repositório GitHub válido como owner/name ou URL https://github.com/owner/name.");
+      }
+      message.value = H.initialMessage(lang === "pt" ? "pt-BR" : "en");
+    };
     input.oninput = refresh; refresh();
   }
   function render(focus) {
@@ -325,7 +359,7 @@
   };
   $("langBtn").onclick = () => { lang = lang === "pt" ? "en" : "pt"; set(KEY + "-lang", lang); render(false); };
   $("newBtn").onclick = () => $("resetDialog").showModal();
-  $("confirmResetBtn").onclick = () => { answers = {}; states = {}; invalid = new Set();
+  $("confirmResetBtn").onclick = () => { answers = {execution_profile:"protected_manual"}; states = {}; repository = ""; invalid = new Set();
     session = {id:crypto?.randomUUID?.() || String(Date.now()), created_at:new Date().toISOString()}; step = 0; save(); render(true); };
   function importData(data) {
     let imported = data;
@@ -337,7 +371,9 @@
     }
     if (core.validate(imported).length) throw new Error("Invalid intake");
     const normalized = core.normalize(imported);
-    answers = normalized.answers; states = normalized.states; session = {...session, ...(normalized.session || {})};
+    const nextAnswers = normalized.answers, nextStates = normalized.states;
+    const nextSession = {...session, ...(normalized.session || {})}, nextRepository = normalized.repository;
+    answers = nextAnswers; states = nextStates; session = nextSession; repository = nextRepository;
     lang = normalized.language === "pt-BR" ? "pt" : "en";
     invalid = new Set(); step = 0; save(); render(true);
   }
@@ -357,4 +393,6 @@
   }
   // A selected preset is an intention, never an authorization or a reduction of Main effort.
   void Preset.resolve({project:answers.consumption_preset});
+  // Execution permissions are independent from autonomy, effort and consumption; absent data stays protected/manual.
+  void Execution.resolve({task:requestedExecution()});
 })();

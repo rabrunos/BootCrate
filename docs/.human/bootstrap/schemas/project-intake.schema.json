@@ -38,9 +38,33 @@
         "pt-BR"
       ]
     },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$",
+      "not": {"anyOf": [
+        {"pattern": "\\.git$"},
+        {"pattern": "/\\.{1,2}$"}
+      ]}
+    },
+    "bootstrap_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "version", "repository", "entrypoint"],
+      "properties": {
+        "product": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "repository": {"type": "string", "minLength": 1},
+        "entrypoint": {"type": "string", "minLength": 1}
+      }
+    },
     "answers": {
       "type": "object",
       "additionalProperties": false,
+      "if": {
+        "properties": {"execution_profile": {"const": "full_access"}},
+        "required": ["execution_profile"]
+      },
+      "then": {"required": ["full_access_acknowledgement"]},
       "properties": {
         "project_name": {
           "type": "string",
@@ -534,6 +558,20 @@
           "enum": [
             "standard",
             "economy"
+          ]
+        },
+        "execution_profile": {
+          "type": "string",
+          "enum": [
+            "protected_manual",
+            "protected_auto",
+            "full_access"
+          ]
+        },
+        "full_access_acknowledgement": {
+          "type": "string",
+          "enum": [
+            "acknowledged"
           ]
         },
         "project_console": {

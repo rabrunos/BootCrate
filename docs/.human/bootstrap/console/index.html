@@ -12,7 +12,8 @@
     <p id="status" role="status" aria-live="polite">Import the project's stable profile to begin.</p>
     <section aria-labelledby="inputs"><h2 id="inputs">Import local information</h2>
       <label>Project profile JSON <input id="profile" type="file" accept=".json,application/json"></label>
-      <label>Local preset override JSON (optional) <input id="override" type="file" accept=".json,application/json"></label>
+      <label>Local consumption-preset override JSON (optional) <input id="presetOverride" type="file" accept=".json,application/json"></label>
+      <label>Local execution-profile override JSON (optional) <input id="executionOverride" type="file" accept=".json,application/json"></label>
       <label>Version source text (optional) <input id="version" type="file" accept=".txt,.json,.toml,.xml,.yaml,.yml"></label>
       <label>CHANGELOG.md (optional) <input id="history" type="file" accept=".md,text/markdown"></label>
       <label>Delivery preflight JSON (optional) <input id="preflight" type="file" accept=".json,application/json"></label>
@@ -22,7 +23,21 @@
       <label for="presetSelect">Local consumption override</label>
       <select id="presetSelect"><option value="">Use project default</option><option value="standard">Standard</option><option value="economy">Economy</option></select>
       <button id="exportPreset" type="button">Download local override</button>
+      <button id="clearPreset" type="button">Clear imported consumption override</button>
       <p>Place the downloaded file at <code>.local/config/preset.json</code> in your project using your normal file tool. This page does not write to the project directory. Reimport the file to see its effective value.</p>
+      <h3>Technical execution permissions</h3>
+      <p>These profiles are independent from Main effort, implementation autonomy and consumption. They never authorize push, publication, production changes, purchases, or access to secrets.</p>
+      <dl class="profileComparison">
+        <dt>Protected - user approval (recommended)</dt><dd>Workspace/sandbox filesystem and network policy; the user reviews eligible elevation requests.</dd>
+        <dt>Protected - automatic review</dt><dd>The sandbox remains active; a supported client reviewer may allow or deny eligible elevations. Unsupported clients must block.</dd>
+        <dt>Full Access - no confirmations (advanced)</dt><dd>Broad filesystem/network access where supported, without approval prompts. Highest risk; managed policy, deny rules and OS limits still prevail.</dd>
+      </dl>
+      <label for="executionSelect">Local execution request</label>
+      <select id="executionSelect"><option value="protected_manual">Protected - user approval</option><option value="protected_auto">Protected - automatic review</option><option value="full_access">Full Access - no confirmations</option></select>
+      <label id="fullRiskRow" hidden><input id="fullRisk" type="checkbox"> I understand that Full Access can expose the host and network and still does not grant task authorization.</label>
+      <button id="exportExecution" type="button">Download execution override</button>
+      <button id="clearExecution" type="button">Clear imported execution override</button>
+      <p>Place the downloaded file at <code>.local/config/execution-profile.json</code>. The executor adapter must report requested and effective values separately. Clearing here does not delete files; remove that ignored file with a normal file tool or the resolver's <code>--clear-local</code> option.</p>
       <button id="validateLocal" type="button">Check imported configuration</button>
       <p id="localCheck" role="status">No local check run. Use the project's native validator for full profile and product verification.</p>
       <button id="exportSnapshot" type="button">Download sanitized snapshot</button>
@@ -32,6 +47,7 @@
     <p>For active work, consult <a href="../PROJECT_GUIDE.md">the project guide</a> and GitHub Issues. Building and publishing require their own approved tools and checks.</p>
   </main>
   <script src="preset.js"></script>
+  <script src="execution-profile.js"></script>
   <script src="console.js"></script>
 </body>
 </html>

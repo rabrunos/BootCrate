@@ -10,6 +10,10 @@
 - A preparação de entrega agora distingue candidato, notas e confirmação de cada destino, bloqueando duplicatas divergentes e resultados desconhecidos.
 - A atualização de arquivos gerenciados antes da materialização agora preserva customizações e interrompe conflitos.
 - Ampliados os cenários de regressão e os contratos de avaliação para registrar evidência efetivamente observada.
+- Corrigidos os achados A01–A09 da auditoria em atualização gerenciada, validação/materialização, guidance, entrega, adoção e Console, com regressões nos módulos atuais.
+- O Intake agora preserva uma identidade canônica de repositório e a origem versionada do BootCrate no handoff.
+- Adicionados três perfis independentes de permissões de execução, com default protegido/manual, opt-in de risco para Acesso Total e adaptadores Codex/Claude que distinguem solicitado de efetivo.
+- Reforçado o opt-in de Acesso Total no contrato do Intake, a comprovação de permissões e sandbox no adapter Claude e a leitura declarativa de versão e histórico no Console.
 
 ## v0.8 — Setup guiado
 

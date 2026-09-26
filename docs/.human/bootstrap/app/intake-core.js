@@ -47,10 +47,17 @@
       const errors = [];
       const add = (code, path) => errors.push({code, path});
       if (!object(data)) return [{code: "object", path: "root"}];
-      const allowed = new Set(["schema", "exported_at", "session", "language", "answers", "answer_states", "interpretation_rules"]);
+      const allowed = new Set(["schema", "exported_at", "session", "language", "repository", "bootstrap_source", "answers", "answer_states", "interpretation_rules"]);
       for (const key of Object.keys(data)) if (!allowed.has(key)) add("unknown", key);
       if (data.schema !== SCHEMA) add("schema", "schema");
       if (data.language !== undefined && !["en", "pt-BR"].includes(data.language)) add("value", "language");
+      if (data.repository !== undefined && (typeof data.repository !== "string" ||
+          !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(data.repository) ||
+          /\/\.{1,2}$/.test(data.repository) || data.repository.endsWith(".git"))) add("value", "repository");
+      if (data.bootstrap_source !== undefined && (!object(data.bootstrap_source) ||
+          Object.keys(data.bootstrap_source).some(key => !["product","version","repository","entrypoint"].includes(key)) ||
+          ["product","version","repository","entrypoint"].some(key => typeof data.bootstrap_source[key] !== "string" || !data.bootstrap_source[key])))
+        add("value", "bootstrap_source");
       if (data.exported_at !== undefined && (typeof data.exported_at !== "string" || data.exported_at.length > 64 || !Number.isFinite(Date.parse(data.exported_at)))) add("value", "exported_at");
       if (data.session !== undefined) {
         if (!object(data.session)) add("object", "session");
@@ -68,6 +75,9 @@
         if (!q) add("unknown", "answers." + id);
         else if (!validValue(q, value)) add("value", "answers." + id);
       }
+      if (data.answers?.execution_profile === "full_access" &&
+          data.answers.full_access_acknowledgement !== "acknowledged")
+        add("required", "answers.full_access_acknowledgement");
       if (data.answer_states !== undefined) {
         if (!object(data.answer_states)) add("object", "answer_states");
         else for (const [id, state] of Object.entries(data.answer_states)) {
@@ -86,6 +96,8 @@
         if (present(value) && !validValue(q, value)) throw new Error("Invalid active answer: " + q.id);
         if (present(value)) out[q.id] = typeof value === "string" ? value.trim() : [...value];
       }
+      if (out.execution_profile === "full_access" && out.full_access_acknowledgement !== "acknowledged")
+        throw new Error("Full Access requires explicit acknowledgement");
       return out;
     }
     function exportStates(states, answers) {
@@ -100,7 +112,9 @@
       if (errors.length) throw new Error("Invalid intake envelope");
       const answers = {};
       for (const [id, value] of Object.entries(data.answers)) answers[id] = typeof value === "string" ? value.trim() : [...value];
-      return {answers, states:{...(data.answer_states || {})}, language: data.language || "en", session: data.session ? {...data.session} : null};
+      if (!answers.execution_profile) answers.execution_profile = "protected_manual";
+      return {answers, states:{...(data.answer_states || {})}, language: data.language || "en", session: data.session ? {...data.session} : null,
+        repository:data.repository || "", bootstrap_source:data.bootstrap_source ? {...data.bootstrap_source} : null};
     }
     function upgradeLegacy(data) {
       if (!object(data) || data.schema !== "bootcrate-project-intake/v1" || !object(data.answers))
@@ -132,6 +146,7 @@
         throw new Error("Invalid legacy project stage");
       }
       // Topology is not a cost preset; the owner must select it separately.
+      answers.execution_profile = "protected_manual";
       const converted = {schema: SCHEMA, answers, language: data.language, session: data.session};
       if (validate(converted).length) throw new Error("Invalid converted intake");
       return {converted, conflicts};

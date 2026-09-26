@@ -11,7 +11,7 @@ python -m pip install -r docs/.human/bootstrap/validation/requirements.txt
 python docs/.human/bootstrap/validation/validate.py
 ```
 
-Checks include JSON/TOML/YAML syntax and duplicates, schema consistency, v3 profile and v2 compatibility, mandatory Issues/ChatGPT invariants, data-only questions and dependency cycles, unchanged Issue Forms/labels, skill and Console preset parity, relative Markdown links, conservative Codex/Claude adapter invariants, ignored secret/local paths, secret-pattern smoke checks and deterministic intake/adoption/delivery/upgrade/eval regressions.
+Checks include JSON/TOML/YAML syntax and duplicates, schema consistency, v3 profile and v2 compatibility, mandatory Issues/ChatGPT invariants, data-only questions and dependency cycles, unchanged Issue Forms/labels, skill and Console resolver parity, relative Markdown links, conservative Codex/Claude execution-adapter invariants, ignored secret/local paths, secret-pattern smoke checks and deterministic intake/adoption/delivery/upgrade/eval regressions.
 
 The validator does not fetch schemas, invoke model APIs, provision services, publish or inspect production credentials. JSON Schema validates structure; the shared finalized-profile gate rejects unresolved placeholders, exposure, version and required local references:
 
@@ -23,7 +23,7 @@ That gate validates a profile, not the project's actual security implementation.
 
 ## Browser smoke (maintenance-only)
 
-`test-browser.cjs` exercises the Setup and optional Console through `file://`, including required-field errors, old-intake confirmation and a local profile import. Use the fixed Playwright version in this directory's maintenance-only `package.json`, install a compatible browser in a disposable maintenance environment, then run `npm run test:browser`. This is not part of the downstream runtime or normal CI; if the browser cannot be installed, record the browser smoke as **not run**. Pair automation with keyboard, screen-reader, reflow/zoom and error recovery inspection before making any WCAG conformance claim.
+`test-browser.cjs` exercises the Setup and optional Console through `file://`, including required-field errors, old-intake confirmation, canonical repository persistence, transactional imports, Full Access acknowledgement and an allowlisted snapshot. Use the fixed Playwright version in this directory's maintenance-only `package.json`, install a compatible browser in a disposable maintenance environment, then run `npm run test:browser`. This is not part of the downstream runtime or normal CI; if the browser cannot be installed, record the browser smoke as **not run**. Pair automation with keyboard, screen-reader, reflow/zoom and error recovery inspection before making any WCAG conformance claim.
 
 For a disposable downstream materialization, run the post-pruning smoke verifier:
 

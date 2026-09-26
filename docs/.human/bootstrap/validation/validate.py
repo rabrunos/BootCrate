@@ -58,7 +58,14 @@ def load_yaml(text: str) -> Any:
 
 def run(command: list[str], cwd: Path = ROOT) -> str:
     result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=90)
-    require(result.returncode == 0, f"Command failed: {' '.join(command)}\n{result.stderr[:2000]}")
+    if result.returncode:
+        def tail(value: str, limit: int, stream: str) -> str:
+            if len(value) > limit:
+                return f"[{len(value) - limit} earlier {stream} characters omitted]\n" + value[-limit:]
+            return value
+        raise ValueError(f"Command failed (exit {result.returncode}): {' '.join(command)}\n"
+                         f"stderr:\n{tail(result.stderr, 8000, 'stderr')}\n"
+                         f"stdout:\n{tail(result.stdout, 2000, 'stdout')}")
     return result.stdout + result.stderr
 
 
@@ -117,6 +124,9 @@ def check_documents(files: list[Path]) -> None:
     version = (ROOT / "VERSION").read_text().strip()
     require(re.fullmatch(r"\d+\.\d+(?:\.\d+)?", version) is not None, "Invalid VERSION")
     require(f"BootCrate v{version}" in (ROOT / "README.md").read_text(encoding="utf-8"), "README/version mismatch")
+    handoff = (BOOT / "app/setup-handoff.js").read_text(encoding="utf-8")
+    require(f'version: "{version}"' in handoff and 'repository: "https://github.com/rabrunos/BootCrate"' in handoff,
+            "Setup bootstrap identity/version drift")
     guide = (ROOT / "PROJECT_GUIDE.md").read_text(encoding="utf-8")
     require("stable entry point" in guide and "active work state" in guide, "PROJECT_GUIDE lost stable routing/authority")
     project_instructions = (BOOT / "templates/chatgpt-project-instructions.md").read_text(encoding="utf-8")
@@ -129,7 +139,8 @@ def check_documents(files: list[Path]) -> None:
 def check_adapters() -> None:
     codex = tomllib.loads((ROOT / ".codex/config.toml").read_text(encoding="utf-8"))
     require(codex["model_reasoning_effort"] == "high", "Main default must remain High")
-    require(codex["approval_policy"] == "on-request" and codex["sandbox_mode"] == "workspace-write", "Unsafe Codex defaults")
+    require(codex["approval_policy"] == "on-request" and codex["sandbox_mode"] == "workspace-write" and
+            codex["approvals_reviewer"] == "user", "Unsafe Codex defaults")
     require(codex["sandbox_workspace_write"]["network_access"] is False, "Sandbox network widened")
     require(codex["agents"]["max_concurrent_threads_per_session"] <= 2, "Agent concurrency widened")
     require(codex["shell_environment_policy"]["inherit"] == "core", "Unexpected credential environment inheritance")
@@ -158,8 +169,14 @@ def check_adapters() -> None:
                 adapter["declared"]["main_requested"] == ["medium", "high", "xhigh"] and
                 adapter["declared"]["consumption_presets"] == ["standard", "economy"],
                 "Adapter weakens common effort/preset contract")
+        permissions = adapter["execution_permissions"]
+        require(permissions["safe_default"] == "protected_manual" and
+                set(permissions["profiles"]) == {"protected_manual", "protected_auto", "full_access"},
+                "Adapter execution profiles drifted")
     require((BOOT / "app/preset.js").read_bytes() == (BOOT / "console/preset.js").read_bytes(),
             "Setup/Console preset resolver drift")
+    require((BOOT / "app/execution-profile.js").read_bytes() == (BOOT / "console/execution-profile.js").read_bytes(),
+            "Setup/Console execution-profile resolver drift")
 
 
 def check_github() -> None:

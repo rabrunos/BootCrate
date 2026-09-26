@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import tomllib
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -68,6 +69,86 @@ def project_file(root: Path, relative: str, label: str) -> Path:
     return current
 
 
+VERSION_TOKEN = re.compile(r"[0-9A-Za-z][0-9A-Za-z._+-]{0,127}")
+
+
+def _value_at(value: Any, pointer: str, label: str) -> Any:
+    require(isinstance(pointer, str) and pointer.startswith("/"), f"Invalid {label} value path")
+    current = value
+    for raw in pointer.split("/")[1:]:
+        key = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, dict):
+            require(key in current, f"Missing {label} value at {pointer}")
+            current = current[key]
+        elif isinstance(current, list) and key.isdigit():
+            index = int(key)
+            require(index < len(current), f"Missing {label} value at {pointer}")
+            current = current[index]
+        else:
+            raise ValueError(f"Missing {label} value at {pointer}")
+    return current
+
+
+def version_value(root: Path, source: dict[str, Any], label: str = "canonical version") -> str:
+    """Read a version declaratively; never execute a command from the profile."""
+    path = version_source_file(root, source.get("path", ""), label)
+    reader = source.get("reader")
+    require(reader in {"plain", "json", "toml"}, f"Unsupported {label} reader")
+    require(path.stat().st_size <= 1024 * 1024, f"{label.capitalize()} source is too large")
+    if reader == "plain":
+        value: Any = path.read_text(encoding="utf-8").strip()
+    elif reader == "json":
+        value = _value_at(load_json(path), source.get("value_path", ""), label)
+    else:
+        with path.open("rb") as stream:
+            value = _value_at(tomllib.load(stream), source.get("value_path", ""), label)
+    require(not isinstance(value, bool) and isinstance(value, (str, int, float)),
+            f"{label.capitalize()} value must be scalar")
+    token = str(value).strip()
+    require(VERSION_TOKEN.fullmatch(token) is not None, f"Invalid {label} value")
+    return token
+
+
+def version_source_file(root: Path, relative: str, label: str) -> Path:
+    """Keep version metadata away from credential and private-key file names."""
+    path = project_file(root, relative, label)
+    require(not any(sensitive_name(Path(part)) for part in Path(relative).parts),
+            f"Sensitive {label} reference: {relative}")
+    return path
+
+
+def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], str, str]:
+    """Return the declarative version contract available only in profile v3."""
+    versioning = profile["versioning"]
+    source = {"path": versioning["canonical_source"], "reader": versioning["reader"]}
+    if "value_path" in versioning:
+        source["value_path"] = versioning["value_path"]
+    return source, versioning["mirrors"], versioning["history_source"], versioning["history_format"]
+
+
+def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None:
+    if profile["schema"] == "project-profile/v2":
+        # v2 did not declare a reader, value path, history source or mirrors.
+        # Check the local file safely without claiming its version was parsed.
+        version_source_file(root, profile["versioning"]["canonical_source"], "canonical version")
+        return None
+    source, mirrors, history_source, history_format = _version_contract(profile)
+    version = version_value(root, source)
+    for mirror in mirrors:
+        require(version_value(root, mirror, "version mirror") == version,
+                "Canonical version and mirror diverge: " + mirror["path"])
+    history = version_source_file(root, history_source, "canonical version history")
+    require(history_format == "markdown-headings", "Unsupported canonical history reader")
+    require(history.stat().st_size <= 2 * 1024 * 1024, "Canonical version history is too large")
+    heading = re.compile(
+        r"^##\s+\[?v?" + re.escape(version) + r"\]?(?:\s|$|[—:–-])",
+        re.MULTILINE,
+    )
+    require(heading.search(history.read_text(encoding="utf-8")) is not None,
+            "Canonical history has no entry for integrated version " + version)
+    return version
+
+
 def materialized_profile(profile: dict[str, Any], root: Path | None = None) -> None:
     """Finalization gate. A valid draft is not necessarily a completed project."""
     def walk(value: Any) -> None:
@@ -101,14 +182,17 @@ def materialized_profile(profile: dict[str, Any], root: Path | None = None) -> N
             require(all(t["kind"] == distribution["mode"] for t in distribution["targets"]),
                     "Distribution mode and selected targets disagree")
     if root is not None:
-        project_file(root, profile["versioning"]["canonical_source"], "canonical version")
+        validate_version_contract(profile, root)
         project_file(root, profile["security"]["control_map"], "security control map")
         project_file(root, "PROJECT_GUIDE.md", "project guide")
-        locations = {"codex": ("AGENTS.md", ".agents/skills"),
-                     "claude_code": ("CLAUDE.md", ".claude/skills")}
+        for required in profile.get("validation", {}).get("required_files", []):
+            project_file(root, required, "declared required file")
+        locations = {"codex": ("AGENTS.md", ".agents/skills", ".codex/config.toml"),
+                     "claude_code": ("CLAUDE.md", ".claude/skills", ".claude/settings.json")}
         for harness in profile["workflow"]["implementation_harnesses"]:
-            entry, skills = locations[harness]
+            entry, skills, native_config = locations[harness]
             project_file(root, entry, "enabled executor instructions")
+            project_file(root, native_config, "enabled executor configuration")
             for skill in profile.get("skills", []):
                 require(re.fullmatch(r"[a-z0-9-]+", skill) is not None, "Invalid selected skill name")
                 project_file(root, f"{skills}/{skill}/SKILL.md", "selected executor skill")

@@ -12,5 +12,28 @@
     "scout": "read-only",
     "worker": "bounded"
   },
+  "execution_permissions": {
+    "safe_default": "protected_manual",
+    "profiles": {
+      "protected_manual": {
+        "surfaces": {"cli": "supported", "ide": "unknown", "cloud": "unknown"},
+        "cli_args": ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"],
+        "native_settings": {"sandbox_mode": "workspace-write", "approval_policy": "on-request", "approvals_reviewer": "user"},
+        "limits": "Workspace-write and managed policy still constrain tools; eligible elevation requests require the user."
+      },
+      "protected_auto": {
+        "surfaces": {"cli": "unknown", "ide": "unknown", "cloud": "unknown"},
+        "cli_args": ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"],
+        "native_settings": {"sandbox_mode": "workspace-write", "approval_policy": "on-request", "approvals_reviewer": "auto_review"},
+        "limits": "Automatic review requires observed client support for approvals_reviewer = auto_review; it does not disable the sandbox or managed policy."
+      },
+      "full_access": {
+        "surfaces": {"cli": "supported", "ide": "unknown", "cloud": "unknown"},
+        "cli_args": ["--dangerously-bypass-approvals-and-sandbox"],
+        "native_settings": {"sandbox_mode": "danger-full-access", "approval_policy": "never"},
+        "limits": "Highest-risk request. Managed requirements, operating-system limits and external authorization boundaries still prevail."
+      }
+    }
+  },
   "verification": "Check the installed client, loaded project settings, available reasoning levels, tool permissions and sandbox coverage in the actual surface. Report unknown if unavailable."
 }
