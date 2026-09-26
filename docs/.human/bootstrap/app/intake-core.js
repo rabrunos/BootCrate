@@ -52,7 +52,8 @@
       if (data.schema !== SCHEMA) add("schema", "schema");
       if (data.language !== undefined && !["en", "pt-BR"].includes(data.language)) add("value", "language");
       if (data.repository !== undefined && (typeof data.repository !== "string" ||
-          !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(data.repository) || data.repository.endsWith(".git"))) add("value", "repository");
+          !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(data.repository) ||
+          /\/\.{1,2}$/.test(data.repository) || data.repository.endsWith(".git"))) add("value", "repository");
       if (data.bootstrap_source !== undefined && (!object(data.bootstrap_source) ||
           Object.keys(data.bootstrap_source).some(key => !["product","version","repository","entrypoint"].includes(key)) ||
           ["product","version","repository","entrypoint"].some(key => typeof data.bootstrap_source[key] !== "string" || !data.bootstrap_source[key])))

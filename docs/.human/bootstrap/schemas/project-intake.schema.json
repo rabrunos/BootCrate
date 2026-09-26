@@ -41,7 +41,10 @@
     "repository": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$",
-      "not": {"pattern": "\\.git$"}
+      "not": {"anyOf": [
+        {"pattern": "\\.git$"},
+        {"pattern": "/\\.{1,2}$"}
+      ]}
     },
     "bootstrap_source": {
       "type": "object",

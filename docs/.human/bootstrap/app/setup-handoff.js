@@ -18,7 +18,7 @@
     const raw = String(value || "").trim();
     const short = raw.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
     const valid = (owner, repo) => /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner) &&
-      /^[A-Za-z0-9._-]{1,100}$/.test(repo) && ![".",".."].includes(repo) && !repo.endsWith(".git.git");
+      /^[A-Za-z0-9._-]{1,100}$/.test(repo) && ![".",".."].includes(repo) && !repo.endsWith(".git");
     if (short) {
       const repo = short[2].replace(/\.git$/, "");
       return valid(short[1],repo) ? short[1] + "/" + repo : "";

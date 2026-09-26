@@ -44,14 +44,70 @@ class AdapterResolverTests(unittest.TestCase):
         for profile in resolver.PROFILES:
             resolved = resolver.resolve_execution(task=profile, task_risk_acknowledged=profile == "full_access")
             result = resolver.map_request(adapter, "cli", resolved)
-            self.assertEqual(result["status"], "supported")
+            self.assertEqual(result["status"], "unknown" if profile == "protected_auto" else "supported")
             self.assertIsNone(result["effective"])
             self.assertFalse(result["applied"])
             actions[profile] = result["native_action"]
         self.assertEqual(len({json.dumps(x, sort_keys=True) for x in actions.values()}), 3)
         self.assertEqual(actions["protected_manual"]["settings_patch"]["approvals_reviewer"], "user")
         self.assertEqual(actions["protected_auto"]["settings_patch"]["approvals_reviewer"], "auto_review")
+        self.assertEqual(actions["protected_auto"]["cli_args"],
+                         ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"])
+        self.assertNotIn("--approve-for-me", actions["protected_auto"]["cli_args"])
         self.assertEqual(actions["full_access"]["settings_patch"]["sandbox_mode"], "danger-full-access")
+
+    def test_codex_auto_requires_observed_capability_and_matching_effective_profile(self):
+        adapter = self.adapter("codex.json")
+        requested = resolver.resolve_execution(task="protected_auto")
+        base = {"surface":"cli", "status":"supported", "effective":"protected_auto"}
+
+        # A newer version label, or even an observed effective label, cannot prove capability.
+        unproven = resolver.map_request(adapter, "cli", requested, observation={
+            **base, "client_version":"0.155.0-alpha.16.3"})
+        self.assertEqual((unproven["status"], unproven["effective"], unproven["applied"]),
+                         ("unknown", None, False))
+        self.assertIn("approvals_reviewer", unproven["reason"])
+        no_surface = resolver.map_request(adapter, "cli", requested, observation={
+            "status":"supported", "effective":"protected_auto",
+            "capabilities":{"approvals_reviewer_auto_review":True}})
+        self.assertEqual((no_surface["status"], no_surface["effective"]), ("unknown", None))
+
+        unsupported = resolver.map_request(adapter, "cli", requested, observation={
+            **base, "client_version":"0.144.0-alpha.4",
+            "capabilities":{"approvals_reviewer_auto_review":False}})
+        self.assertEqual((unsupported["status"], unsupported["effective"], unsupported["applied"]),
+                         ("unsupported", None, False))
+        supported = resolver.map_request(adapter, "cli", requested, observation={
+            **base, "capabilities":{"approvals_reviewer_auto_review":True}})
+        self.assertEqual((supported["status"], supported["effective"], supported["applied"]),
+                         ("supported", "protected_auto", True))
+
+        for observed_effective in ("full_access", "protected_manual"):
+            mismatched = resolver.map_request(adapter, "cli", requested, observation={
+                **base, "effective":observed_effective,
+                "capabilities":{"approvals_reviewer_auto_review":True}})
+            self.assertEqual((mismatched["status"], mismatched["effective"], mismatched["applied"]),
+                             ("unknown", None, False))
+
+        blocked = resolver.map_request(adapter, "cli", requested,
+                                       observation={**base,"capabilities":{"approvals_reviewer_auto_review":True}},
+                                       managed_policy={"allowed_profiles":["protected_manual"]})
+        self.assertEqual((blocked["status"], blocked["effective"], blocked["applied"]),
+                         ("unsupported", None, False))
+
+    def test_codex_manual_and_full_access_do_not_require_auto_review(self):
+        adapter = self.adapter("codex.json")
+        manual = resolver.map_request(adapter, "cli", resolver.resolve_execution(task="protected_manual"),
+                                      observation={"surface":"cli", "status":"supported",
+                                                   "effective":"protected_manual"})
+        self.assertEqual((manual["status"], manual["effective"], manual["applied"]),
+                         ("supported", "protected_manual", True))
+        self.assertEqual(manual["native_action"]["settings_patch"]["approvals_reviewer"], "user")
+        full = resolver.map_request(adapter, "cli",
+                                    resolver.resolve_execution(task="full_access", task_risk_acknowledged=True),
+                                    observation={"surface":"cli", "status":"supported", "effective":"full_access"})
+        self.assertEqual((full["status"], full["effective"], full["applied"]),
+                         ("supported", "full_access", True))
 
     def test_claude_auto_unknown_never_falls_through(self):
         adapter = self.adapter("claude-code.json")

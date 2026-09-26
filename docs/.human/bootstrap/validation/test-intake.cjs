@@ -82,6 +82,26 @@ test('handoff parses only supported GitHub repository forms',()=>{
   assert.equal(Handoff.parseRepository('javascript:alert(1)'),'');
   assert.equal(Handoff.parseRepository('https://example.com/owner/project'),'');
 });
+test('canonical repository identities and handoff normalization stay aligned',()=>{
+  const canonical = [
+    ['owner/repo',true],['owner/repo-name',true],['owner/.repo',true],
+    ['owner/.',false],['owner/..',false],['owner/repo.git',false],
+    ['owner/repo.git.git',false],['https://github.com/owner/repo',false]
+  ];
+  for(const [repository,accepted] of canonical)
+    assert.equal(core.validate({...envelope({}),repository}).length===0,accepted,repository);
+  const handoff = [
+    ['owner/repo','owner/repo'],['owner/repo-name','owner/repo-name'],['owner/.repo','owner/.repo'],
+    ['owner/.',''],['owner/..',''],['owner/repo.git','owner/repo'],
+    ['owner/repo.git.git',''],['https://github.com/owner/repo.git','owner/repo'],
+    ['https://github.com/owner/.',''],['https://github.com/owner/..','']
+  ];
+  for(const [input,expected] of handoff){
+    const parsed=Handoff.parseRepository(input);
+    assert.equal(parsed,expected,input);
+    if(parsed)assert.deepEqual(core.validate({...envelope({}),repository:parsed}),[],input);
+  }
+});
 test('GitHub creation URL does not pretend this repository is configured as a template',()=>{
   const url=new URL(Handoff.githubCreateUrl({name:'My Project <x>',description:'Example',visibility:'private'}));
   assert.equal(url.origin,'https://github.com');

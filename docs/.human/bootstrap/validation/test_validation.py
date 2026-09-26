@@ -33,6 +33,35 @@ class ValidationTests(unittest.TestCase):
         v.schema_check(schema,{**base,"answers":{"execution_profile":"full_access",
                                               "full_access_acknowledgement":"acknowledged"}})
 
+    def test_repository_identity_schema_matches_shared_intake_validator(self):
+        schema=v.load_json(v.BOOT/"schemas/project-intake.schema.json")
+        values=["owner/repo", "owner/repo-name", "owner/.repo", "owner/.", "owner/..",
+                "owner/repo.git", "owner/repo.git.git", "owner//repo", "-owner/repo",
+                "owner/repo/name", "https://github.com/owner/repo"]
+        script="""
+const fs=require('node:fs'),vm=require('node:vm'),Core=require(process.argv[1]);
+const scope={window:{}};
+vm.runInNewContext(fs.readFileSync(process.argv[2],'utf8'),scope);
+const core=Core.create(scope.window.BOOTCRATE_QUESTIONS);
+const values=JSON.parse(fs.readFileSync(0,'utf8'));
+process.stdout.write(JSON.stringify(values.map(repository=>
+  core.validate({schema:Core.SCHEMA,answers:{},repository}).length===0)));
+"""
+        result=subprocess.run(
+            ["node", "-e", script, str(v.BOOT/"app/intake-core.js"), str(v.BOOT/"app/questions.js")],
+            input=json.dumps(values), text=True, capture_output=True, check=True, timeout=10)
+        core_results=json.loads(result.stdout)
+        self.assertEqual(len(core_results),len(values))
+        for repository, core_valid in zip(values, core_results):
+            with self.subTest(repository=repository):
+                try:
+                    v.schema_check(schema,{"schema":"bootcrate-project-intake/v2", "answers":{},
+                                           "repository":repository})
+                    schema_valid=True
+                except ValueError:
+                    schema_valid=False
+                self.assertEqual(schema_valid,core_valid)
+
     def test_command_failure_reports_bounded_stderr_tail(self):
         script="import sys; sys.stderr.write('progress\\n'*1000); sys.stderr.write('test_synthetic_failure\\nTraceback marker\\n'); sys.exit(7)"
         with self.assertRaises(ValueError) as failure:

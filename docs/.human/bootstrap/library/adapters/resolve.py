@@ -103,6 +103,22 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
         if not policy_blocked:
             status, effective = observed_status, observed_effective
             reason = observation.get("reason") or reason
+            if adapter["id"] == "codex" and requested == "protected_auto":
+                capabilities = observation.get("capabilities") or {}
+                if not isinstance(capabilities, dict):
+                    raise ValueError("Invalid Codex capability observation")
+                auto_review = capabilities.get("approvals_reviewer_auto_review")
+                if auto_review is False:
+                    status, effective = "unsupported", None
+                    reason = "Codex client does not support approvals_reviewer = auto_review on this surface."
+                elif auto_review is not True or observation.get("surface") != surface:
+                    status, effective = ("unsupported" if status == "unsupported" else "unknown"), None
+                    reason = "Codex Protected Auto not proven: matching surface and approvals_reviewer = auto_review support are required."
+                elif status != "supported":
+                    effective = None
+                elif effective not in (None, "protected_auto"):
+                    status, effective = "unknown", None
+                    reason = "Observed profile does not satisfy the requested Codex Protected Auto profile."
             if adapter["id"] == "claude_code" and requested != "full_access" and effective == "full_access":
                 status, effective = "unknown", None
                 reason = "Observed Full Access does not satisfy the requested protected profile."

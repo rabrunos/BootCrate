@@ -55,6 +55,18 @@ test('file-mode Setup shows accessible required errors and preserves legacy draf
   await page.getByRole('button',{name:'Next steps'}).click();
   await page.locator('#repoInput').fill('https://github.com/owner/example.git');
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bootcrate-project-intake-v2')).repository),'owner/example');
+  const displayedRepository=await page.locator('#repoInput').inputValue();
+  for(const repository of ['owner/.','owner/..']){
+    await page.locator('#importInput').setInputFiles({name:'invalid-repository.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+      schema:'bootcrate-project-intake/v2',repository,answers:{project_name:'Replaced'}
+    }))});
+    await page.waitForFunction(()=>document.querySelector('#importInput').value==='' &&
+      document.querySelector('#inlineMessage').textContent.includes('current draft was preserved'));
+    const draft=await page.evaluate(()=>JSON.parse(localStorage.getItem('bootcrate-project-intake-v2')));
+    assert.equal(draft.repository,'owner/example');
+    assert.equal(draft.answers.project_name,'Legacy');
+    assert.equal(await page.locator('#repoInput').inputValue(),displayedRepository);
+  }
   await page.reload();
   await page.getByRole('button',{name:'Next steps'}).click();
   assert.equal(await page.locator('#repoInput').inputValue(),'owner/example');
