@@ -17,7 +17,10 @@ class MaterializationExamples(unittest.TestCase):
         for name,body in [('PROJECT_GUIDE.md','# Project guide\n'),('README.md','# Product\n'),
                           ('AGENTS.md','# Codex task rules\n'),('VERSION','1.0\n'),
                           ('CHANGELOG.md','# Changelog\n\n## v1.0 — Initial\n\n- Added the fixture.\n'),
-                          ('.codex/config.toml','model_reasoning_effort = "high"\n'),
+                          ('.codex/config.toml','model_reasoning_effort = "high"\n'
+                                                'sandbox_mode = "workspace-write"\n'
+                                                'approval_policy = "on-request"\n'
+                                                'approvals_reviewer = "user"\n'),
                           ('docs/.ai/SECURITY_BASELINE.md','# Selected local controls\n')]:
             (root/name).parent.mkdir(parents=True,exist_ok=True)
             (root/name).write_text(body,encoding='utf-8')

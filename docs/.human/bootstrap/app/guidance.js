@@ -52,6 +52,10 @@
         if (status === "not_applicable") {
           if (!legitimateWaiver(req, item, answers)) {
             status = "unknown"; reason = "waiver_not_authorized_or_not_applicable";
+          } else if (freshness !== "current") {
+            status = "unknown"; reason = "evidence_not_current";
+          } else if (!basisMatches(req.basis, item.basis, basis)) {
+            status = "unknown"; reason = "evidence_basis_missing_or_divergent";
           }
         } else if (status === "satisfied") {
           if (freshness !== "current") {

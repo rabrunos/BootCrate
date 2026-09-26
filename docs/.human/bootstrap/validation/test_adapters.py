@@ -247,6 +247,33 @@ class AdapterResolverTests(unittest.TestCase):
                         elif os.name == "nt" and link.is_junction():
                             os.rmdir(link)
 
+    def test_invalid_local_override_leaf_never_becomes_an_absent_default(self):
+        for filename, path_for in (
+            ("execution-profile.json", resolver.local_override_path),
+            ("preset.json", resolver.local_preset_path),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                target = config / filename
+                target.mkdir()
+                with self.assertRaisesRegex(ValueError, "regular"):
+                    path_for(root)
+                target.rmdir()
+                target.write_bytes(b"x" * (resolver.MAX_LOCAL_OVERRIDE_BYTES + 1))
+                with self.assertRaisesRegex(ValueError, "size limit"):
+                    path_for(root)
+                target.unlink()
+                if os.name != "nt":
+                    target.symlink_to(config / "missing.json")
+                    with self.assertRaisesRegex(ValueError, "regular"):
+                        path_for(root)
+                    target.unlink()
+                    os.mkfifo(target)
+                    with self.assertRaisesRegex(ValueError, "regular"):
+                        path_for(root)
+
     def test_clear_rejects_parent_replaced_after_path_validation(self):
         for filename, clear in (
             ("execution-profile.json", resolver.clear_local_override),

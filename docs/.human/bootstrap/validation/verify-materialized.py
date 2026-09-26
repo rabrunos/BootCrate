@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import tomllib
 from urllib.parse import unquote, urlsplit
 
 from validation_core import (inventory, load_json, materialized_profile, profile_schema,
@@ -105,7 +106,7 @@ def inspect(root: Path) -> list[dict]:
             status, summary = "pass", detail or "Verified in the requested checkout"
         except BlockedCheck as error:
             status, summary = "blocked", str(error)
-        except (ValueError, OSError, KeyError, TypeError, RuntimeError) as error:
+        except (ValueError, OSError, KeyError, TypeError, RuntimeError, UnicodeError) as error:
             status, summary = "fail", str(error)
         results.append({"check_id": check_id, "scope": "structure", "required": True,
                         "status": status, "evidence_ref": evidence, "summary": summary})
@@ -120,6 +121,27 @@ def inspect(root: Path) -> list[dict]:
         data = load_json(path)
         schema_check(profile_schema(SCHEMAS, data), data)
         materialized_profile(data, root)
+        if data["schema"] == "project-profile/v3":
+            # v3 declares a protected manual default. Check the selected native files,
+            # because their existence alone does not prove that default is in force.
+            for harness in data["workflow"]["implementation_harnesses"]:
+                if harness == "codex":
+                    native = root / ".codex/config.toml"
+                    require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Codex configuration is too large")
+                    settings = tomllib.loads(native.read_text(encoding="utf-8"))
+                    require(settings.get("sandbox_mode") == "workspace-write" and
+                            settings.get("approval_policy") == "on-request" and
+                            settings.get("approvals_reviewer") == "user",
+                            "Enabled Codex protected manual defaults are not configured")
+                elif harness == "claude_code":
+                    native = root / ".claude/settings.json"
+                    require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Claude configuration is too large")
+                    settings = load_json(native)
+                    permissions = settings.get("permissions") if isinstance(settings, dict) else None
+                    sandbox = settings.get("sandbox") if isinstance(settings, dict) else None
+                    require(isinstance(permissions, dict) and permissions.get("defaultMode") == "default" and
+                            isinstance(sandbox, dict) and sandbox.get("enabled") is True,
+                            "Enabled Claude protected manual defaults are not configured")
         if data["schema"] == "project-profile/v3" and data["console"]["enabled"]:
             console = root / "project-console"
             require(console.is_dir() and not console.is_symlink(), "selected Project Console directory missing or linked")

@@ -41,7 +41,10 @@ class ConsoleResourceTests(unittest.TestCase):
             "VERSION": "1.0\n",
             "CHANGELOG.md": "# Changelog\n\n## v1.0 — Initial\n",
             "AGENTS.md": "# Codex rules\n",
-            ".codex/config.toml": 'model_reasoning_effort = "high"\n',
+            ".codex/config.toml": ('model_reasoning_effort = "high"\n'
+                                   'sandbox_mode = "workspace-write"\n'
+                                   'approval_policy = "on-request"\n'
+                                   'approvals_reviewer = "user"\n'),
             "project-console/index.html": self.INDEX,
             "project-console/styles.css": "body { color: black; }\n",
             "project-console/preset.js": "/* fixture */\n",

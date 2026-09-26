@@ -17,6 +17,7 @@ PROFILES = ("protected_manual", "protected_auto", "full_access")
 PRESETS = ("standard", "economy")
 OVERRIDE_SCHEMA = "bootcrate-execution-profile-override/v1"
 PRESET_OVERRIDE_SCHEMA = "bootcrate-preset-override/v1"
+MAX_LOCAL_OVERRIDE_BYTES = 64 * 1024
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -170,6 +171,17 @@ def _local_config_path(project_root: Path, filename: str) -> Path:
         if not stat.S_ISDIR(metadata.st_mode):
             raise ValueError("Local config parent is not a directory")
     target = config / filename
+    try:
+        metadata = target.lstat()
+    except FileNotFoundError:
+        metadata = None
+    if metadata is not None:
+        reparse = (getattr(metadata, "st_file_attributes", 0) &
+                   getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+        if stat.S_ISLNK(metadata.st_mode) or reparse or not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("Local override must be a regular, unlinked file")
+        if metadata.st_size > MAX_LOCAL_OVERRIDE_BYTES:
+            raise ValueError("Local override exceeds its size limit")
     if not target.resolve(strict=False).is_relative_to(root):
         raise ValueError("Unsafe local config path")
     return target

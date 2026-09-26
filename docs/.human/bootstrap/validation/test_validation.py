@@ -90,7 +90,10 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             "VERSION":"1.0\n",
             "CHANGELOG.md":"# Changelog\n\n## v1.0 — Initial\n\n- Added the synthetic fixture.\n",
             "AGENTS.md":"# Codex rules\n",
-            ".codex/config.toml":'model_reasoning_effort = "high"\n',
+            ".codex/config.toml":'model_reasoning_effort = "high"\n'
+                                  'sandbox_mode = "workspace-write"\n'
+                                  'approval_policy = "on-request"\n'
+                                  'approvals_reviewer = "user"\n',
         }.items():
             path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body,encoding="utf-8")
         profile=self.finalize_profile(v.load_json(v.ROOT/"docs/.ai/project-profile.json"))
@@ -196,6 +199,71 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             self.assertEqual(verify_materialized.check(root),[])
             (root/"docs/.human/bootstrap").mkdir(parents=True)
             self.assertIn("bootstrap directory remains",verify_materialized.check(root))
+
+    def test_v3_selected_codex_config_requires_protected_manual_defaults(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.materialized_fixture(root)
+            config=root/".codex/config.toml"
+            self.assertEqual(verify_materialized.check(root),[])
+            for content in (
+                'sandbox_mode = "danger-full-access"\napproval_policy = "never"\n',
+                'sandbox_mode = "workspace-write"\napproval_policy = "never"\napprovals_reviewer = "user"\n',
+                'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\napprovals_reviewer = "auto_review"\n',
+            ):
+                with self.subTest(content=content):
+                    config.write_text(content,encoding="utf-8")
+                    self.assertTrue(any("Codex protected manual defaults" in failure
+                                        for failure in verify_materialized.check(root)))
+            config.write_text('sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n'
+                              'approvals_reviewer = "user"\n',encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+            config.write_bytes(b"\xff")
+            self.assertEqual(next(entry for entry in verify_materialized.inspect(root)
+                                  if entry["check_id"] == "profile.finalized")["status"],"fail")
+
+    def test_v3_selected_claude_config_requires_protected_manual_defaults(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,path=self.materialized_fixture(root)
+            profile["workflow"]["implementation_harnesses"]=["codex","claude_code"]
+            path.write_text(json.dumps(profile),encoding="utf-8")
+            (root/"CLAUDE.md").write_text("# Claude rules\n",encoding="utf-8")
+            settings=root/".claude/settings.json";settings.parent.mkdir()
+            def write_settings(mode,enabled):
+                settings.write_text(json.dumps({"permissions":{"defaultMode":mode},
+                                                "sandbox":{"enabled":enabled}}),encoding="utf-8")
+            write_settings("default",True)
+            self.assertEqual(verify_materialized.check(root),[])
+            for mode,enabled in (("bypassPermissions",True),("default",False)):
+                with self.subTest(mode=mode,enabled=enabled):
+                    write_settings(mode,enabled)
+                    self.assertTrue(any("Claude protected manual defaults" in failure
+                                        for failure in verify_materialized.check(root)))
+            write_settings("default",True)
+            self.assertEqual(verify_materialized.check(root),[])
+
+    def test_native_default_gate_is_v3_and_selected_executor_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,path=self.materialized_fixture(root)
+            claude=root/".claude/settings.json";claude.parent.mkdir()
+            claude.write_text('{"permissions":{"defaultMode":"bypassPermissions"}}',encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])  # Claude is not selected.
+            profile={
+                "schema":"project-profile/v2",
+                "project":{"name":"Legacy example","kind":"static","summary":"Synthetic fixture"},
+                "owner":{"repository_language":"en","report_language":"pt-BR"},
+                "workflow":{"tracking":"github_issues","primary_orchestrator":"chatgpt",
+                            "fallback_planners":[],"implementation_harnesses":["codex"]},
+                "versioning":{"required":True,"canonical_source":"VERSION","format":"native",
+                              "target_version_in_prompt_h1":True,"target_version_in_commit":True,
+                              "target_version_in_report_h1":True,"continuations_reuse_target":True},
+                "security":{"exposure":"local","data_classes":[],"untrusted_inputs":[],
+                            "modules":[],"control_map":"docs/.ai/SECURITY_BASELINE.md",
+                            "verification_commands":[]},
+            }
+            path.write_text(json.dumps(profile),encoding="utf-8")
+            (root/".codex/config.toml").write_text('sandbox_mode = "danger-full-access"\n'
+                                                  'approval_policy = "never"\n',encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])  # v2 had no native-default contract.
 
     def test_materialized_profile_negative_cases(self):
         with tempfile.TemporaryDirectory() as td:

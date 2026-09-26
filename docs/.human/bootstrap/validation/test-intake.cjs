@@ -9,6 +9,7 @@ const Handoff = require(path.join(app, 'setup-handoff.js'));
 const Guidance = require(path.join(app, 'guidance.js'));
 const Preset = require(path.join(app, 'preset.js'));
 const Execution = require(path.join(app, 'execution-profile.js'));
+const ConsoleExecution = require(path.join(__dirname, '../console/execution-profile.js'));
 const scope = {window:{}};
 vm.runInNewContext(fs.readFileSync(path.join(app,'questions.js'),'utf8'),scope);
 const Q = JSON.parse(JSON.stringify(scope.window.BOOTCRATE_QUESTIONS));
@@ -194,6 +195,23 @@ test('execution profiles have task/local/default precedence and Full Access ackn
   assert.ok(core.missing({execution_profile:'full_access'}).some(q=>q.id==='full_access_acknowledgement'));
   assert.ok(!core.active({execution_profile:'protected_manual'}).some(q=>q.id==='full_access_acknowledgement'));
 });
+test('execution profile observation applies only supported matching profiles in Setup and Console',()=>{
+  assert.equal(fs.readFileSync(path.join(app,'execution-profile.js'),'utf8'),
+    fs.readFileSync(path.join(__dirname,'../console/execution-profile.js'),'utf8'));
+  for (const api of [Execution,ConsoleExecution]) {
+    for (const requested of api.ids) {
+      const resolved=api.resolve({task:requested});
+      for (const effective of api.ids) {
+        const observed=api.observation(resolved,{executor:'codex',surface:'cli',status:'supported',effective});
+        assert.equal(observed.applied,effective===requested,`${requested} requested, ${effective} effective`);
+      }
+      for (const status of ['unknown','unsupported']) {
+        assert.equal(api.observation(resolved,{executor:'codex',surface:'cli',status,effective:requested}).applied,false);
+      }
+      assert.equal(api.observation(resolved,{executor:'codex',surface:'cli',status:'supported'}).applied,false);
+    }
+  }
+});
 test('guidance enforces applicability, authority, basis and permissions',()=>{
   const basis={repository:'owner/project',commit:'a'.repeat(40),scope:'issue-12'};
   const evidence=Object.fromEntries(Guidance.requirements.map(req=>[req.id,{
@@ -218,8 +236,21 @@ test('guidance enforces applicability, authority, basis and permissions',()=>{
   assert.equal(Guidance.resolve({distribution_mode:'artifact'},agentAcceptance,basis).items.find(x=>x.id==='acceptance').reason,'evidence_source_insufficient');
 
   const legitimate=structuredClone(evidence);
-  legitimate.distribution={status:'not_applicable',source:'owner_confirmed',freshness:'current',waiver:{reason:'no_distribution_selected'}};
+  legitimate.distribution={status:'not_applicable',source:'owner_confirmed',freshness:'current',basis,waiver:{reason:'no_distribution_selected'}};
   assert.equal(Guidance.resolve({distribution_mode:'none'},legitimate,basis).readiness,'accepted');
+  for(const [change,expectedReason] of [
+    [item=>{item.freshness='stale'},'evidence_not_current'],
+    [item=>{delete item.basis},'evidence_basis_missing_or_divergent'],
+    [item=>{item.basis={...basis,repository:'other/project'}},'evidence_basis_missing_or_divergent'],
+    [item=>{item.basis={...basis,commit:'b'.repeat(40)}},'evidence_basis_missing_or_divergent']
+  ]) {
+    const staleWaiver=structuredClone(legitimate);
+    change(staleWaiver.distribution);
+    const result=Guidance.resolve({distribution_mode:'none'},staleWaiver,basis);
+    assert.equal(result.readiness,'pending');
+    assert.equal(result.readiness_levels.behavior,'pending');
+    assert.equal(result.items.find(x=>x.id==='distribution').reason,expectedReason);
+  }
   legitimate.distribution.source='agent_declared';
   assert.equal(Guidance.resolve({distribution_mode:'none'},legitimate,basis).readiness,'pending');
   assert.equal(Guidance.resolve({distribution_mode:'none'},legitimate,basis).readiness_levels.behavior,'pending');

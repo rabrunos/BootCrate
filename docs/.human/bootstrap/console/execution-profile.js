@@ -35,7 +35,7 @@
     if (typeof executor !== "string" || !executor || typeof surface !== "string" || !surface)
       throw new Error("Executor and surface are required");
     return {requested:resolved.requested,effective,source:resolved.source,executor,surface,status,reason,
-      applied:effective !== null};
+      applied:status === "supported" && effective === resolved.requested};
   }
   return {ids,profiles,valid,resolve,parseOverride,observation};
 });
