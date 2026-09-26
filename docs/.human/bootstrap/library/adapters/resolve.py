@@ -103,7 +103,13 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
         if not policy_blocked:
             status, effective = observed_status, observed_effective
             reason = observation.get("reason") or reason
-            if adapter["id"] == "codex" and requested == "protected_auto":
+            # An observed profile cannot satisfy a different requested profile,
+            # even when the observation describes broader permissions.
+            if effective is not None and effective != requested:
+                status, effective = ("unsupported" if status == "unsupported" else "unknown"), None
+                reason = ("Observed effective profile " + observed_effective +
+                          " does not match requested profile " + requested + ".")
+            elif adapter["id"] == "codex" and requested == "protected_auto":
                 capabilities = observation.get("capabilities") or {}
                 if not isinstance(capabilities, dict):
                     raise ValueError("Invalid Codex capability observation")
@@ -116,13 +122,7 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
                     reason = "Codex Protected Auto not proven: matching surface and approvals_reviewer = auto_review support are required."
                 elif status != "supported":
                     effective = None
-                elif effective not in (None, "protected_auto"):
-                    status, effective = "unknown", None
-                    reason = "Observed profile does not satisfy the requested Codex Protected Auto profile."
-            if adapter["id"] == "claude_code" and requested != "full_access" and effective == "full_access":
-                status, effective = "unknown", None
-                reason = "Observed Full Access does not satisfy the requested protected profile."
-            if adapter["id"] == "claude_code" and requested == "full_access" and effective == "full_access":
+            elif adapter["id"] == "claude_code" and requested == "full_access" and effective == "full_access":
                 capabilities = observation.get("capabilities") or {}
                 if not isinstance(capabilities, dict):
                     raise ValueError("Invalid Claude capability observation")
@@ -133,6 +133,8 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
                 if status != "supported" or missing:
                     status, effective = "unknown", None
                     reason = "Claude Full Access not proven: " + ", ".join(missing or ["supported status"]) + "."
+            if status != "supported":
+                effective = None
     return {
         "requested": requested,
         "effective": effective,
@@ -140,7 +142,7 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
         "executor": adapter["id"],
         "surface": surface,
         "status": status,
-        "applied": effective is not None,
+        "applied": status == "supported" and effective == requested,
         "native_action": {"cli_args": profile.get("cli_args", []), "settings_patch": profile.get("native_settings", {})},
         "reason": reason,
         "authorization": "Technical permissions do not authorize push, publication, production changes, purchases, or secret access."

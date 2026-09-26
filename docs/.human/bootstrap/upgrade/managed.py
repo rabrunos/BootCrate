@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+from contextvars import ContextVar
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import secrets
-import shutil
 import stat
 import sys
 
@@ -23,6 +24,140 @@ MANIFEST = CONTROL / "bootcrate-managed.json"
 LOCK = CONTROL / "bootcrate-managed.lock"
 MAX_MANAGED_BYTES = 2 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
+_active_mutator = ContextVar("managed_mutator", default=None)
+
+
+class _PosixMutator:
+    """Perform every mutation relative to checked, open directory descriptors."""
+
+    def __init__(self, root: Path):
+        required = (os.open, os.mkdir, os.unlink, os.rmdir, os.replace, os.link)
+        if not all(operation in os.supports_dir_fd for operation in required):
+            raise RuntimeError("Managed update requires directory-relative filesystem operations")
+        self.root = root
+        self.descriptor = None
+
+    def __enter__(self):
+        self.descriptor = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        if not stat.S_ISDIR(os.fstat(self.descriptor).st_mode):
+            self.__exit__(None, None, None)
+            raise ValueError("Project root is not a real directory")
+        return self
+
+    def __exit__(self, *_):
+        if self.descriptor is not None:
+            os.close(self.descriptor)
+            self.descriptor = None
+
+    @staticmethod
+    def _parts(relative: Path) -> tuple[str, ...]:
+        relative = Path(relative)
+        if relative.is_absolute() or not relative.parts or any(
+            part in ("", ".", "..") for part in relative.parts
+        ):
+            raise ValueError("Unsafe managed mutation path")
+        return relative.parts
+
+    @contextmanager
+    def _parent(self, relative: Path):
+        parts = self._parts(relative)
+        descriptor = os.dup(self.descriptor)
+        try:
+            for part in parts[:-1]:
+                child = os.open(
+                    part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=descriptor,
+                )
+                os.close(descriptor)
+                descriptor = child
+            yield descriptor, parts[-1]
+        finally:
+            os.close(descriptor)
+
+    def write_new(self, relative: Path, data: bytes) -> None:
+        with self._parent(relative) as (parent, name):
+            descriptor = os.open(
+                name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600, dir_fd=parent,
+            )
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+
+    def read(self, relative: Path) -> bytes:
+        with self._parent(relative) as (parent, name):
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
+            with os.fdopen(descriptor, "rb") as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    raise ValueError("Managed control file is not regular")
+                data = stream.read(4 * 1024 * 1024 + 1)
+                if len(data) > 4 * 1024 * 1024:
+                    raise ValueError("Managed control file exceeds its read limit")
+                return data
+
+    def replace(self, source: Path, target: Path, *, expected_digest: str) -> None:
+        if hash_bytes(self.read(source)) != expected_digest:
+            raise ValueError("Frozen staged bytes changed before replace")
+        with self._parent(source) as (source_parent, source_name):
+            with self._parent(target) as (target_parent, target_name):
+                os.replace(
+                    source_name, target_name,
+                    src_dir_fd=source_parent, dst_dir_fd=target_parent,
+                )
+
+    def unlink(self, relative: Path, *, missing_ok: bool = False) -> None:
+        with self._parent(relative) as (parent, name):
+            try:
+                os.unlink(name, dir_fd=parent)
+            except FileNotFoundError:
+                if not missing_ok:
+                    raise
+
+    def mkdir(self, relative: Path) -> None:
+        with self._parent(relative) as (parent, name):
+            os.mkdir(name, dir_fd=parent)
+
+    def rmdir(self, relative: Path) -> None:
+        with self._parent(relative) as (parent, name):
+            os.rmdir(name, dir_fd=parent)
+
+    def link(self, source: Path, target: Path, *, expected_digest: str) -> None:
+        if hash_bytes(self.read(source)) != expected_digest:
+            raise ValueError("Frozen staged bytes changed before link")
+        with self._parent(source) as (source_parent, source_name):
+            with self._parent(target) as (target_parent, target_name):
+                os.link(
+                    source_name, target_name,
+                    src_dir_fd=source_parent, dst_dir_fd=target_parent,
+                    follow_symlinks=False,
+                )
+
+
+def _mutator_for(root: Path):
+    if os.name != "nt":
+        return _PosixMutator(root)
+    module_path = Path(__file__).with_name("_windows_mutation.py")
+    spec = importlib.util.spec_from_file_location("_bootcrate_windows_mutation", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Windows managed mutation capability is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except (OSError, AttributeError) as error:
+        raise RuntimeError("Windows managed update requires native handle-relative filesystem capability") from error
+    return module.WindowsMutator(root)
+
+
+def _mutator():
+    active = _active_mutator.get()
+    if active is None:
+        raise RuntimeError("Managed mutation requires an anchored filesystem session")
+    return active
+
+
+def _relative(path: Path) -> Path:
+    return Path(path).relative_to(_mutator().root)
 
 
 def hash_bytes(data: bytes) -> str:
@@ -94,7 +229,7 @@ def _control_dir(root: Path) -> Path:
             raise ValueError("BootCrate control path is not a directory")
     else:
         try:
-            path.mkdir()
+            _mutator().mkdir(CONTROL)
         except FileExistsError:
             pass
     path = _control_path(root, CONTROL)
@@ -148,32 +283,31 @@ def _read_manifest(root: Path) -> tuple[dict, bytes]:
 
 @contextmanager
 def _locked(root: Path):
-    control = _control_dir(root)
-    lock = _control_path(root, LOCK)
-    token = (secrets.token_hex(24) + "\n").encode("ascii")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    if hasattr(os, "O_BINARY"):
-        flags |= os.O_BINARY
-    try:
-        descriptor = os.open(lock, flags, 0o600)
-    except FileExistsError as error:
-        raise ValueError("Another managed update or unrecovered lock is present") from error
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(token)
-            stream.flush()
-            os.fsync(stream.fileno())
-        yield control
-    finally:
-        current = None
+    with _mutator_for(root) as filesystem:
+        filesystem.created = set()
+        filesystem.frozen = {}
+        marker = _active_mutator.set(filesystem)
         try:
-            current = _control_path(root, LOCK).read_bytes()
-        except (OSError, ValueError):
-            pass
-        if current == token:
-            _control_path(root, LOCK).unlink()
-        else:
-            raise RuntimeError("Managed-update lock changed; it was preserved for reconciliation")
+            control = _control_dir(root)
+            token = (secrets.token_hex(24) + "\n").encode("ascii")
+            try:
+                _write_file(_control_path(root, LOCK), token)
+            except FileExistsError as error:
+                raise ValueError("Another managed update or unrecovered lock is present") from error
+            try:
+                yield control
+            finally:
+                current = None
+                try:
+                    current = filesystem.read(LOCK)
+                except (OSError, ValueError):
+                    pass
+                if current == token:
+                    _unlink_file(_control_path(root, LOCK))
+                else:
+                    raise RuntimeError("Managed-update lock changed; it was preserved for reconciliation")
+        finally:
+            _active_mutator.reset(marker)
 
 
 def content(root: Path, relative: str) -> bytes | None:
@@ -193,10 +327,11 @@ def bootstrap(root: Path) -> None:
 
 
 def _write_file(path: Path, data: bytes) -> None:
-    with path.open("xb") as stream:
-        stream.write(data)
-        stream.flush()
-        os.fsync(stream.fileno())
+    relative = _relative(path)
+    active = _mutator()
+    active.write_new(relative, data)
+    active.created.add(relative)
+    active.frozen[relative] = hash_bytes(data)
 
 
 def _manifest_bytes(manifest: dict) -> bytes:
@@ -205,7 +340,34 @@ def _manifest_bytes(manifest: dict) -> bytes:
 
 def _replace_file(staged: Path, target: Path) -> None:
     """Small patch boundary used by deterministic interleaving tests."""
-    os.replace(staged, target)
+    source_relative, target_relative = _relative(staged), _relative(target)
+    active = _mutator()
+    expected_digest = active.frozen.get(source_relative)
+    if expected_digest is None:
+        raise RuntimeError("Replace source is not a frozen staged file")
+    active.replace(source_relative, target_relative, expected_digest=expected_digest)
+    active.created.discard(source_relative)
+    active.frozen.pop(source_relative)
+    active.created.add(target_relative)
+
+
+def _unlink_file(target: Path, *, missing_ok: bool = False) -> None:
+    relative = _relative(target)
+    active = _mutator()
+    active.unlink(relative, missing_ok=missing_ok)
+    active.created.discard(relative)
+    active.frozen.pop(relative, None)
+
+
+def _cleanup_transaction(transaction: Path) -> None:
+    relative = _relative(transaction)
+    active = _mutator()
+    for entry in sorted(active.created, key=lambda item: item.as_posix(), reverse=True):
+        if entry.parent == relative:
+            active.unlink(entry, missing_ok=True)
+            active.created.discard(entry)
+            active.frozen.pop(entry, None)
+    active.rmdir(relative)
 
 
 def create(root: Path, revision: str, paths: list[str]) -> dict:
@@ -231,11 +393,15 @@ def create(root: Path, revision: str, paths: list[str]) -> dict:
         _write_file(staged, raw)
         try:
             # A hard-link publishes the fully written bytes without replacing a concurrent file.
-            os.link(staged, target)
+            source_relative = _relative(staged)
+            _mutator().link(
+                source_relative, _relative(target),
+                expected_digest=_mutator().frozen[source_relative],
+            )
             if target.read_bytes() != raw:
                 raise RuntimeError("Manifest create could not be verified")
         finally:
-            staged.unlink(missing_ok=True)
+            _unlink_file(staged, missing_ok=True)
     return manifest
 
 
@@ -311,7 +477,7 @@ def _prepare_parent(root: Path, target: Path) -> list[Path]:
         missing.append(current)
         current = current.parent
     for directory in reversed(missing):
-        directory.mkdir()
+        _mutator().mkdir(_relative(directory))
         created.append(directory)
         resolve(root, directory.relative_to(root).as_posix())
     if not target.parent.is_dir():
@@ -346,7 +512,7 @@ def apply(
             raise ValueError("Resolve all conflicts explicitly before applying")
         changes = [item for item in plan["actions"] if item["action"] in {"add", "remove", "update"}]
         transaction = control / ("bootcrate-upgrade-txn-" + secrets.token_hex(12))
-        transaction.mkdir()
+        _mutator().mkdir(_relative(transaction))
         written: dict[str, str | None] = {}
         created_dirs: list[Path] = []
         manifest_after: bytes | None = None
@@ -371,7 +537,7 @@ def apply(
                     raise ValueError("Managed destination changed before write: " + name)
                 target = resolve(root, name)
                 if item["action"] == "remove":
-                    target.unlink()
+                    _unlink_file(target)
                     written[name] = None
                 else:
                     created_dirs.extend(_prepare_parent(root, target))
@@ -411,9 +577,12 @@ def apply(
             incomplete = []
             if manifest_written:
                 if manifest_after is not None and _same_manifest(root, manifest_after):
-                    staged = transaction / "manifest-restore"
-                    _write_file(staged, manifest_before)
-                    _replace_file(staged, _control_path(root, MANIFEST))
+                    try:
+                        staged = transaction / "manifest-restore"
+                        _write_file(staged, manifest_before)
+                        _replace_file(staged, _control_path(root, MANIFEST))
+                    except (OSError, ValueError, RuntimeError):
+                        incomplete.append(MANIFEST.as_posix())
                 else:
                     incomplete.append(MANIFEST.as_posix())
             for index in range(len(changes) - 1, -1, -1):
@@ -428,17 +597,17 @@ def apply(
                     target = resolve(root, name)
                     old = before[name]
                     if old is None:
-                        target.unlink(missing_ok=True)
+                        _unlink_file(target, missing_ok=True)
                     else:
                         staged = transaction / ("restore-" + str(index))
                         _write_file(staged, old)
                         _replace_file(staged, target)
-                except (OSError, ValueError):
+                except (OSError, ValueError, RuntimeError):
                     incomplete.append(name)
             for directory in reversed(created_dirs):
                 try:
-                    directory.rmdir()
-                except OSError:
+                    _mutator().rmdir(_relative(directory))
+                except (OSError, ValueError, RuntimeError):
                     pass
             if incomplete:
                 try:
@@ -447,15 +616,15 @@ def apply(
                         "recovery_incomplete",
                         {"preserved": sorted(set(incomplete)), "error_type": type(error).__name__},
                     )
-                except OSError:
+                except (OSError, ValueError, RuntimeError):
                     pass
                 raise RuntimeError(
                     "Recovery incomplete; concurrent data and transaction evidence were preserved in "
                     + transaction.name
                 ) from error
-            shutil.rmtree(transaction)
+            _cleanup_transaction(transaction)
             raise
-        shutil.rmtree(transaction)
+        _cleanup_transaction(transaction)
     return {"status": "applied", "paths": [item["path"] for item in changes], "revision": new_revision}
 
 

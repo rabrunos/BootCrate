@@ -109,6 +109,41 @@ class AdapterResolverTests(unittest.TestCase):
         self.assertEqual((full["status"], full["effective"], full["applied"]),
                          ("supported", "full_access", True))
 
+    def test_only_the_requested_effective_profile_can_be_applied(self):
+        for adapter_name in ("codex.json", "claude-code.json"):
+            adapter = self.adapter(adapter_name)
+            for requested_profile in resolver.PROFILES:
+                requested = resolver.resolve_execution(
+                    task=requested_profile,
+                    task_risk_acknowledged=requested_profile == "full_access")
+                for observed_profile in resolver.PROFILES:
+                    with self.subTest(adapter=adapter["id"], requested=requested_profile,
+                                      observed=observed_profile):
+                        capabilities = {}
+                        if adapter["id"] == "codex" and requested_profile == "protected_auto":
+                            capabilities["approvals_reviewer_auto_review"] = True
+                        if adapter["id"] == "claude_code" and requested_profile == "full_access":
+                            capabilities.update(approval_bypass=True, filesystem_unrestricted=True,
+                                                network_unrestricted=True)
+                        result = resolver.map_request(adapter, "cli", requested, observation={
+                            "surface": "cli", "status": "supported", "effective": observed_profile,
+                            "capabilities": capabilities})
+                        matches = observed_profile == requested_profile
+                        self.assertEqual(result["applied"], matches)
+                        self.assertEqual(result["effective"], requested_profile if matches else None)
+                        self.assertEqual(result["status"], "supported" if matches else "unknown")
+                        if not matches:
+                            self.assertIn(observed_profile, result["reason"])
+                            self.assertIn(requested_profile, result["reason"])
+
+    def test_unsupported_observation_cannot_claim_applied_profile(self):
+        adapter = self.adapter("codex.json")
+        requested = resolver.resolve_execution(task="protected_manual")
+        result = resolver.map_request(adapter, "cli", requested, observation={
+            "surface": "cli", "status": "unsupported", "effective": "protected_manual"})
+        self.assertEqual((result["status"], result["effective"], result["applied"]),
+                         ("unsupported", None, False))
+
     def test_claude_auto_unknown_never_falls_through(self):
         adapter = self.adapter("claude-code.json")
         requested = resolver.resolve_execution(task="protected_auto")
