@@ -65,6 +65,7 @@
         "required": ["execution_profile"]
       },
       "then": {"required": ["full_access_acknowledgement"]},
+      "else": {"not": {"required": ["full_access_acknowledgement"]}},
       "properties": {
         "project_name": {
           "type": "string",

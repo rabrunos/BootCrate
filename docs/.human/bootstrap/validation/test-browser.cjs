@@ -39,8 +39,17 @@ test('file-mode Setup shows accessible required errors and preserves legacy draf
   await page.locator('#field-full_access_acknowledgement').selectOption('acknowledged');
   await page.locator('#field-execution_profile').selectOption('protected_manual');
   assert.equal(await page.locator('#field-full_access_acknowledgement').count(),0);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bootcrate-project-intake-v2')).answers.full_access_acknowledgement),undefined);
+  await page.locator('#field-execution_profile').selectOption('full_access');
+  assert.equal(await page.locator('#field-full_access_acknowledgement').inputValue(),'');
+  await page.locator('#field-execution_profile').selectOption('protected_manual');
   await page.locator('#importInput').setInputFiles({name:'unsafe-intake.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({schema:'bootcrate-project-intake/v2',answers:{project_name:'Unsafe',execution_profile:'full_access'}}))});
   await page.waitForFunction(()=>document.querySelector('#inlineMessage').textContent.includes('current draft was preserved'));
+  assert.equal(await page.locator('#field-execution_profile').inputValue(),'protected_manual');
+  await page.locator('#inlineMessage').evaluate(element => { element.textContent=''; });
+  await page.locator('#importInput').setInputFiles({name:'hidden-opt-in.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({schema:'bootcrate-project-intake/v2',answers:{project_name:'Unsafe',execution_profile:'protected_auto',full_access_acknowledgement:'acknowledged'}}))});
+  await page.waitForFunction(()=>document.querySelector('#importInput').value==='' &&
+    document.querySelector('#inlineMessage').textContent.includes('current draft was preserved'));
   assert.equal(await page.locator('#field-execution_profile').inputValue(),'protected_manual');
   const old = {schema:'bootcrate-project-intake/v1',answers:{project_name:'Legacy',issues_tracking:'no',primary_orchestration:'local_planner'}};
   await page.locator('#importInput').setInputFiles({name:'legacy.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(old))});
@@ -57,6 +66,7 @@ test('file-mode Setup shows accessible required errors and preserves legacy draf
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bootcrate-project-intake-v2')).repository),'owner/example');
   const displayedRepository=await page.locator('#repoInput').inputValue();
   for(const repository of ['owner/.','owner/..']){
+    await page.locator('#inlineMessage').evaluate(element => { element.textContent=''; });
     await page.locator('#importInput').setInputFiles({name:'invalid-repository.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
       schema:'bootcrate-project-intake/v2',repository,answers:{project_name:'Replaced'}
     }))});
@@ -71,6 +81,31 @@ test('file-mode Setup shows accessible required errors and preserves legacy draf
   await page.getByRole('button',{name:'Next steps'}).click();
   assert.equal(await page.locator('#repoInput').inputValue(),'owner/example');
   assert.match(await page.locator('#instructionsOutput').inputValue(),/BootCrate v0\.9/);
+  await page.close();
+});
+
+test('invalid repository edit clears the stored identity and exported intake',async () => {
+  const page = await browser.newPage();
+  await page.addInitScript(() => localStorage.setItem('bootcrate-project-intake-v2',JSON.stringify({answers:{
+    project_name:'Example',one_sentence:'Synthetic project',project_kind:'cli_tool',existing_or_new:'new',
+    success:'A working example',report_language:'pt-BR',repo_language:'en',distribution_mode:'none',
+    single_or_team:'single',repository_state:'none',consumption_preset:'standard',
+    execution_profile:'protected_manual',project_console:'no'
+  }})));
+  await page.goto(app);
+  await page.getByRole('button',{name:'Next steps'}).click();
+  await page.locator('#repoInput').fill('owner/valid');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bootcrate-project-intake-v2')).repository),'owner/valid');
+  await page.locator('#repoInput').fill('owner/..');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bootcrate-project-intake-v2')).repository),'');
+  assert.equal(await page.locator('#instructionsOutput').inputValue(),'');
+  assert.match(await page.locator('#inlineMessage').innerText(),/valid GitHub repository/);
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download intake JSON'}).click();
+  const download=await downloadPromise;
+  let exported='';
+  for await(const chunk of await download.createReadStream()) exported+=chunk;
+  assert.equal(JSON.parse(exported).repository,undefined);
   await page.close();
 });
 

@@ -172,8 +172,13 @@ test('old v2 intake defaults safely without inferring permissions from autonomy'
   assert.equal(normalized.answers.execution_profile,'protected_manual');
 });
 test('intake validation and export enforce the Full Access opt-in',()=>{
-  for(const profile of ['protected_manual','protected_auto'])
+  for(const profile of ['protected_manual','protected_auto']) {
     assert.deepEqual(core.validate(envelope({execution_profile:profile})),[]);
+    const hidden=envelope({execution_profile:profile,full_access_acknowledgement:'acknowledged'});
+    assert.ok(core.validate(hidden).some(error=>error.path==='answers.full_access_acknowledgement'));
+    assert.throws(()=>core.normalize(hidden),/Invalid intake envelope/);
+  }
+  assert.ok(core.validate(envelope({full_access_acknowledgement:'acknowledged'})).length);
   const unsafe=envelope({execution_profile:'full_access'});
   assert.ok(core.validate(unsafe).some(error=>error.path==='answers.full_access_acknowledgement'));
   assert.throws(()=>core.normalize(unsafe),/Invalid intake envelope/);

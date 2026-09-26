@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import unittest
@@ -25,6 +26,11 @@ class ValidationTests(unittest.TestCase):
         base={"schema":"bootcrate-project-intake/v2"}
         for profile in ("protected_manual","protected_auto"):
             v.schema_check(schema,{**base,"answers":{"execution_profile":profile}})
+            with self.assertRaises(ValueError):
+                v.schema_check(schema,{**base,"answers":{"execution_profile":profile,
+                                                       "full_access_acknowledgement":"acknowledged"}})
+        with self.assertRaises(ValueError):
+            v.schema_check(schema,{**base,"answers":{"full_access_acknowledgement":"acknowledged"}})
         with self.assertRaises(ValueError):
             v.schema_check(schema,{**base,"answers":{"execution_profile":"full_access"}})
         with self.assertRaises(ValueError):
@@ -320,7 +326,8 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                 '<!doctype html><link rel="stylesheet" href="styles.css"><script src="preset.js"></script><script src="execution-profile.js"></script><script src="console.js"></script>'
             )
             self.assertTrue(any("dependency missing" in x for x in verify_materialized.check(root)))
-            for name in ("styles.css","preset.js","execution-profile.js","console.js"):(console/name).write_text("/* fixture */\n")
+            for name in verify_materialized.CONSOLE_ASSETS:
+                shutil.copy2(v.BOOT/"console"/name,console/name)
             self.assertEqual(verify_materialized.check(root),[])
             (console/"index.html").write_text('<!doctype html><script src="missing.js"></script>')
             self.assertTrue(any("reference missing" in x for x in verify_materialized.check(root)))

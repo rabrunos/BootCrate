@@ -5,6 +5,7 @@ Run from a retained copy of the bootstrap tools. Product behavior is a separate 
 from __future__ import annotations
 
 import argparse
+import hashlib
 from html.parser import HTMLParser
 import json
 from pathlib import Path
@@ -21,6 +22,15 @@ SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_INVENTORY_FILES = 10_000
 MAX_INVENTORY_BYTES = 512 * 1024 * 1024
+# Approved static Console assets. Hash normalized UTF-8 text so Windows and POSIX
+# checkouts agree; the retained verifier does not need a second template copy.
+CONSOLE_ASSETS = {
+    "index.html": "0ef86967a5b7b5dc34ffb618292fb673f38f2942d49ca68a3095947c72f8196f",
+    "styles.css": "5a68eafb183298afb563bf2a80e037b78cf9fea92ff334bdd0239607255dbb8f",
+    "preset.js": "1d518102c7238d85a0f3e478844f893695a52d62b114bf01d3091f5103f41487",
+    "execution-profile.js": "f803f1a9357404cea1dbdd19e01a8aca7460efb81b2db6066333e0c272bc8198",
+    "console.js": "46d466b9f1763c1276417eca8962aa967c0668adcb892d351e0d0fb21a71fa11",
+}
 CSS_URL = re.compile(r"url\s*\(\s*(?P<quote>['\"]?)(?P<reference>.*?)(?P=quote)\s*\)", re.I | re.S)
 CSS_IMPORT = re.compile(r"@import\b", re.I)
 CSS_QUOTED = re.compile(r"(?P<quote>['\"])(?P<reference>.*?)(?P=quote)", re.S)
@@ -96,6 +106,13 @@ def css_references(content: str) -> list[str]:
     return references
 
 
+def console_asset_matches(path: Path, expected: str) -> bool:
+    if path.stat().st_size > MAX_TEXT_BYTES:
+        return False
+    normalized = path.read_text(encoding="utf-8").encode("utf-8")
+    return hashlib.sha256(normalized).hexdigest() == expected
+
+
 def inspect(root: Path) -> list[dict]:
     root = root.resolve()
     results = []
@@ -145,7 +162,7 @@ def inspect(root: Path) -> list[dict]:
         if data["schema"] == "project-profile/v3" and data["console"]["enabled"]:
             console = root / "project-console"
             require(console.is_dir() and not console.is_symlink(), "selected Project Console directory missing or linked")
-            for name in ("index.html", "styles.css", "preset.js", "execution-profile.js", "console.js"):
+            for name in CONSOLE_ASSETS:
                 require((console / name).is_file() and not (console / name).is_symlink(),
                         "selected Project Console dependency missing: " + name)
             parser = LocalReferences()
@@ -173,6 +190,12 @@ def inspect(root: Path) -> list[dict]:
                     target = local_console_resource(reference, stylesheet.parent, console)
                     if target.suffix.lower() == ".css":
                         stylesheets.append(target)
+            # A relative resource can still execute attacker-controlled code.
+            # Finalization approves only the reviewed Console bytes, including
+            # its HTML (which could otherwise add inline scripts/event handlers).
+            for name, digest in CONSOLE_ASSETS.items():
+                require(console_asset_matches(console / name, digest),
+                        "selected Project Console asset differs from approved template: " + name)
 
     def pruning() -> None:
         require(not (root / "docs/.human/bootstrap").exists(), "bootstrap directory remains")

@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -45,32 +46,50 @@ class ConsoleResourceTests(unittest.TestCase):
                                    'sandbox_mode = "workspace-write"\n'
                                    'approval_policy = "on-request"\n'
                                    'approvals_reviewer = "user"\n'),
-            "project-console/index.html": self.INDEX,
-            "project-console/styles.css": "body { color: black; }\n",
-            "project-console/preset.js": "/* fixture */\n",
-            "project-console/execution-profile.js": "/* fixture */\n",
-            "project-console/console.js": "/* fixture */\n",
         }.items():
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(body, encoding="utf-8")
+        (root / "project-console").mkdir()
+        for name in verify_materialized.CONSOLE_ASSETS:
+            shutil.copy2(v.BOOT / "console" / name, root / "project-console" / name)
         return root / "project-console"
 
     def profile_check(self, root):
         return next(entry for entry in verify_materialized.inspect(root)
                     if entry["check_id"] == "profile.finalized")
 
-    def test_local_resources_and_navigation_links_pass(self):
+    def test_approved_local_resources_pass_and_navigation_is_not_a_dependency(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            console = self.fixture(root)
+            self.assertEqual(self.profile_check(root)["status"], "pass")
+            parser = verify_materialized.LocalReferences()
+            parser.feed('<a href="https://example.invalid/project">Navigation only</a>')
+            self.assertEqual(parser.resources, [])
+            for name, digest in verify_materialized.CONSOLE_ASSETS.items():
+                with self.subTest(name=name):
+                    self.assertTrue(verify_materialized.console_asset_matches(console / name, digest))
+
+    def test_added_local_script_inline_code_and_modified_assets_are_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             console = self.fixture(root)
             (console / "assets").mkdir()
-            (console / "assets/extra.js").write_text("/* local */\n", encoding="utf-8")
-            (console / "index.html").write_text(
-                self.INDEX + '<script src="assets/extra.js"></script>'
-                '<a href="https://example.invalid/project">Navigation only</a>', encoding="utf-8"
-            )
-            self.assertEqual(self.profile_check(root)["status"], "pass")
+            (console / "assets/extra.js").write_text("/* local but unapproved */\n", encoding="utf-8")
+            for extra in ('<script src="assets/extra.js"></script>',
+                          '<script>fetch("https://example.invalid")</script>',
+                          '<body onload="alert(1)"></body>'):
+                with self.subTest(extra=extra):
+                    (console / "index.html").write_text(self.INDEX + extra, encoding="utf-8")
+                    result = self.profile_check(root)
+                    self.assertEqual(result["status"], "fail")
+                    self.assertIn("asset differs from approved template: index.html", result["summary"])
+            shutil.copy2(v.BOOT / "console/index.html", console / "index.html")
+            (console / "console.js").write_text("fetch('https://example.invalid')\n", encoding="utf-8")
+            result = self.profile_check(root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("asset differs from approved template: console.js", result["summary"])
 
     def test_remote_script_and_stylesheet_are_rejected(self):
         cases = [
@@ -148,7 +167,9 @@ class ConsoleResourceTests(unittest.TestCase):
                 '@import "assets/more.css"; p { background: url("assets/font.woff"); }\n',
                 encoding="utf-8"
             )
-            self.assertEqual(self.profile_check(root)["status"], "pass")
+            result = self.profile_check(root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("asset differs from approved template: styles.css", result["summary"])
             for css in ('@import "https://example.invalid/x.css";',
                         'p { background: url(https://example.invalid/x.png); }',
                         '@import url(//example.invalid/x.css);'):

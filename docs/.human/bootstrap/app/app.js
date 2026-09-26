@@ -142,7 +142,12 @@
         option.textContent = lang === "pt" ? pt : en; option.selected = answers[q.id] === value;
         control.appendChild(option);
       });
-      control.onchange = () => { answers[q.id] = control.value; clear(); render(false); $(id)?.focus(); };
+      control.onchange = () => {
+        answers[q.id] = control.value;
+        if (q.id === "execution_profile" && control.value !== "full_access")
+          delete answers.full_access_acknowledgement;
+        clear(); render(false); $(id)?.focus();
+      };
       wrapper.appendChild(control);
     } else {
       control = wrapper;
@@ -296,8 +301,8 @@
     root.replaceChildren(card);
     const refresh = () => {
       const raw = input.value.trim(), parsed = H.parseRepository(raw);
+      if (repository !== parsed) { repository = parsed; save(); }
       if (!raw || parsed) {
-        if (repository !== parsed) { repository = parsed; save(); }
         instructions.value = H.projectInstructions(repository, answers.repository_state, requestedExecution());
         $("inlineMessage").textContent = "";
       } else {

@@ -78,6 +78,9 @@
       if (data.answers?.execution_profile === "full_access" &&
           data.answers.full_access_acknowledgement !== "acknowledged")
         add("required", "answers.full_access_acknowledgement");
+      if (object(data.answers) && data.answers.execution_profile !== "full_access" &&
+          Object.hasOwn(data.answers, "full_access_acknowledgement"))
+        add("value", "answers.full_access_acknowledgement");
       if (data.answer_states !== undefined) {
         if (!object(data.answer_states)) add("object", "answer_states");
         else for (const [id, state] of Object.entries(data.answer_states)) {
