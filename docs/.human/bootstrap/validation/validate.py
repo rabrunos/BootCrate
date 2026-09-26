@@ -15,7 +15,7 @@ from typing import Any
 from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_object, load_json,
                              inventory as project_inventory, sensitive_name,
                              secret_findings, local_refs_only, schema_check,
-                             reject_unselected_codex_config,
+                             reject_unselected_codex_config, reject_unselected_claude_config,
                              materialized_profile, profile_schema,
                              valid_claude_credential_denials)
 
@@ -158,6 +158,7 @@ def check_adapters() -> None:
     fm = load_yaml(text.split("---", 2)[1])
     require(set(t.strip() for t in fm["tools"].split(",")) == {"Read", "Grep", "Glob"}, "Claude Scout tool pool widened")
     settings = load_json(ROOT / ".claude/settings.json")
+    reject_unselected_claude_config(settings)
     require(settings["effortLevel"] == "high" and settings["permissions"]["defaultMode"] == "default", "Unsafe Claude defaults")
     require(settings.get("sandbox", {}).get("enabled") is True, "Claude sandbox baseline disabled")
     require(valid_claude_credential_denials(settings["permissions"].get("deny")),

@@ -30,6 +30,14 @@ ALLOWED_CODEX_CONFIG_KEYS = {
 }
 
 
+ALLOWED_CLAUDE_CONFIG_KEYS = {
+    "$schema": None,
+    "effortLevel": None,
+    "permissions": {"defaultMode", "deny"},
+    "sandbox": {"enabled", "allowUnsandboxedCommands"},
+}
+
+
 def reject_unselected_codex_config(settings: dict) -> None:
     """Reject v3 native settings outside the selected protected baseline."""
     require(isinstance(settings, dict), "Codex configuration must be a TOML table")
@@ -44,6 +52,23 @@ def reject_unselected_codex_config(settings: dict) -> None:
         for child in value:
             require(child in allowed_children,
                     f"Unselected Codex configuration key: {key}.{child}")
+
+
+def reject_unselected_claude_config(settings: dict) -> None:
+    """Reject executable or undeclared v3 Claude project settings."""
+    require(isinstance(settings, dict), "Claude configuration must be a JSON object")
+    for key, value in settings.items():
+        require(key in ALLOWED_CLAUDE_CONFIG_KEYS,
+                f"Unselected Claude configuration key: {key}")
+        allowed_children = ALLOWED_CLAUDE_CONFIG_KEYS[key]
+        if allowed_children is None:
+            require(not isinstance(value, (dict, list)),
+                    f"Unexpected Claude configuration structure: {key}")
+            continue
+        require(isinstance(value, dict), f"Claude configuration object required: {key}")
+        for child in value:
+            require(child in allowed_children,
+                    f"Unselected Claude configuration key: {key}.{child}")
 
 
 def valid_claude_credential_denials(value: Any) -> bool:

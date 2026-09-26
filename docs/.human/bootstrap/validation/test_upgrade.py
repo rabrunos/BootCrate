@@ -433,6 +433,28 @@ class UpgradeTests(unittest.TestCase):
                 self.assertEqual(len(recoveries),1)
                 self.assertIn('rolled_back',recoveries[0].read_text())
 
+    def test_failure_reported_after_manifest_publish_rolls_back(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            original=m._replace_file
+
+            def publish_manifest_then_report_failure(staged,target):
+                original(staged,target)
+                if target==root/m.MANIFEST and staged.name=='manifest-after':
+                    raise OSError('failure reported after manifest publication')
+
+            with patch.object(m,'_replace_file',side_effect=publish_manifest_then_report_failure):
+                with self.assertRaisesRegex(OSError,'after manifest publication'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            self.assertEqual((root/'update.txt').read_bytes(),b'base')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertIn('rolled_back',recoveries[0].read_text())
+
     def test_committed_and_rolled_back_displaced_bytes_remain_available(self):
         with tempfile.TemporaryDirectory() as td:
             root,source=self.setup_roots(Path(td))
@@ -469,6 +491,119 @@ class UpgradeTests(unittest.TestCase):
             self.assertEqual((root/'a.txt').read_bytes(),b'original-a.txt')
             self.assertEqual((root/'b.txt').read_bytes(),b'original-b.txt')
             self.assertEqual(m.read(root)['source_revision'],'rev1')
+
+    def test_published_files_do_not_alias_retained_staging_or_journal(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            result=m.apply(root,source,plan['digest'],'rev2')
+            evidence=root/result['retained_evidence']
+            target=root/'update.txt'
+            approved=evidence/'approved-evidence-0'
+            manifest=root/m.MANIFEST
+            manifest_evidence=evidence/'manifest-after-evidence'
+            journal=evidence/'recovery.json'
+            prior_journals=list(evidence.glob('journal-prior-*'))
+            self.assertFalse((evidence/'approved-0').exists())
+            self.assertFalse((evidence/'manifest-after').exists())
+            self.assertEqual(approved.read_bytes(),b'approved replacement')
+            self.assertFalse(target.samefile(approved))
+            self.assertFalse(manifest.samefile(manifest_evidence))
+            self.assertEqual(len(prior_journals),1)
+            self.assertFalse(journal.samefile(prior_journals[0]))
+            approved.write_bytes(b'edited transaction evidence')
+            manifest_evidence.write_bytes(b'edited manifest evidence')
+            prior_journals[0].write_bytes(b'edited prior journal')
+            self.assertEqual(target.read_bytes(),b'approved replacement')
+            self.assertEqual(m.read(root)['source_revision'],'rev2')
+            self.assertIn('committed',journal.read_text())
+
+    def test_owner_same_byte_replacement_after_publish_is_not_rolled_back(self):
+        for action in ('add','update'):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as td:
+                root,source=self.setup_roots(Path(td))
+                target=root/('new.txt' if action=='add' else 'update.txt')
+                m.create(root,'rev1',['update.txt'])
+                approved=b'approved replacement'
+                (source/target.name).write_bytes(approved)
+                new_paths=['new.txt'] if action=='add' else []
+                plan=m.preview(root,source,m.read(root),new_paths)
+                original=m._replace_file
+                owner_witness=root/'owner-witness'
+
+                def owner_replaces_same_bytes_then_failure(staged,destination):
+                    original(staged,destination)
+                    if destination==target and staged.name.startswith('approved-'):
+                        replacement=root/'owner-replacement'
+                        replacement.write_bytes(approved)
+                        os.link(replacement,owner_witness)
+                        os.replace(replacement,target)
+                        raise OSError('failure after same-byte owner replacement')
+
+                with patch.object(m,'_replace_file',side_effect=owner_replaces_same_bytes_then_failure):
+                    with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                        m.apply(root,source,plan['digest'],'rev2',new_paths)
+                self.assertTrue(target.samefile(owner_witness))
+                self.assertEqual(target.read_bytes(),approved)
+                self.assertEqual(m.read(root)['source_revision'],'rev1')
+                recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+                self.assertEqual(len(recoveries),1)
+                self.assertIn('recovery_incomplete',recoveries[0].read_text())
+
+    def test_owner_same_byte_replacement_before_rollback_is_preserved(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source,plan=self.two_file_upgrade(Path(td))
+            original=m._replace_file
+            owner_witness=root/'owner-witness'
+
+            def replace_first_then_fail_second(staged,target):
+                if target==root/'b.txt' and staged.name=='approved-1':
+                    replacement=root/'owner-replacement'
+                    replacement.write_bytes(b'approved-a.txt')
+                    os.link(replacement,owner_witness)
+                    os.replace(replacement,root/'a.txt')
+                    raise OSError('synthetic second write failure')
+                return original(staged,target)
+
+            with patch.object(m,'_replace_file',side_effect=replace_first_then_fail_second):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            self.assertTrue((root/'a.txt').samefile(owner_witness))
+            self.assertEqual((root/'b.txt').read_bytes(),b'original-b.txt')
+            self.assertEqual(m.read(root)['source_revision'],'rev1')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertEqual((recoveries[0].parent/'displaced-0').read_bytes(),b'original-a.txt')
+
+    def test_owner_same_byte_manifest_replacement_is_preserved(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,source=self.setup_roots(Path(td))
+            m.create(root,'rev1',['update.txt'])
+            (source/'update.txt').write_bytes(b'approved replacement')
+            plan=m.preview(root,source,m.read(root))
+            original=m._replace_file
+            owner_witness=root/'manifest-owner-witness'
+            manifest=root/m.MANIFEST
+
+            def owner_replaces_same_manifest_then_failure(staged,target):
+                original(staged,target)
+                if target==manifest and staged.name=='manifest-after':
+                    replacement=root/'owner-manifest-replacement'
+                    replacement.write_bytes(manifest.read_bytes())
+                    os.link(replacement,owner_witness)
+                    os.replace(replacement,manifest)
+                    raise OSError('failure after same-byte manifest replacement')
+
+            with patch.object(m,'_replace_file',side_effect=owner_replaces_same_manifest_then_failure):
+                with self.assertRaisesRegex(RuntimeError,'Recovery incomplete'):
+                    m.apply(root,source,plan['digest'],'rev2')
+            self.assertTrue(manifest.samefile(owner_witness))
+            self.assertEqual((root/'update.txt').read_bytes(),b'approved replacement')
+            recoveries=list((root/'.local').glob('bootcrate-upgrade-txn-*/recovery.json'))
+            self.assertEqual(len(recoveries),1)
+            self.assertIn('recovery_incomplete',recoveries[0].read_text())
 
     def test_owner_replacement_after_publish_is_preserved_on_reported_failure(self):
         with tempfile.TemporaryDirectory() as td:

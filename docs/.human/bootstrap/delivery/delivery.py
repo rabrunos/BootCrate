@@ -79,15 +79,21 @@ def inline_tokens(text: str) -> list[tuple[str,str,str | None]]:
             if end < 0:raise ValueError("Unclosed emphasis")
             inner=text[index+len(marker):end]
             if not inner:raise ValueError("Empty emphasis")
+            if any(kind != "text" for kind,_,_ in inline_tokens(inner)):
+                raise ValueError("Nested Markdown is unsupported")
             flush();tokens.append(("strong" if marker=="**" else "emphasis",inner,None));index=end+len(marker);continue
+        if text.startswith("![",index):
+            close=text.find("](",index+2)
+            if close >= 0:raise ValueError("Markdown images are unsupported")
         if text[index] == "[":
             close=text.find("](",index+1)
             if close >= 0:
                 end=text.find(")",close+2)
                 if end < 0:raise ValueError("Unclosed Markdown link")
                 label=text[index+1:close];url=text[close+2:end]
-                if label and re.fullmatch(r"https://[^\s()]+",url):
+                if label and not any(char in label for char in "[]`*") and re.fullmatch(r"https://[^\s()]+",url):
                     flush();tokens.append(("link",label,url));index=end+1;continue
+                raise ValueError("Unsupported Markdown link")
         plain.append(text[index]);index += 1
     flush();return tokens
 
@@ -208,6 +214,16 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
     if any(r.get("status") in {"unknown","pending"} for r in matches):
         return {"status":"BLOCK","reason":"Reconcile pending/unknown remote outcome before retry"}
     confirmed=[r for r in matches if r.get("status")=="confirmed"]
+    ordered=sorted(confirmed,key=lambda r:r["integration_order"])
+    for previous,current in zip(ordered,ordered[1:]):
+        if previous["integration_order"] == current["integration_order"]:
+            if (previous["candidate_id"],previous["artifact_sha256"],previous["version"],
+                set(previous["included_changes"])) != (
+                current["candidate_id"],current["artifact_sha256"],current["version"],
+                set(current["included_changes"])):
+                return {"status":"BLOCK","reason":"Ambiguous confirmed integration order requires reconciliation"}
+        elif not set(previous["included_changes"]) <= set(current["included_changes"]):
+            return {"status":"BLOCK","reason":"Confirmed integration history is not cumulative"}
     if any(r.get("integration_order",-1)>=candidate["integration_order"] and r.get("version")!=candidate["version"] for r in confirmed):
         return {"status":"BLOCK","reason":"Later candidate active; rollback requires separate authorization"}
     # A confirmed receipt does not waive the candidate's canonical history.

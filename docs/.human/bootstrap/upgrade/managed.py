@@ -107,8 +107,21 @@ class _PosixMutator:
                     raise ValueError("Managed control file exceeds its read limit")
                 return data
 
-    def move(self, source: Path, target: Path) -> None:
+    def identity(self, relative: Path) -> tuple[int, int]:
+        with self._parent(relative) as (parent, name):
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
+            try:
+                info = os.fstat(descriptor)
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError("Managed mutation source is not a regular file")
+                return info.st_dev, info.st_ino
+            finally:
+                os.close(descriptor)
+
+    def move(self, source: Path, target: Path, *, expected_digest: str | None = None) -> None:
         """Displace the entry present at the anchored source name, not an earlier inode."""
+        if expected_digest is not None and hash_bytes(self.read(source)) != expected_digest:
+            raise ValueError("Frozen staged bytes changed before move")
         with self._parent(source) as (source_parent, source_name):
             with self._parent(target) as (target_parent, target_name):
                 result = self._rename_no_replace(
@@ -299,6 +312,7 @@ def _locked(root: Path):
     with _mutator_for(root) as filesystem:
         filesystem.created = set()
         filesystem.frozen = {}
+        filesystem.published = {}
         marker = _active_mutator.set(filesystem)
         try:
             control = _control_dir(root)
@@ -358,9 +372,15 @@ def _replace_file(staged: Path, target: Path) -> None:
     expected_digest = active.frozen.get(source_relative)
     if expected_digest is None:
         raise RuntimeError("Replace source is not a frozen staged file")
-    # Publication never replaces a name created after displacement or preview.
-    active.link(source_relative, target_relative, expected_digest=expected_digest)
+    source_identity = active.identity(source_relative)
+    # A no-overwrite move publishes an independent staged inode. No retained
+    # transaction name shares it with the installed destination.
+    active.move(source_relative, target_relative, expected_digest=expected_digest)
+    active.created.discard(source_relative)
+    active.frozen.pop(source_relative, None)
     active.created.add(target_relative)
+    active.frozen[target_relative] = expected_digest
+    active.published[target_relative] = source_identity
 
 
 def _retained_matches(path: Path, expected_digest: str) -> bool:
@@ -370,11 +390,16 @@ def _retained_matches(path: Path, expected_digest: str) -> bool:
         return False
 
 
-def _same_file(first: Path, second: Path) -> bool:
+def _same_identity(path: Path, expected_identity: object) -> bool:
     try:
-        return first.samefile(second)
+        return _mutator().identity(_relative(path)) == expected_identity
     except (OSError, ValueError):
         return False
+
+
+def _published_matches(path: Path, expected_digest: str) -> bool:
+    identity = _mutator().published.get(_relative(path))
+    return identity is not None and _same_identity(path, identity) and _retained_matches(path, expected_digest)
 
 
 def _displace_file(source: Path, retained: Path) -> None:
@@ -384,6 +409,7 @@ def _displace_file(source: Path, retained: Path) -> None:
     active.move(relative_source, relative_retained)
     active.created.discard(relative_source)
     active.frozen.pop(relative_source, None)
+    active.published.pop(relative_source, None)
     active.created.add(relative_retained)
 
 
@@ -534,6 +560,8 @@ def _journal(path: Path, status: str, details: dict) -> None:
         if not _retained_matches(displaced, expected):
             raise ValueError("Recovery journal changed during mutation; displaced bytes were retained")
     _replace_file(staged, current)
+    if not _published_matches(current, hash_bytes(data)):
+        raise RuntimeError("Recovery journal publication could not be verified")
 
 
 def apply(
@@ -573,6 +601,9 @@ def apply(
                     if frozen is None or hash_bytes(frozen) != item["new"]:
                         raise RuntimeError("Approved source buffer is inconsistent")
                     _write_file(transaction / ("approved-" + str(index)), frozen)
+                    # The publish source is moved into place. Keep a separate
+                    # evidence copy rather than a hard link to the live file.
+                    _write_file(transaction / ("approved-evidence-" + str(index)), frozen)
             _journal(transaction, "prepared", {"paths": [item["path"] for item in changes]})
 
             for index, item in enumerate(changes):
@@ -598,13 +629,19 @@ def apply(
                     written[name] = item["new"]
                 if name in retained and not _retained_matches(*retained[name]):
                     raise ValueError("Managed destination changed during mutation: " + name)
-                if not _same_content(root, name, written[name]):
+                if not (
+                    _same_content(root, name, None) if written[name] is None
+                    else _published_matches(target, written[name])
+                ):
                     raise ValueError("Managed destination changed at write boundary: " + name)
 
             if not _same_manifest(root, manifest_before):
                 raise ValueError("Manifest changed before commit")
             for name, digest in written.items():
-                if not _same_content(root, name, digest):
+                if not (
+                    _same_content(root, name, None) if digest is None
+                    else _published_matches(resolve(root, name), digest)
+                ):
                     raise ValueError("Managed destination changed before manifest commit: " + name)
                 if name in retained and not _retained_matches(*retained[name]):
                     raise ValueError("Displaced managed bytes changed before manifest commit: " + name)
@@ -619,6 +656,7 @@ def apply(
             manifest_after = _manifest_bytes(next_manifest)
             staged_manifest = transaction / "manifest-after"
             _write_file(staged_manifest, manifest_after)
+            _write_file(transaction / "manifest-after-evidence", manifest_after)
             if not _same_manifest(root, manifest_before):
                 raise ValueError("Manifest changed at commit boundary")
             manifest_displaced = transaction / "manifest-displaced"
@@ -629,10 +667,13 @@ def apply(
             manifest_written = True
             if not _retained_matches(manifest_displaced, hash_bytes(manifest_before)):
                 raise ValueError("Manifest changed during commit; displaced bytes were retained")
-            if not _same_manifest(root, manifest_after):
+            if not _published_matches(_control_path(root, MANIFEST), hash_bytes(manifest_after)):
                 raise RuntimeError("Committed manifest could not be verified")
             for name, digest in written.items():
-                if not _same_content(root, name, digest):
+                if not (
+                    _same_content(root, name, None) if digest is None
+                    else _published_matches(resolve(root, name), digest)
+                ):
                     raise ValueError("Managed destination changed during manifest commit: " + name)
             _journal(transaction, "committed", {"paths": list(written), "revision": new_revision})
             for name, displaced in retained.items():
@@ -649,16 +690,24 @@ def apply(
                     manifest_displaced, hash_bytes(manifest_before)
                 ):
                     incomplete.append(MANIFEST.as_posix())
-                if manifest_after is not None and _same_manifest(root, manifest_after):
+                if manifest_after is not None and _published_matches(
+                    manifest_path, hash_bytes(manifest_after)
+                ):
                     try:
                         rollback_displaced = transaction / "manifest-rollback-displaced"
+                        published_identity = _mutator().published[_relative(manifest_path)]
                         _displace_file(manifest_path, rollback_displaced)
-                        if not _retained_matches(rollback_displaced, hash_bytes(manifest_after)):
+                        if not (
+                            _retained_matches(rollback_displaced, hash_bytes(manifest_after))
+                            and _same_identity(rollback_displaced, published_identity)
+                        ):
                             incomplete.append(MANIFEST.as_posix())
                         staged = transaction / "manifest-restore"
                         _write_file(staged, manifest_before)
                         _replace_file(staged, manifest_path)
-                        manifest_rollback_safe = _same_manifest(root, manifest_before)
+                        manifest_rollback_safe = _published_matches(
+                            manifest_path, hash_bytes(manifest_before)
+                        )
                     except (OSError, ValueError, RuntimeError):
                         incomplete.append(MANIFEST.as_posix())
                 else:
@@ -668,12 +717,34 @@ def apply(
                     incomplete.append(MANIFEST.as_posix())
                 if _same_manifest(root, manifest_before):
                     manifest_rollback_safe = True
+                elif manifest_after is not None and _published_matches(
+                    manifest_path, hash_bytes(manifest_after)
+                ):
+                    try:
+                        rollback_displaced = transaction / "manifest-rollback-displaced"
+                        published_identity = _mutator().published[_relative(manifest_path)]
+                        _displace_file(manifest_path, rollback_displaced)
+                        if not (
+                            _retained_matches(rollback_displaced, hash_bytes(manifest_after))
+                            and _same_identity(rollback_displaced, published_identity)
+                        ):
+                            incomplete.append(MANIFEST.as_posix())
+                        staged = transaction / "manifest-restore"
+                        _write_file(staged, manifest_before)
+                        _replace_file(staged, manifest_path)
+                        manifest_rollback_safe = _published_matches(
+                            manifest_path, hash_bytes(manifest_before)
+                        )
+                    except (OSError, ValueError, RuntimeError):
+                        incomplete.append(MANIFEST.as_posix())
                 elif not _lexists(manifest_path):
                     try:
                         staged = transaction / "manifest-restore"
                         _write_file(staged, manifest_before)
                         _replace_file(staged, manifest_path)
-                        manifest_rollback_safe = _same_manifest(root, manifest_before)
+                        manifest_rollback_safe = _published_matches(
+                            manifest_path, hash_bytes(manifest_before)
+                        )
                     except (OSError, ValueError, RuntimeError):
                         incomplete.append(MANIFEST.as_posix())
                 else:
@@ -691,9 +762,7 @@ def apply(
                     continue
                 if name in publishing and name not in written:
                     target = resolve(root, name)
-                    if _same_content(root, name, item["new"]) and _same_file(
-                        target, transaction / ("approved-" + str(index))
-                    ):
+                    if _published_matches(target, item["new"]):
                         # Publication succeeded physically before its wrapper reported failure.
                         written[name] = item["new"]
                     elif not _same_content(root, name, None):
@@ -707,7 +776,10 @@ def apply(
                     continue
                 if name in retained and not _retained_matches(*retained[name]):
                     incomplete.append(name)
-                if name in written and not _same_content(root, name, written[name]):
+                if name in written and not (
+                    _same_content(root, name, None) if written[name] is None
+                    else _published_matches(resolve(root, name), written[name])
+                ):
                     incomplete.append(name)
                     continue
                 if name not in written and not _same_content(root, name, None):
@@ -718,9 +790,11 @@ def apply(
                     old = before[name]
                     if name in written and written[name] is not None:
                         rollback_displaced = transaction / ("rollback-displaced-" + str(index))
+                        published_identity = _mutator().published[_relative(target)]
                         _displace_file(target, rollback_displaced)
-                        if not _retained_matches(rollback_displaced, written[name]) or not _same_file(
-                            rollback_displaced, transaction / ("approved-" + str(index))
+                        if not (
+                            _retained_matches(rollback_displaced, written[name])
+                            and _same_identity(rollback_displaced, published_identity)
                         ):
                             incomplete.append(name)
                     if old is not None:

@@ -113,6 +113,8 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
             raise ValueError("Invalid observed support status")
         if observed_effective is not None and observed_effective not in PROFILES:
             raise ValueError("Invalid observed effective profile")
+        if observation.get("executor") not in (None, adapter["id"]):
+            raise ValueError("Observation belongs to another executor")
         if observation.get("surface") not in (None, surface):
             raise ValueError("Observation belongs to another surface")
         if not policy_blocked:
@@ -150,6 +152,9 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
                     reason = "Claude Full Access not proven: " + ", ".join(missing or ["supported status"]) + "."
             if status != "supported":
                 effective = None
+            if observation.get("executor") is None:
+                status, effective = ("unsupported" if status == "unsupported" else "unknown"), None
+                reason = "Permission observation has no observed executor; requested " + adapter["id"] + " is not proven."
             if observation.get("surface") is None:
                 status, effective = ("unsupported" if status == "unsupported" else "unknown"), None
                 reason = "Permission observation has no observed surface; requested " + surface + " is not proven."

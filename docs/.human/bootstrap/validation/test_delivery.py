@@ -94,6 +94,26 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn('CSV',github['notes']);self.assertNotIn('configurações',github['notes'])
         self.assertNotIn('CSV',nexus['notes'])
 
+    def test_confirmed_integration_history_must_be_cumulative(self):
+        first=receipt('1.1',1,['#40/1'])
+        dropped=receipt('1.2',2,['#41/1'])
+        result=d.plan(candidate(),[first,dropped],target(baseline='unknown'),self.entries)
+        self.assertEqual(result['status'],'BLOCK')
+        self.assertIn('not cumulative',result['reason'])
+
+        cumulative=receipt('1.2',2,['#40/1','#41/1'])
+        ready=d.plan(candidate(),[first,cumulative],target(baseline='unknown'),self.entries)
+        self.assertEqual(ready['status'],'READY')
+        self.assertEqual(ready['included_changes'],['#42/1'])
+
+        conflict=receipt('1.2-alt',2,['#40/1','#41/1'],attempt='other-attempt')
+        ambiguous=d.plan(candidate(),[first,cumulative,conflict],target(baseline='unknown'),self.entries)
+        self.assertEqual(ambiguous['status'],'BLOCK')
+        self.assertIn('Ambiguous confirmed integration order',ambiguous['reason'])
+
+        independent=receipt('1.2',2,['#41/1'],id='nexus')
+        self.assertEqual(d.plan(candidate(),[first,independent],target('github',baseline='unknown'),self.entries)['status'],'READY')
+
     def test_unknown_partial_and_duplicate_behaviors(self):
         self.assertEqual(d.plan(candidate(),[],target(baseline='unknown'),self.entries)['status'],'BLOCK')
         self.assertEqual(d.plan(candidate(),[receipt('1.2',2,['#40/1','#41/1'],status='unknown')],target(),self.entries)['status'],'BLOCK')
@@ -176,7 +196,8 @@ class DeliveryTests(unittest.TestCase):
                 self.assertIn('inconsistent integration metadata',blocked['reason'])
                 mixed=d.plan(current,[matching,inconsistent],target(),self.entries)
                 self.assertEqual(mixed['status'],'BLOCK')
-                self.assertIn('inconsistent integration metadata',mixed['reason'])
+                self.assertTrue('inconsistent integration metadata' in mixed['reason'] or
+                                'Ambiguous confirmed integration order' in mixed['reason'])
 
     def test_formats_escapes_and_notes_limit(self):
         first=d.plan(candidate(),[],target(field='plain'),self.entries)
@@ -195,6 +216,17 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(d.plain_inline(combo),'Preserve *literal*, bold, emphasis, x_[y] and docs (https://example.invalid/a). ✓')
         with self.assertRaisesRegex(ValueError,'Unclosed inline code'):d.changelog('## v1 — X\n- Broken `code')
         with self.assertRaisesRegex(ValueError,'Unclosed emphasis'):d.changelog('## v1 — X\n- Broken **bold')
+
+    def test_unsupported_markdown_links_and_images_fail_closed(self):
+        for note in ('[click](http://example.invalid)', '[click](javascript:alert)',
+                     '![track](https://example.invalid/pixel)', '[click](relative/path)',
+                     '*![track](https://example.invalid/pixel)*',
+                     '**[click](javascript:alert)**',
+                     '[![track](https://example.invalid/pixel)](https://example.invalid)'):
+            with self.subTest(note=note), self.assertRaises(ValueError):
+                d.changelog('## v1 — X\n- '+note)
+        self.assertEqual(d.plain_inline(r'Literal \[click](http://example.invalid)'),
+                         'Literal [click](http://example.invalid)')
 
     def test_missing_change_and_new_target(self):
         c=candidate();c['included_changes'].append('#missing/1')

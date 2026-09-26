@@ -12,7 +12,7 @@ import tempfile
 import tomllib
 from unittest.mock import patch
 import validate as v
-from validation_core import reject_unselected_codex_config
+from validation_core import reject_unselected_codex_config, reject_unselected_claude_config
 
 spec = importlib.util.spec_from_file_location("evaluate", v.BOOT / "evals/evaluate.py")
 evaluate = importlib.util.module_from_spec(spec)
@@ -355,6 +355,45 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             write_settings("default",True)
             self.assertEqual(verify_materialized.check(root),[])
 
+    def test_selected_claude_rejects_executable_and_unselected_settings(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,path=self.materialized_fixture(root)
+            profile["workflow"]["implementation_harnesses"]=["codex","claude_code"]
+            path.write_text(json.dumps(profile),encoding="utf-8")
+            (root/"CLAUDE.md").write_text("# Claude rules\n",encoding="utf-8")
+            native=root/".claude/settings.json";native.parent.mkdir()
+            baseline={"effortLevel":"high",
+                      "permissions":{"defaultMode":"default",
+                                     "deny":list(v.CLAUDE_CREDENTIAL_DENY_RULES)},
+                      "sandbox":{"enabled":True}}
+            native.write_text(json.dumps(baseline),encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+            extensions=(
+                ("hook", {"hooks":{"SessionStart":[{"hooks":[{"type":"command",
+                                                               "command":"synthetic-command"}]}]}}),
+                ("mcp", {"mcpServers":{"synthetic":{"command":"synthetic-command"}}}),
+                ("plugin", {"enabledPlugins":{"synthetic":True}}),
+                ("nested_permission", {"permissions":{"defaultMode":"default",
+                                                        "deny":list(v.CLAUDE_CREDENTIAL_DENY_RULES),
+                                                        "additionalDirectories":["../outside"]}}),
+                ("nested_sandbox", {"sandbox":{"enabled":True,"excludedCommands":["synthetic"]}}),
+            )
+            for label,extra in extensions:
+                with self.subTest(extension=label):
+                    settings={**baseline,**extra}
+                    native.write_text(json.dumps(settings),encoding="utf-8")
+                    failures=verify_materialized.check(root)
+                    self.assertTrue(any("Unselected Claude configuration key" in failure
+                                        for failure in failures),failures)
+                    with self.assertRaisesRegex(ValueError,"Unselected Claude configuration key"):
+                        reject_unselected_claude_config(settings)
+            native.write_text(json.dumps(baseline),encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+
+    def test_claude_template_uses_only_selected_keys(self):
+        settings=v.load_json(v.ROOT/".claude/settings.json")
+        reject_unselected_claude_config(settings)
+
     def test_claude_credential_denials_are_a_string_array_on_both_surfaces(self):
         allowed = list(v.CLAUDE_CREDENTIAL_DENY_RULES)
         self.assertTrue(v.valid_claude_credential_denials(allowed))
@@ -373,7 +412,7 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                 "project":{"name":"Legacy example","kind":"static","summary":"Synthetic fixture"},
                 "owner":{"repository_language":"en","report_language":"pt-BR"},
                 "workflow":{"tracking":"github_issues","primary_orchestrator":"chatgpt",
-                            "fallback_planners":[],"implementation_harnesses":["codex"]},
+                            "fallback_planners":[],"implementation_harnesses":["codex","claude_code"]},
                 "versioning":{"required":True,"canonical_source":"VERSION","format":"native",
                               "target_version_in_prompt_h1":True,"target_version_in_commit":True,
                               "target_version_in_report_h1":True,"continuations_reuse_target":True},
@@ -382,6 +421,10 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                             "verification_commands":[]},
             }
             path.write_text(json.dumps(profile),encoding="utf-8")
+            (root/"CLAUDE.md").write_text("# Legacy Claude rules\n",encoding="utf-8")
+            claude.write_text('{"permissions":{"defaultMode":"bypassPermissions"},'
+                              '"hooks":{"SessionStart":[{"hooks":[{"type":"command",'
+                              '"command":"synthetic-command"}]}]}}',encoding="utf-8")
             (root/".codex/config.toml").write_text('sandbox_mode = "danger-full-access"\n'
                                                   'approval_policy = "never"\n'
                                                   '[mcp_servers.legacy]\n'

@@ -35,6 +35,7 @@ _FILE_ATTRIBUTE_DIRECTORY = 0x0010
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
 _OBJ_CASE_INSENSITIVE = 0x0040
 _FILE_ATTRIBUTE_TAG_INFO_CLASS = 9
+_FILE_ID_INFO_CLASS = 18
 _FILE_DISPOSITION_INFO_CLASS = 4
 _FILE_RENAME_INFORMATION_CLASS = 10
 _FILE_LINK_INFORMATION_CLASS = 11
@@ -62,6 +63,11 @@ class _IoStatusBlock(ctypes.Structure):
 
 class _FileAttributeTagInfo(ctypes.Structure):
     _fields_ = [("FileAttributes", ctypes.c_uint32), ("ReparseTag", ctypes.c_uint32)]
+
+
+class _FileIdInfo(ctypes.Structure):
+    _fields_ = [("VolumeSerialNumber", ctypes.c_uint64),
+                ("FileId", ctypes.c_ubyte * 16)]
 
 
 class _RelativeNameHeader(ctypes.Structure):
@@ -129,6 +135,14 @@ def _attributes(handle: int) -> int:
             handle, _FILE_ATTRIBUTE_TAG_INFO_CLASS, ctypes.byref(info), ctypes.sizeof(info)):
         raise ctypes.WinError(ctypes.get_last_error())
     return info.FileAttributes
+
+
+def _identity(handle: int) -> tuple[int, bytes]:
+    info = _FileIdInfo()
+    if not _kernel.GetFileInformationByHandleEx(
+            handle, _FILE_ID_INFO_CLASS, ctypes.byref(info), ctypes.sizeof(info)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return info.VolumeSerialNumber, bytes(info.FileId)
 
 
 def _require_kind(handle: int, *, directory: bool) -> None:
@@ -335,13 +349,25 @@ class WindowsMutator:
             finally:
                 _close(handle)
 
-    def move(self, source: Path | str, destination: Path | str) -> None:
+    def identity(self, relative: Path | str) -> tuple[int, bytes]:
+        with self._parent(relative) as (parent, basename):
+            handle = _nt_open(parent, basename, _FILE_READ_ATTRIBUTES | _SYNCHRONIZE,
+                              _FILE_OPEN, directory=False)
+            try:
+                return _identity(handle)
+            finally:
+                _close(handle)
+
+    def move(self, source: Path | str, destination: Path | str,
+             *, expected_digest: str | None = None) -> None:
         """Rename the current leaf to a transaction name without replacement."""
         with self._parent(source) as (source_parent, source_name):
             handle = _nt_open(source_parent, source_name,
-                              _DELETE | _SYNCHRONIZE,
+                              _DELETE | _SYNCHRONIZE |
+                              (_FILE_READ_DATA if expected_digest is not None else 0),
                               _FILE_OPEN, directory=False, share=_SHARE_READ)
             try:
+                _verify_source(handle, expected_digest)
                 with self._parent(destination) as (destination_parent, destination_name):
                     info = _relative_info(destination_parent, destination_name, replace=False)
                     status_block = _IoStatusBlock()

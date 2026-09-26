@@ -85,7 +85,7 @@ class AdapterResolverTests(unittest.TestCase):
     def test_codex_auto_requires_observed_capability_and_matching_effective_profile(self):
         adapter = self.adapter("codex.json")
         requested = resolver.resolve_execution(task="protected_auto")
-        base = {"surface":"cli", "status":"supported", "effective":"protected_auto"}
+        base = {"executor":"codex", "surface":"cli", "status":"supported", "effective":"protected_auto"}
 
         # A newer version label, or even an observed effective label, cannot prove capability.
         unproven = resolver.map_request(adapter, "cli", requested, observation={
@@ -94,7 +94,7 @@ class AdapterResolverTests(unittest.TestCase):
                          ("unknown", None, False))
         self.assertIn("approvals_reviewer", unproven["reason"])
         no_surface = resolver.map_request(adapter, "cli", requested, observation={
-            "status":"supported", "effective":"protected_auto",
+            "executor":"codex", "status":"supported", "effective":"protected_auto",
             "capabilities":{"approvals_reviewer_auto_review":True}})
         self.assertEqual((no_surface["status"], no_surface["effective"]), ("unknown", None))
 
@@ -124,14 +124,14 @@ class AdapterResolverTests(unittest.TestCase):
     def test_codex_manual_and_full_access_do_not_require_auto_review(self):
         adapter = self.adapter("codex.json")
         manual = resolver.map_request(adapter, "cli", resolver.resolve_execution(task="protected_manual"),
-                                      observation={"surface":"cli", "status":"supported",
+                                      observation={"executor":"codex", "surface":"cli", "status":"supported",
                                                    "effective":"protected_manual"})
         self.assertEqual((manual["status"], manual["effective"], manual["applied"]),
                          ("supported", "protected_manual", True))
         self.assertEqual(manual["native_action"]["settings_patch"]["approvals_reviewer"], "user")
         full = resolver.map_request(adapter, "cli",
                                     resolver.resolve_execution(task="full_access", task_risk_acknowledged=True),
-                                    observation={"surface":"cli", "status":"supported", "effective":"full_access"})
+                                    observation={"executor":"codex", "surface":"cli", "status":"supported", "effective":"full_access"})
         self.assertEqual((full["status"], full["effective"], full["applied"]),
                          ("supported", "full_access", True))
 
@@ -152,7 +152,7 @@ class AdapterResolverTests(unittest.TestCase):
                             capabilities.update(approval_bypass=True, filesystem_unrestricted=True,
                                                 network_unrestricted=True)
                         result = resolver.map_request(adapter, "cli", requested, observation={
-                            "surface": "cli", "status": "supported", "effective": observed_profile,
+                            "executor": adapter["id"], "surface": "cli", "status": "supported", "effective": observed_profile,
                             "capabilities": capabilities})
                         matches = observed_profile == requested_profile
                         self.assertEqual(result["applied"], matches)
@@ -166,7 +166,7 @@ class AdapterResolverTests(unittest.TestCase):
         adapter = self.adapter("codex.json")
         requested = resolver.resolve_execution(task="protected_manual")
         result = resolver.map_request(adapter, "cli", requested, observation={
-            "surface": "cli", "status": "unsupported", "effective": "protected_manual"})
+            "executor":"codex", "surface": "cli", "status": "unsupported", "effective": "protected_manual"})
         self.assertEqual((result["status"], result["effective"], result["applied"]),
                          ("unsupported", None, False))
 
@@ -178,7 +178,7 @@ class AdapterResolverTests(unittest.TestCase):
                          ("protected_auto", None, "unknown"))
         self.assertNotIn("dangerously-skip-permissions", result["native_action"]["cli_args"])
         mismatched = resolver.map_request(adapter,"cli",requested,
-            observation={"surface":"cli","status":"supported","effective":"full_access"})
+            observation={"executor":"claude_code","surface":"cli","status":"supported","effective":"full_access"})
         self.assertEqual((mismatched["status"],mismatched["effective"],mismatched["applied"]),
                          ("unknown",None,False))
 
@@ -188,7 +188,7 @@ class AdapterResolverTests(unittest.TestCase):
                                        managed_policy={"allowed_profiles":["protected_manual"]})
         self.assertEqual((blocked["status"], blocked["effective"]), ("unsupported", None))
         observed = resolver.map_request(self.adapter("codex.json"), "cli", requested,
-                                        observation={"surface":"cli", "status":"supported", "effective":"full_access"})
+                                        observation={"executor":"codex", "surface":"cli", "status":"supported", "effective":"full_access"})
         self.assertTrue(observed["applied"])
 
     def test_observation_must_identify_the_requested_surface(self):
@@ -198,19 +198,39 @@ class AdapterResolverTests(unittest.TestCase):
             for surface in ("cli", "ide"):
                 with self.subTest(adapter=adapter_name, surface=surface):
                     unscoped = resolver.map_request(adapter, surface, requested, observation={
-                        "status":"supported", "effective":"protected_manual"})
+                        "executor":adapter["id"], "status":"supported", "effective":"protected_manual"})
                     self.assertEqual((unscoped["status"], unscoped["effective"], unscoped["applied"]),
                                      ("unknown", None, False))
                     self.assertIn("observed surface", unscoped["reason"])
                     other = "ide" if surface == "cli" else "cli"
                     with self.assertRaisesRegex(ValueError, "another surface"):
                         resolver.map_request(adapter, surface, requested, observation={
-                            "surface":other, "status":"supported", "effective":"protected_manual"})
+                            "executor":adapter["id"], "surface":other, "status":"supported", "effective":"protected_manual"})
+
+    def test_observation_must_identify_the_requested_executor(self):
+        requested = resolver.resolve_execution(task="protected_manual")
+        for adapter_name, other_executor in (("codex.json", "claude_code"),
+                                             ("claude-code.json", "codex")):
+            adapter = self.adapter(adapter_name)
+            with self.subTest(adapter=adapter["id"]):
+                valid = resolver.map_request(adapter, "cli", requested, observation={
+                    "executor":adapter["id"], "surface":"cli", "status":"supported",
+                    "effective":"protected_manual"})
+                self.assertTrue(valid["applied"])
+                unbound = resolver.map_request(adapter, "cli", requested, observation={
+                    "surface":"cli", "status":"supported", "effective":"protected_manual"})
+                self.assertEqual((unbound["status"], unbound["effective"], unbound["applied"]),
+                                 ("unknown", None, False))
+                self.assertIn("observed executor", unbound["reason"])
+                with self.assertRaisesRegex(ValueError, "another executor"):
+                    resolver.map_request(adapter, "cli", requested, observation={
+                        "executor":other_executor, "surface":"cli", "status":"supported",
+                        "effective":"protected_manual"})
 
     def test_claude_full_access_requires_bypass_and_unrestricted_boundary(self):
         adapter = self.adapter("claude-code.json")
         requested = resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)
-        base = {"surface":"cli", "status":"supported", "effective":"full_access"}
+        base = {"executor":"claude_code", "surface":"cli", "status":"supported", "effective":"full_access"}
         for capabilities, missing in (
             ({"approval_bypass":True}, "filesystem_unrestricted"),
             ({"filesystem_unrestricted":True,"network_unrestricted":True}, "approval_bypass"),
@@ -226,7 +246,7 @@ class AdapterResolverTests(unittest.TestCase):
         self.assertEqual((result["status"],result["effective"],result["applied"]),
                          ("supported","full_access",True))
         no_surface = resolver.map_request(adapter,"cli",requested,observation={
-            "status":"supported","effective":"full_access","capabilities":{
+            "executor":"claude_code","status":"supported","effective":"full_access","capabilities":{
                 "approval_bypass":True,"filesystem_unrestricted":True,"network_unrestricted":True}})
         self.assertEqual((no_surface["status"],no_surface["effective"],no_surface["applied"]),
                          ("unknown",None,False))
