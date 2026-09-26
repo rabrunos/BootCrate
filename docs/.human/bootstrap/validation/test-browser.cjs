@@ -183,3 +183,40 @@ test('file-mode optional Console imports a profile without claiming remote proof
   assert.match(await page.locator('#details').innerText(),/protected_manual \(safe_default\)/);
   await page.close();
 });
+
+test('file-mode Console keeps limited v2 version previews without inventing v3 metadata',async () => {
+  const page=await browser.newPage();
+  await page.goto(consoleUrl);
+  const profile={schema:'project-profile/v2',project:{name:'Legacy profile',kind:'cli'},
+    workflow:{tracking:'github_issues',primary_orchestrator:'chatgpt',implementation_harnesses:['codex']},
+    versioning:{canonical_source:'VERSION'},security:{exposure:'local',control_map:'baseline'}};
+  const selectProfile=async value=>{
+    await page.locator('#profile').setInputFiles({name:'profile.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(value))});
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
+  };
+  await selectProfile(profile);
+  await page.locator('#version').setInputFiles({name:'VERSION',mimeType:'text/plain',buffer:Buffer.from('1.2\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version source imported'));
+  assert.match(await page.locator('#details').innerText(),/1\.2/);
+  await page.locator('#validateLocal').click();
+  assert.match(await page.locator('#localCheck').innerText(),/v2 declares no reader or history source/);
+  assert.doesNotMatch(await page.locator('#localCheck').innerText(),/incomplete|CHANGELOG\.md/);
+  assert.match(await page.locator('#localCheck').innerText(),/native checks/);
+
+  await selectProfile({...profile,versioning:{canonical_source:'package.json'}});
+  await page.locator('#version').setInputFiles({name:'package.json',mimeType:'application/json',buffer:Buffer.from('{"name":"legacy","version":"2.3"}')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version source imported'));
+  assert.match(await page.locator('#details').innerText(),/2\.3/);
+
+  await selectProfile({...profile,versioning:{canonical_source:'pyproject.toml'}});
+  const before=await page.locator('#details').innerText();
+  await page.locator('#version').setInputFiles({name:'pyproject.toml',mimeType:'text/plain',buffer:Buffer.from('[project]\nversion="3.2"\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('cannot be interpreted'));
+  assert.match(await page.locator('#status').innerText(),/use native validation.*Previous state was preserved/);
+  assert.equal(await page.locator('#details').innerText(),before);
+  await page.locator('#validateLocal').click();
+  assert.match(await page.locator('#localCheck').innerText(),/readable canonical version source file/);
+  assert.match(await page.locator('#localCheck').innerText(),/v2 declares no reader or history source/);
+  assert.doesNotMatch(await page.locator('#localCheck').innerText(),/CHANGELOG\.md/);
+  await page.close();
+});

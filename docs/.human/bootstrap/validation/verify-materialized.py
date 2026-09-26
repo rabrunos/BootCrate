@@ -8,8 +8,9 @@ import argparse
 from html.parser import HTMLParser
 import json
 from pathlib import Path
+import re
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from validation_core import (inventory, load_json, materialized_profile, profile_schema,
                              schema_check, secret_findings, sensitive_name)
@@ -19,6 +20,9 @@ SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_INVENTORY_FILES = 10_000
 MAX_INVENTORY_BYTES = 512 * 1024 * 1024
+CSS_URL = re.compile(r"url\s*\(\s*(?P<quote>['\"]?)(?P<reference>.*?)(?P=quote)\s*\)", re.I | re.S)
+CSS_IMPORT = re.compile(r"@import\b", re.I)
+CSS_QUOTED = re.compile(r"(?P<quote>['\"])(?P<reference>.*?)(?P=quote)", re.S)
 
 
 class BlockedCheck(RuntimeError):
@@ -28,14 +32,67 @@ class BlockedCheck(RuntimeError):
 class LocalReferences(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.values = []
+        self.resources = []
+        self.inline_styles = []
+        self.in_style = False
+        self.has_base = False
 
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
-        if tag == "script" and values.get("src"):
-            self.values.append(values["src"])
-        if tag == "link" and values.get("href"):
-            self.values.append(values["href"])
+        if tag == "base":
+            self.has_base = True
+        if tag == "script" and "src" in values:
+            self.resources.append((values["src"], False))
+        if tag == "link" and "href" in values:
+            stylesheet = "stylesheet" in (values.get("rel") or "").lower().split()
+            self.resources.append((values["href"], stylesheet))
+        if tag == "style":
+            self.in_style = True
+        if "style" in values:
+            self.inline_styles.append(values["style"] or "")
+
+    def handle_endtag(self, tag):
+        if tag == "style":
+            self.in_style = False
+
+    def handle_data(self, data):
+        if self.in_style:
+            self.inline_styles.append(data)
+
+
+def local_console_resource(reference: str, base: Path, console: Path) -> Path:
+    """Resolve only relative files within the selected local Console."""
+    if (not isinstance(reference, str) or not reference or reference != reference.strip()
+            or "\\" in reference or any(ord(char) < 32 or ord(char) == 127 for char in reference)):
+        raise ValueError("selected Project Console invalid local reference: " + str(reference))
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc:
+        raise ValueError("selected Project Console non-local reference: " + reference)
+    path = unquote(parsed.path)
+    if not path or path.startswith("/") or Path(path).is_absolute():
+        raise ValueError("selected Project Console reference must be relative: " + reference)
+    target = (base / path).resolve()
+    if not target.is_relative_to(console.resolve()):
+        raise ValueError("selected Project Console reference escapes project-console: " + reference)
+    if not target.is_file():
+        raise ValueError("selected Project Console reference missing: " + reference)
+    return target
+
+
+def css_references(content: str) -> list[str]:
+    """Extract simple CSS imports and URLs; reject syntax this offline check cannot prove local."""
+    content = re.sub(r"/\*.*?\*/", "", content, flags=re.S)
+    if "\\" in content:
+        raise ValueError("selected Project Console CSS escapes are unsupported in the local resource check")
+    references = [match.group("reference") for match in CSS_URL.finditer(content)]
+    for match in CSS_IMPORT.finditer(content):
+        remainder = content[match.end():].lstrip()
+        quoted = CSS_QUOTED.match(remainder)
+        if quoted:
+            references.append(quoted.group("reference"))
+        elif not CSS_URL.match(remainder):
+            raise ValueError("selected Project Console CSS import cannot be verified as local")
+    return references
 
 
 def inspect(root: Path) -> list[dict]:
@@ -65,18 +122,35 @@ def inspect(root: Path) -> list[dict]:
         materialized_profile(data, root)
         if data["schema"] == "project-profile/v3" and data["console"]["enabled"]:
             console = root / "project-console"
+            require(console.is_dir() and not console.is_symlink(), "selected Project Console directory missing or linked")
             for name in ("index.html", "styles.css", "preset.js", "execution-profile.js", "console.js"):
                 require((console / name).is_file() and not (console / name).is_symlink(),
                         "selected Project Console dependency missing: " + name)
             parser = LocalReferences()
             parser.feed((console / "index.html").read_text(encoding="utf-8"))
-            for reference in parser.values:
-                parsed = urlsplit(reference)
-                if parsed.scheme or parsed.netloc or not parsed.path:
+            require(not parser.has_base, "selected Project Console base URL is unsupported")
+            stylesheets = [console / "styles.css"]
+            for reference, stylesheet in parser.resources:
+                target = local_console_resource(reference, console, console)
+                if stylesheet or target.suffix.lower() == ".css":
+                    stylesheets.append(target)
+            for content in parser.inline_styles:
+                for reference in css_references(content):
+                    target = local_console_resource(reference, console, console)
+                    if target.suffix.lower() == ".css":
+                        stylesheets.append(target)
+            seen = set()
+            while stylesheets:
+                stylesheet = stylesheets.pop()
+                if stylesheet in seen:
                     continue
-                target = (console / parsed.path).resolve()
-                require(target.is_relative_to(console.resolve()) and target.is_file(),
-                        "selected Project Console reference missing: " + reference)
+                seen.add(stylesheet)
+                require(stylesheet.stat().st_size <= MAX_TEXT_BYTES,
+                        "selected Project Console CSS exceeds local resource check limit: " + str(stylesheet))
+                for reference in css_references(stylesheet.read_text(encoding="utf-8")):
+                    target = local_console_resource(reference, stylesheet.parent, console)
+                    if target.suffix.lower() == ".css":
+                        stylesheets.append(target)
 
     def pruning() -> None:
         require(not (root / "docs/.human/bootstrap").exists(), "bootstrap directory remains")

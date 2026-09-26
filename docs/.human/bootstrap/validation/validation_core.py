@@ -110,19 +110,20 @@ def version_value(root: Path, source: dict[str, Any], label: str = "canonical ve
 
 
 def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], str, str]:
+    """Return the declarative version contract available only in profile v3."""
     versioning = profile["versioning"]
-    if profile["schema"] == "project-profile/v2":
-        suffix = Path(versioning["canonical_source"]).suffix.lower()
-        reader = "json" if suffix == ".json" else "toml" if suffix == ".toml" else "plain"
-        source = {"path": versioning["canonical_source"], "reader": reader}
-        return source, [], "CHANGELOG.md", "markdown-headings"
     source = {"path": versioning["canonical_source"], "reader": versioning["reader"]}
     if "value_path" in versioning:
         source["value_path"] = versioning["value_path"]
     return source, versioning["mirrors"], versioning["history_source"], versioning["history_format"]
 
 
-def validate_version_contract(profile: dict[str, Any], root: Path) -> str:
+def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None:
+    if profile["schema"] == "project-profile/v2":
+        # v2 did not declare a reader, value path, history source or mirrors.
+        # Check the local file safely without claiming its version was parsed.
+        project_file(root, profile["versioning"]["canonical_source"], "canonical version")
+        return None
     source, mirrors, history_source, history_format = _version_contract(profile)
     version = version_value(root, source)
     for mirror in mirrors:
