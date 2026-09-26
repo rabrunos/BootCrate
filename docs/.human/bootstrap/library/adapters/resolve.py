@@ -6,7 +6,9 @@ changes native settings, or treats a permission profile as task authorization.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import os
 import stat
 from pathlib import Path
 from typing import Any
@@ -181,6 +183,41 @@ def local_preset_path(project_root: Path) -> Path:
     return _local_config_path(project_root, "preset.json")
 
 
+def _unlink_local_file(target: Path) -> None:
+    root = target.parents[2]
+    relative = Path(".local") / "config" / target.name
+    if os.name == "nt":
+        helper = Path(__file__).resolve().parents[2] / "upgrade" / "_windows_mutation.py"
+        if not helper.is_file():
+            raise OSError("Safe local override removal requires the Windows native mutation helper")
+        spec = importlib.util.spec_from_file_location("_bootcrate_windows_mutation", helper)
+        if spec is None or spec.loader is None:
+            raise OSError("Windows native mutation helper is unavailable")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with module.WindowsMutator(root) as mutator:
+            mutator.unlink(relative)
+        return
+
+    if (not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW") or
+            os.open not in os.supports_dir_fd or os.unlink not in os.supports_dir_fd):
+        raise OSError("Safe local override removal requires directory-relative unlink")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    root_fd = os.open(root, flags)
+    try:
+        local_fd = os.open(".local", flags, dir_fd=root_fd)
+        try:
+            config_fd = os.open("config", flags, dir_fd=local_fd)
+            try:
+                os.unlink(target.name, dir_fd=config_fd)
+            finally:
+                os.close(config_fd)
+        finally:
+            os.close(local_fd)
+    finally:
+        os.close(root_fd)
+
+
 def clear_local_override(project_root: Path) -> bool:
     target = local_override_path(project_root)
     if target.is_symlink():
@@ -189,7 +226,7 @@ def clear_local_override(project_root: Path) -> bool:
         return False
     if not target.is_file():
         raise ValueError("Local override is not a regular file")
-    target.unlink()
+    _unlink_local_file(target)
     return True
 
 
@@ -201,7 +238,7 @@ def clear_local_preset(project_root: Path) -> bool:
         return False
     if not target.is_file():
         raise ValueError("Local preset override is not a regular file")
-    target.unlink()
+    _unlink_local_file(target)
     return True
 
 

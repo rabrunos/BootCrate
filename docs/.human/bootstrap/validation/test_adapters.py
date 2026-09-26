@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 ADAPTERS = HERE.parent / "library" / "adapters"
@@ -244,6 +245,49 @@ class AdapterResolverTests(unittest.TestCase):
                             link.unlink()
                         elif os.name == "nt" and link.is_junction():
                             os.rmdir(link)
+
+    def test_clear_rejects_parent_replaced_after_path_validation(self):
+        for filename, clear in (
+            ("execution-profile.json", resolver.clear_local_override),
+            ("preset.json", resolver.clear_local_preset),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as project, tempfile.TemporaryDirectory() as outside:
+                root = Path(project)
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                (config / filename).write_bytes(b"local override")
+                external = Path(outside)
+                sentinel = external / filename
+                sentinel.write_bytes(b"external owner data")
+                displaced = root / "displaced-config"
+                original_path = resolver._local_config_path
+                swapped = False
+
+                def swap_after_validation(project_root: Path, name: str) -> Path:
+                    nonlocal swapped
+                    target = original_path(project_root, name)
+                    if not swapped:
+                        config.rename(displaced)
+                        if os.name == "nt":
+                            subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J",
+                                            str(config), str(external)], check=True, capture_output=True)
+                        else:
+                            config.symlink_to(external, target_is_directory=True)
+                        swapped = True
+                    return target
+
+                try:
+                    with mock.patch.object(resolver, "_local_config_path", side_effect=swap_after_validation):
+                        with self.assertRaises((ValueError, OSError)):
+                            clear(root)
+                    self.assertTrue(swapped)
+                    self.assertEqual(sentinel.read_bytes(), b"external owner data")
+                    self.assertEqual((displaced / filename).read_bytes(), b"local override")
+                finally:
+                    if config.is_symlink():
+                        config.unlink()
+                    elif os.name == "nt" and config.is_junction():
+                        os.rmdir(config)
 
 
 if __name__ == "__main__":
