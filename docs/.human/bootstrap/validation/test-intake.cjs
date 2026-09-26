@@ -196,6 +196,9 @@ test('execution profiles have task/local/default precedence and Full Access ackn
   assert.deepEqual(Execution.resolve(),{requested:'protected_manual',source:'safe_default'});
   assert.throws(()=>Execution.parseOverride({schema:'bootcrate-execution-profile-override/v1',profile:'full_access'}));
   assert.throws(()=>Execution.parseOverride({schema:'bootcrate-execution-profile-override/v1',profile:'protected_manual',unexpected:true}));
+  for(const api of [Execution,ConsoleExecution])for(const profile of api.ids){
+    assert.throws(()=>api.parseOverride({schema:'bootcrate-execution-profile-override/v1',profile,risk_acknowledged:'yes'}));
+  }
   assert.equal(Execution.parseOverride({schema:'bootcrate-execution-profile-override/v1',profile:'full_access',risk_acknowledged:true}).profile,'full_access');
   assert.ok(core.missing({execution_profile:'full_access'}).some(q=>q.id==='full_access_acknowledgement'));
   assert.ok(!core.active({execution_profile:'protected_manual'}).some(q=>q.id==='full_access_acknowledgement'));

@@ -14,8 +14,9 @@ import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
 
-from validation_core import (inventory, load_json, materialized_profile, profile_schema,
-                             schema_check, secret_findings, sensitive_name)
+from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, inventory, load_json,
+                             materialized_profile, profile_schema, schema_check,
+                             secret_findings, sensitive_name)
 
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".yml", ".yaml", ".txt", ".py", ".js", ".cjs", ".html", ".css"}
 SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
@@ -29,7 +30,7 @@ CONSOLE_ASSETS = {
     "styles.css": "5a68eafb183298afb563bf2a80e037b78cf9fea92ff334bdd0239607255dbb8f",
     "preset.js": "1d518102c7238d85a0f3e478844f893695a52d62b114bf01d3091f5103f41487",
     "execution-profile.js": "f803f1a9357404cea1dbdd19e01a8aca7460efb81b2db6066333e0c272bc8198",
-    "console.js": "46d466b9f1763c1276417eca8962aa967c0668adcb892d351e0d0fb21a71fa11",
+    "console.js": "725a247ed55a75f53184e3467025afbac5bbbfd9a46b39d416078a42537555fd",
 }
 CSS_URL = re.compile(r"url\s*\(\s*(?P<quote>['\"]?)(?P<reference>.*?)(?P=quote)\s*\)", re.I | re.S)
 CSS_IMPORT = re.compile(r"@import\b", re.I)
@@ -146,6 +147,8 @@ def inspect(root: Path) -> list[dict]:
                     native = root / ".codex/config.toml"
                     require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Codex configuration is too large")
                     settings = tomllib.loads(native.read_text(encoding="utf-8"))
+                    require(settings.get("model_reasoning_effort") == "high",
+                            "Enabled Codex Main default must remain High")
                     require(settings.get("sandbox_mode") == "workspace-write" and
                             settings.get("approval_policy") == "on-request" and
                             settings.get("approvals_reviewer") == "user",
@@ -165,9 +168,15 @@ def inspect(root: Path) -> list[dict]:
                     settings = load_json(native)
                     permissions = settings.get("permissions") if isinstance(settings, dict) else None
                     sandbox = settings.get("sandbox") if isinstance(settings, dict) else None
+                    require(isinstance(settings, dict) and settings.get("effortLevel") == "high",
+                            "Enabled Claude Main default must remain High")
                     require(isinstance(permissions, dict) and permissions.get("defaultMode") == "default" and
                             isinstance(sandbox, dict) and sandbox.get("enabled") is True,
                             "Enabled Claude protected manual defaults are not configured")
+                    deny = permissions.get("deny")
+                    require(isinstance(deny, list) and all(isinstance(rule, str) for rule in deny) and
+                            CLAUDE_CREDENTIAL_DENY_RULES.issubset(deny),
+                            "Enabled Claude credential-deny rules are missing")
         if data["schema"] == "project-profile/v3" and data["console"]["enabled"]:
             console = root / "project-console"
             require(console.is_dir() and not console.is_symlink(), "selected Project Console directory missing or linked")

@@ -12,8 +12,9 @@ import sys
 import tomllib
 from typing import Any
 
-from validation_core import (require, unique_object, load_json, inventory as project_inventory,
-                             sensitive_name, secret_findings, local_refs_only, schema_check,
+from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_object,
+                             load_json, inventory as project_inventory, sensitive_name,
+                             secret_findings, local_refs_only, schema_check,
                              materialized_profile, profile_schema)
 
 try:
@@ -156,7 +157,8 @@ def check_adapters() -> None:
     settings = load_json(ROOT / ".claude/settings.json")
     require(settings["effortLevel"] == "high" and settings["permissions"]["defaultMode"] == "default", "Unsafe Claude defaults")
     require(settings.get("sandbox", {}).get("enabled") is True, "Claude sandbox baseline disabled")
-    require("Read(./**/.env)" in settings["permissions"]["deny"], "Nested env denial missing")
+    require(CLAUDE_CREDENTIAL_DENY_RULES.issubset(settings["permissions"]["deny"]),
+            "Claude credential-deny rules missing")
     for canonical in (BOOT / "library/skills").glob("*/SKILL.md"):
         relative = canonical.relative_to(BOOT / "library/skills")
         content = canonical.read_text(encoding="utf-8")

@@ -213,6 +213,11 @@ test('file-mode optional Console imports a profile without claiming remote proof
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
   assert.match(await page.locator('#historyNotes').innerText(),/v2\.3/);
   const validJsonDetails=await page.locator('#details').innerText(),validJsonHistory=await page.locator('#historyNotes').innerText();
+  await page.locator('#version').setInputFiles({name:'package.json',mimeType:'application/json',buffer:Buffer.from('{"meta":{"release/version":1e400}}')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version value must be a finite scalar'));
+  assert.match(await page.locator('#status').innerText(),/Previous state was preserved/);
+  assert.equal(await page.locator('#details').innerText(),validJsonDetails);
+  assert.equal(await page.locator('#historyNotes').innerText(),validJsonHistory);
   await page.locator('#version').setInputFiles({name:'package.json',mimeType:'application/json',buffer:Buffer.from('{"meta":{}}')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version value path not found'));
   assert.equal(await page.locator('#details').innerText(),validJsonDetails);

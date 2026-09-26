@@ -12,6 +12,13 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 
+CLAUDE_CREDENTIAL_DENY_RULES = frozenset({
+    "Read(./.env)", "Read(./.env.*)", "Read(./**/.env)", "Read(./**/.env.*)",
+    "Read(./**/secrets.*)", "Read(./**/credentials.*)", "Read(./**/*.key)",
+    "Read(./**/*.p12)", "Read(./**/*.pfx)",
+})
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)

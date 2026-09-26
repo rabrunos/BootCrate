@@ -42,6 +42,23 @@ class AdapterResolverTests(unittest.TestCase):
             resolver.resolve_execution(task="full_access")
         self.assertEqual(resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)["requested"], "full_access")
 
+    def test_local_acknowledgement_type_matches_javascript_contract(self):
+        for profile in resolver.PROFILES:
+            for invalid in ("yes", 1, None, [], {}):
+                with self.subTest(profile=profile, invalid=invalid):
+                    with self.assertRaisesRegex(ValueError, "risk acknowledgement"):
+                        resolver.parse_execution_override({"schema":resolver.OVERRIDE_SCHEMA,
+                                                           "profile":profile,
+                                                           "risk_acknowledged":invalid})
+        for profile in ("protected_manual", "protected_auto"):
+            for acknowledged in (False, True):
+                self.assertEqual(resolver.parse_execution_override(
+                    {"schema":resolver.OVERRIDE_SCHEMA, "profile":profile,
+                     "risk_acknowledged":acknowledged}), profile)
+        self.assertEqual(resolver.parse_execution_override(
+            {"schema":resolver.OVERRIDE_SCHEMA, "profile":"full_access",
+             "risk_acknowledged":True}), "full_access")
+
     def test_codex_mappings_are_distinct_and_unobserved_is_not_applied(self):
         adapter = self.adapter("codex.json")
         actions = {}

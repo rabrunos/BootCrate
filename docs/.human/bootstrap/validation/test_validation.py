@@ -214,16 +214,23 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             root=Path(td);self.materialized_fixture(root)
             config=root/".codex/config.toml"
             self.assertEqual(verify_materialized.check(root),[])
+            original = config.read_text(encoding="utf-8")
+            config.write_text(original.replace('model_reasoning_effort = "high"',
+                                               'model_reasoning_effort = "low"'), encoding="utf-8")
+            self.assertTrue(any("Codex Main default must remain High" in failure
+                                for failure in verify_materialized.check(root)))
+            config.write_text(original, encoding="utf-8")
             for content in (
-                'sandbox_mode = "danger-full-access"\napproval_policy = "never"\n',
-                'sandbox_mode = "workspace-write"\napproval_policy = "never"\napprovals_reviewer = "user"\n',
-                'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\napprovals_reviewer = "auto_review"\n',
+                'model_reasoning_effort = "high"\nsandbox_mode = "danger-full-access"\napproval_policy = "never"\n',
+                'model_reasoning_effort = "high"\nsandbox_mode = "workspace-write"\napproval_policy = "never"\napprovals_reviewer = "user"\n',
+                'model_reasoning_effort = "high"\nsandbox_mode = "workspace-write"\napproval_policy = "on-request"\napprovals_reviewer = "auto_review"\n',
             ):
                 with self.subTest(content=content):
                     config.write_text(content,encoding="utf-8")
                     self.assertTrue(any("Codex protected manual defaults" in failure
                                         for failure in verify_materialized.check(root)))
-            config.write_text('sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n'
+            config.write_text('model_reasoning_effort = "high"\n'
+                              'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n'
                               'approvals_reviewer = "user"\n'
                               '[sandbox_workspace_write]\nnetwork_access = false\n'
                               '[shell_environment_policy]\ninherit = "core"\n'
@@ -238,7 +245,8 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             root=Path(td);self.materialized_fixture(root)
             config=root/".codex/config.toml"
             self.assertEqual(verify_materialized.check(root),[])
-            protected='sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n' \
+            protected='model_reasoning_effort = "high"\n' \
+                      'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n' \
                       'approvals_reviewer = "user"\n'
             safe_environment='[shell_environment_policy]\ninherit = "core"\nignore_default_excludes = false\n'
             for network in ('[sandbox_workspace_write]\nnetwork_access = true\n',
@@ -262,7 +270,8 @@ process.stdout.write(JSON.stringify(values.map(repository=>
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.materialized_fixture(root)
             config=root/".codex/config.toml"
-            protected='sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n' \
+            protected='model_reasoning_effort = "high"\n' \
+                      'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n' \
                       'approvals_reviewer = "user"\n' \
                       '[sandbox_workspace_write]\nnetwork_access = false\n'
             for environment in ('', '[shell_environment_policy]\ninherit = "all"\n'
@@ -284,8 +293,11 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             path.write_text(json.dumps(profile),encoding="utf-8")
             (root/"CLAUDE.md").write_text("# Claude rules\n",encoding="utf-8")
             settings=root/".claude/settings.json";settings.parent.mkdir()
-            def write_settings(mode,enabled):
-                settings.write_text(json.dumps({"permissions":{"defaultMode":mode},
+            def write_settings(mode,enabled,*,deny=None,effort="high"):
+                settings.write_text(json.dumps({"effortLevel":effort,
+                                                "permissions":{"defaultMode":mode,
+                                                               "deny":list(verify_materialized.CLAUDE_CREDENTIAL_DENY_RULES)
+                                                               if deny is None else deny},
                                                 "sandbox":{"enabled":enabled}}),encoding="utf-8")
             write_settings("default",True)
             self.assertEqual(verify_materialized.check(root),[])
@@ -294,6 +306,19 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                     write_settings(mode,enabled)
                     self.assertTrue(any("Claude protected manual defaults" in failure
                                         for failure in verify_materialized.check(root)))
+            write_settings("default",True)
+            self.assertEqual(verify_materialized.check(root),[])
+            for missing in verify_materialized.CLAUDE_CREDENTIAL_DENY_RULES:
+                with self.subTest(missing=missing):
+                    write_settings("default",True,deny=list(verify_materialized.CLAUDE_CREDENTIAL_DENY_RULES-{missing}))
+                    self.assertTrue(any("Claude credential-deny rules are missing" in failure
+                                        for failure in verify_materialized.check(root)))
+            write_settings("default",True,deny=[])
+            self.assertTrue(any("Claude credential-deny rules are missing" in failure
+                                for failure in verify_materialized.check(root)))
+            write_settings("default",True,effort="low")
+            self.assertTrue(any("Claude Main default must remain High" in failure
+                                for failure in verify_materialized.check(root)))
             write_settings("default",True)
             self.assertEqual(verify_materialized.check(root),[])
 

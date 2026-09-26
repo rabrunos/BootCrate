@@ -40,8 +40,12 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def parse_execution_override(value: dict[str, Any]) -> str:
+    if not isinstance(value, dict):
+        raise ValueError("Invalid execution-profile override")
     if set(value) - {"schema", "profile", "risk_acknowledged"}:
         raise ValueError("Unknown execution override field")
+    if "risk_acknowledged" in value and type(value["risk_acknowledged"]) is not bool:
+        raise ValueError("Invalid execution override risk acknowledgement")
     profile = value.get("profile")
     if value.get("schema") != OVERRIDE_SCHEMA or profile not in PROFILES:
         raise ValueError("Invalid execution-profile override")
