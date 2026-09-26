@@ -1,6 +1,7 @@
 """Shared, read-only profile and repository checks for template and downstream validation."""
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -36,6 +37,50 @@ ALLOWED_CLAUDE_CONFIG_KEYS = {
     "permissions": {"defaultMode", "deny"},
     "sandbox": {"enabled", "allowUnsandboxedCommands"},
 }
+
+
+CODEX_AGENT_SANDBOXES = {"scout": "read-only", "worker": "workspace-write"}
+CODEX_AGENT_INSTRUCTIONS_SHA256 = {
+    "scout": "c2499fae1d2a3bc3be41aada8038184432d784419c953ebd4b6e6ceb35e8c35a",
+    "worker": "ce445d89179c868978504ad8fee815f1a835a37a6b7c4d4a15325a5139fca3fb",
+}
+ALLOWED_CODEX_AGENT_KEYS = {
+    "name", "description", "developer_instructions", "model", "model_reasoning_effort", "sandbox_mode",
+}
+
+
+def validate_codex_agent_configs(root: Path) -> None:
+    """Bound optional v3 Codex roles to the selected Scout/Worker permissions."""
+    agents = root / ".codex/agents"
+    if not (agents.exists() or agents.is_symlink() or getattr(agents, "is_junction", lambda: False)()):
+        return
+    require(agents.is_dir() and not agents.is_symlink() and
+            not getattr(agents, "is_junction", lambda: False)(),
+            "Codex agent directory must be local and real")
+    for path in agents.iterdir():
+        role = path.stem
+        require(path.name == role + ".toml" and role in CODEX_AGENT_SANDBOXES,
+                "Unselected Codex agent configuration: " + path.name)
+        require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 2 * 1024 * 1024,
+                "Codex agent configuration is linked, missing or too large: " + path.name)
+        settings = tomllib.loads(path.read_text(encoding="utf-8"))
+        require(set(settings) <= ALLOWED_CODEX_AGENT_KEYS,
+                "Unselected Codex agent configuration key: " + path.name)
+        require(settings.get("name") == role and
+                all(isinstance(settings.get(key), str) and settings[key].strip()
+                    for key in ("description", "developer_instructions")),
+                "Invalid Codex agent identity or instructions: " + path.name)
+        require(settings.get("sandbox_mode") == CODEX_AGENT_SANDBOXES[role],
+                "Unsafe Codex agent sandbox: " + path.name)
+        # Role instructions are an executable trust input. Keep the reviewed
+        # baseline while allowing a materialized project to choose its model.
+        require(hashlib.sha256(settings["developer_instructions"].encode("utf-8")).hexdigest() ==
+                CODEX_AGENT_INSTRUCTIONS_SHA256[role],
+                "Unreviewed Codex agent instructions: " + path.name)
+        for key in ("model", "model_reasoning_effort"):
+            if key in settings:
+                require(isinstance(settings[key], str) and bool(settings[key].strip()),
+                        "Invalid Codex agent setting: " + path.name + "." + key)
 
 
 def reject_unselected_codex_config(settings: dict) -> None:
@@ -194,14 +239,26 @@ def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dic
 
 
 def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
-    """Find a history heading outside Markdown fences and HTML comments."""
+    """Find a history heading outside fences, comments and raw HTML blocks."""
     fence: str | None = None
     in_comment = False
+    raw_html = False
+    html_until_blank = False
+    content_tag = re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?=[\t >])", re.I)
+    content_end = re.compile(r"</(?:script|pre|style|textarea)[ \t]*>", re.I)
     for raw_line in markdown.splitlines():
         if fence is not None:
             if re.fullmatch(r" {0,3}" + re.escape(fence[0]) +
                             "{" + str(len(fence)) + r",}[ \t]*", raw_line):
                 fence = None
+            continue
+        if raw_html:
+            if content_end.search(raw_line):
+                raw_html = False
+            continue
+        if html_until_blank:
+            if not raw_line.strip():
+                html_until_blank = False
             continue
         if in_comment:
             end = raw_line.find("-->")
@@ -217,6 +274,14 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
         opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
         if opening and (opening[1][0] == "~" or "`" not in opening[2]):
             fence = opening[1]
+            continue
+        if content_tag.match(line):
+            raw_html = content_end.search(line) is None
+            continue
+        if re.match(r"^ {0,3}<(?:/?[A-Za-z]|[!?])", line):
+            # Other raw HTML blocks end at a blank line; conservatively skip
+            # unknown tags rather than accepting a hidden version heading.
+            html_until_blank = True
             continue
         if heading.match(line):
             return True

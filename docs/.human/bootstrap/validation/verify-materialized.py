@@ -18,7 +18,8 @@ from validation_core import (inventory, load_json, materialized_profile,
                              profile_schema, schema_check, secret_findings,
                              sensitive_name, valid_claude_credential_denials,
                              reject_unselected_codex_config,
-                             reject_unselected_claude_config)
+                             reject_unselected_claude_config,
+                             validate_codex_agent_configs)
 
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".yml", ".yaml", ".txt", ".py", ".js", ".cjs", ".html", ".css"}
 SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
@@ -165,6 +166,7 @@ def inspect(root: Path) -> list[dict]:
                     require(isinstance(environment, dict) and environment.get("inherit") == "core" and
                             environment.get("ignore_default_excludes") is False,
                             "Enabled Codex protected manual environment inheritance is too broad")
+                    validate_codex_agent_configs(root)
                 elif harness == "claude_code":
                     native = root / ".claude/settings.json"
                     require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Claude configuration is too large")

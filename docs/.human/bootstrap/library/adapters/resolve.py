@@ -6,11 +6,14 @@ changes native settings, or treats a permission profile as task authorization.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import errno
 import importlib.util
 import json
 import os
+import secrets
 import stat
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +22,7 @@ PRESETS = ("standard", "economy")
 OVERRIDE_SCHEMA = "bootcrate-execution-profile-override/v1"
 PRESET_OVERRIDE_SCHEMA = "bootcrate-preset-override/v1"
 MAX_LOCAL_OVERRIDE_BYTES = 64 * 1024
+_RENAME_NOREPLACE = 1
 
 
 def _parse_json(text: str, source: str) -> dict[str, Any]:
@@ -281,17 +285,34 @@ def _load_local_config(project_root: Path, filename: str) -> dict[str, Any] | No
     return None if content is None else _parse_json(content.decode("utf-8"), filename)
 
 
-def _unlink_local_file(target: Path) -> None:
+def _rename_local_noreplace(parent_fd: int, source: str, destination: str) -> None:
+    """Move a local leaf without replacing a concurrent entry (Linux only)."""
+    if sys.platform != "linux":
+        raise OSError("Safe local override removal requires Linux renameat2")
+    try:
+        renameat2 = ctypes.CDLL(None, use_errno=True).renameat2
+    except AttributeError as error:
+        raise OSError("Safe local override removal requires renameat2") from error
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int,
+                          ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    if renameat2(parent_fd, os.fsencode(source), parent_fd,
+                 os.fsencode(destination), _RENAME_NOREPLACE):
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), source)
+
+
+def _unlink_local_file(target: Path, expected_identity: tuple[int, int]) -> None:
     root = target.parents[2]
     relative = Path(".local") / "config" / target.name
     if os.name == "nt":
         with _windows_mutation_module().WindowsMutator(root) as mutator:
-            mutator.unlink(relative)
+            mutator.unlink(relative, expected_identity=expected_identity)
         return
 
-    if (not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW") or
-            os.open not in os.supports_dir_fd or os.unlink not in os.supports_dir_fd):
-        raise OSError("Safe local override removal requires directory-relative unlink")
+    if (not all(hasattr(os, name) for name in ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK")) or
+            any(method not in os.supports_dir_fd for method in (os.open, os.stat))):
+        raise OSError("Safe local override removal requires directory-relative operations")
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     root_fd = os.open(root, flags)
     try:
@@ -299,7 +320,27 @@ def _unlink_local_file(target: Path) -> None:
         try:
             config_fd = os.open("config", flags, dir_fd=local_fd)
             try:
-                os.unlink(target.name, dir_fd=config_fd)
+                leaf_flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+                leaf_fd = os.open(target.name, leaf_flags, dir_fd=config_fd)
+                try:
+                    metadata = os.fstat(leaf_fd)
+                    if not stat.S_ISREG(metadata.st_mode) or (metadata.st_dev, metadata.st_ino) != expected_identity:
+                        raise ValueError("Local override changed before removal")
+                    displaced = ".clear-" + secrets.token_hex(16)
+                    _rename_local_noreplace(config_fd, target.name, displaced)
+                    moved = os.stat(displaced, dir_fd=config_fd, follow_symlinks=False)
+                    if not stat.S_ISREG(moved.st_mode) or (moved.st_dev, moved.st_ino) != expected_identity:
+                        try:
+                            _rename_local_noreplace(config_fd, displaced, target.name)
+                        except OSError as error:
+                            raise ValueError("Local override changed; replacement preserved as " + displaced) from error
+                        raise ValueError("Local override changed before removal")
+                    # POSIX cannot unlink a regular file by its open descriptor.
+                    # Keep the verified old override under the ignored local
+                    # quarantine name; a concurrent replacement of that name
+                    # must never be removed by a pathname-based unlink.
+                finally:
+                    os.close(leaf_fd)
             finally:
                 os.close(config_fd)
         finally:
@@ -310,25 +351,37 @@ def _unlink_local_file(target: Path) -> None:
 
 def clear_local_override(project_root: Path) -> bool:
     target = local_override_path(project_root)
-    if target.is_symlink():
-        raise ValueError("Refusing to remove a linked override")
-    if not target.exists():
+    try:
+        metadata = target.lstat()
+    except FileNotFoundError:
         return False
-    if not target.is_file():
+    reparse = (getattr(metadata, "st_file_attributes", 0) &
+               getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    if stat.S_ISLNK(metadata.st_mode) or reparse:
+        raise ValueError("Refusing to remove a linked override")
+    if not stat.S_ISREG(metadata.st_mode):
         raise ValueError("Local override is not a regular file")
-    _unlink_local_file(target)
+    if metadata.st_size > MAX_LOCAL_OVERRIDE_BYTES:
+        raise ValueError("Local override exceeds its size limit")
+    _unlink_local_file(target, (metadata.st_dev, metadata.st_ino))
     return True
 
 
 def clear_local_preset(project_root: Path) -> bool:
     target = local_preset_path(project_root)
-    if target.is_symlink():
-        raise ValueError("Refusing to remove a linked preset override")
-    if not target.exists():
+    try:
+        metadata = target.lstat()
+    except FileNotFoundError:
         return False
-    if not target.is_file():
+    reparse = (getattr(metadata, "st_file_attributes", 0) &
+               getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    if stat.S_ISLNK(metadata.st_mode) or reparse:
+        raise ValueError("Refusing to remove a linked preset override")
+    if not stat.S_ISREG(metadata.st_mode):
         raise ValueError("Local preset override is not a regular file")
-    _unlink_local_file(target)
+    if metadata.st_size > MAX_LOCAL_OVERRIDE_BYTES:
+        raise ValueError("Local override exceeds its size limit")
+    _unlink_local_file(target, (metadata.st_dev, metadata.st_ino))
     return True
 
 

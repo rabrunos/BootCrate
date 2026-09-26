@@ -16,6 +16,7 @@ from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_objec
                              inventory as project_inventory, sensitive_name,
                              secret_findings, local_refs_only, schema_check,
                              reject_unselected_codex_config, reject_unselected_claude_config,
+                             validate_codex_agent_configs,
                              materialized_profile, profile_schema,
                              valid_claude_credential_denials)
 
@@ -152,8 +153,9 @@ def check_adapters() -> None:
     require(codex["shell_environment_policy"]["inherit"] == "core" and
             codex["shell_environment_policy"].get("ignore_default_excludes") is False,
             "Unexpected credential environment inheritance")
-    scout = tomllib.loads((ROOT / ".codex/agents/scout.toml").read_text(encoding="utf-8"))
-    require(scout["sandbox_mode"] == "read-only", "Codex Scout may write")
+    require((ROOT / ".codex/agents/scout.toml").is_file(), "Codex Scout configuration missing")
+    require((ROOT / ".codex/agents/worker.toml").is_file(), "Codex Worker configuration missing")
+    validate_codex_agent_configs(ROOT)
     text = (ROOT / ".claude/agents/scout.md").read_text(encoding="utf-8")
     fm = load_yaml(text.split("---", 2)[1])
     require(set(t.strip() for t in fm["tools"].split(",")) == {"Read", "Grep", "Glob"}, "Claude Scout tool pool widened")

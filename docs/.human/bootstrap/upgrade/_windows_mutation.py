@@ -379,7 +379,8 @@ class WindowsMutator:
             finally:
                 _close(handle)
 
-    def unlink(self, relative: Path | str, *, missing_ok: bool = False) -> None:
+    def unlink(self, relative: Path | str, *, missing_ok: bool = False,
+               expected_identity: tuple[int, int] | None = None) -> None:
         with self._parent(relative) as (parent, basename):
             try:
                 handle = _nt_open(parent, basename, _DELETE | _SYNCHRONIZE,
@@ -389,6 +390,10 @@ class WindowsMutator:
                     return
                 raise
             try:
+                if expected_identity is not None:
+                    volume, file_id = _identity(handle)
+                    if (volume, int.from_bytes(file_id, "little")) != expected_identity:
+                        raise ValueError("Local override changed before removal")
                 remove = ctypes.c_byte(1)
                 if not _kernel.SetFileInformationByHandle(handle, _FILE_DISPOSITION_INFO_CLASS,
                                                            ctypes.byref(remove), ctypes.sizeof(remove)):

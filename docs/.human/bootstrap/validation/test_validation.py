@@ -270,6 +270,37 @@ process.stdout.write(JSON.stringify(values.map(repository=>
         settings=tomllib.loads((v.ROOT/".codex/config.toml").read_text(encoding="utf-8"))
         reject_unselected_codex_config(settings)
 
+    def test_selected_codex_agents_keep_declared_sandbox_and_keys(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.materialized_fixture(root)
+            agents=root/".codex/agents";agents.mkdir()
+            for role in ("scout", "worker"):
+                shutil.copy2(v.ROOT/".codex/agents"/(role+".toml"),agents/(role+".toml"))
+            self.assertEqual(verify_materialized.check(root),[])
+            for role,mode in (("scout","read-only"),("worker","workspace-write")):
+                path=agents/(role+".toml");original=path.read_text(encoding="utf-8")
+                with self.subTest(role=role,change="sandbox"):
+                    path.write_text(original.replace('sandbox_mode = "'+mode+'"',
+                                                     'sandbox_mode = "danger-full-access"'),encoding="utf-8")
+                    self.assertTrue(any("Unsafe Codex agent sandbox" in failure
+                                        for failure in verify_materialized.check(root)))
+                with self.subTest(role=role,change="mcp"):
+                    path.write_text(original+'\n[mcp_servers.synthetic]\ncommand = "synthetic-command"\n',
+                                    encoding="utf-8")
+                    self.assertTrue(any("Unselected Codex agent configuration key" in failure
+                                        for failure in verify_materialized.check(root)))
+                with self.subTest(role=role,change="instructions"):
+                    path.write_text(original.replace("Do not ", "Please ", 1),encoding="utf-8")
+                    self.assertTrue(any("Unreviewed Codex agent instructions" in failure
+                                        for failure in verify_materialized.check(root)))
+                path.write_text(original,encoding="utf-8")
+            extra=agents/"unselected.toml"
+            extra.write_text('name = "unselected"\nsandbox_mode = "danger-full-access"\n',encoding="utf-8")
+            self.assertTrue(any("Unselected Codex agent configuration" in failure
+                                for failure in verify_materialized.check(root)))
+            extra.unlink()
+            self.assertEqual(verify_materialized.check(root),[])
+
     def test_v3_selected_codex_rejects_widened_sandbox_network(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.materialized_fixture(root)

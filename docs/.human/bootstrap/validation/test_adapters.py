@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -374,6 +375,83 @@ class AdapterResolverTests(unittest.TestCase):
                         config.unlink()
                     elif os.name == "nt" and config.is_junction():
                         os.rmdir(config)
+
+    def test_clear_preserves_owner_leaf_replaced_after_validation(self):
+        for filename, clear in (
+            ("execution-profile.json", resolver.clear_local_override),
+            ("preset.json", resolver.clear_local_preset),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                target = config / filename
+                displaced = config / (filename + ".previous")
+                target.write_bytes(b"validated override")
+                original_unlink = resolver._unlink_local_file
+
+                def replace_before_unlink(path: Path, expected_identity: tuple[int, int]) -> None:
+                    path.rename(displaced)
+                    path.write_bytes(b"new owner override")
+                    original_unlink(path, expected_identity)
+
+                with mock.patch.object(resolver, "_unlink_local_file", side_effect=replace_before_unlink):
+                    with self.assertRaisesRegex(ValueError, "changed"):
+                        clear(root)
+                self.assertEqual(target.read_bytes(), b"new owner override")
+                self.assertEqual(displaced.read_bytes(), b"validated override")
+
+    @unittest.skipUnless(os.name == "posix" and sys.platform == "linux",
+                         "Linux renameat2 is required")
+    def test_clear_quarantines_verified_leaf_without_unlink_race(self):
+        for filename, clear in (
+            ("execution-profile.json", resolver.clear_local_override),
+            ("preset.json", resolver.clear_local_preset),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                target = config / filename
+                target.write_bytes(b"validated override")
+                self.assertTrue(clear(root))
+                self.assertFalse(target.exists())
+                quarantined = list(config.glob(".clear-*"))
+                self.assertEqual(len(quarantined), 1)
+                self.assertEqual(quarantined[0].read_bytes(), b"validated override")
+
+    @unittest.skipUnless(os.name == "posix" and sys.platform == "linux",
+                         "Linux renameat2 is required")
+    def test_clear_restores_leaf_swapped_immediately_before_displacement(self):
+        for filename, clear in (
+            ("execution-profile.json", resolver.clear_local_override),
+            ("preset.json", resolver.clear_local_preset),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                target = config / filename
+                previous = config / (filename + ".previous")
+                target.write_bytes(b"validated override")
+                original_move = resolver._rename_local_noreplace
+                swapped = False
+
+                def replace_before_move(parent_fd: int, source: str, destination: str) -> None:
+                    nonlocal swapped
+                    if source == filename and not swapped:
+                        target.rename(previous)
+                        target.write_bytes(b"new owner override")
+                        swapped = True
+                    original_move(parent_fd, source, destination)
+
+                with mock.patch.object(resolver, "_rename_local_noreplace", side_effect=replace_before_move):
+                    with self.assertRaisesRegex(ValueError, "changed"):
+                        clear(root)
+                self.assertTrue(swapped)
+                self.assertEqual(target.read_bytes(), b"new owner override")
+                self.assertEqual(previous.read_bytes(), b"validated override")
+                self.assertEqual(list(config.glob(".clear-*")), [])
 
     def test_local_reads_use_bounded_handles_after_path_validation(self):
         with tempfile.TemporaryDirectory() as empty:

@@ -183,6 +183,11 @@ class VersionCompatibilityTests(unittest.TestCase):
                 "<!-- ## v1.0 - Draft -->",
                 "<!-- note -->## v1.0 - Draft",
                 "```markdown\n<!-- unfinished comment\n```",
+                "<script>\n## v1.0 - Draft\n</script>",
+                "<PRE class=\"sample\">\n## v1.0 - Draft\n</PRE>",
+                "<style>\n## v1.0 - Draft\n</style>",
+                "<textarea>\n## v1.0 - Draft\n</textarea>",
+                "<div>\n## v1.0 - Draft\n</div>",
             )
             for section in hidden:
                 with self.subTest(section=section):
@@ -192,6 +197,9 @@ class VersionCompatibilityTests(unittest.TestCase):
                     self.write(root, "HISTORY.md", "# History\n\n" + section +
                                "\n\n## v1.0 - Release\n")
                     self.schema_and_finalization(root, profile)
+            self.write(root, "HISTORY.md", "<script>\n## v1.0 - Draft\n</script>\n"
+                       "## v1.0 - Release\n")
+            self.schema_and_finalization(root, profile)
 
     def test_v3_numeric_versions_must_be_finite(self):
         sources = (
