@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -288,6 +289,41 @@ class AdapterResolverTests(unittest.TestCase):
                         config.unlink()
                     elif os.name == "nt" and config.is_junction():
                         os.rmdir(config)
+
+    @unittest.skipUnless(os.name == "nt", "Windows native helper is required")
+    def test_materialized_resolver_uses_adjacent_windows_helper_for_clear(self):
+        helper = HERE.parent / "upgrade" / "_windows_mutation.py"
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            materialized = base / "materialized"
+            materialized.mkdir()
+            copied_resolver = materialized / "resolve.py"
+            shutil.copyfile(ADAPTERS / "resolve.py", copied_resolver)
+            shutil.copyfile(helper, materialized / "_windows_mutation.py")
+            copied_spec = importlib.util.spec_from_file_location("materialized_resolver", copied_resolver)
+            copied = importlib.util.module_from_spec(copied_spec)
+            assert copied_spec.loader
+            copied_spec.loader.exec_module(copied)
+
+            project = base / "project"
+            config = project / ".local" / "config"
+            config.mkdir(parents=True)
+            for filename, clear in (
+                ("execution-profile.json", copied.clear_local_override),
+                ("preset.json", copied.clear_local_preset),
+            ):
+                with self.subTest(filename=filename):
+                    target = config / filename
+                    target.write_bytes(b"local override")
+                    self.assertTrue(clear(project))
+                    self.assertFalse(target.exists())
+
+            (materialized / "_windows_mutation.py").unlink()
+            missing = config / "execution-profile.json"
+            missing.write_bytes(b"local override")
+            with self.assertRaisesRegex(OSError, "Windows native mutation helper"):
+                copied.clear_local_override(project)
+            self.assertEqual(missing.read_bytes(), b"local override")
 
 
 if __name__ == "__main__":

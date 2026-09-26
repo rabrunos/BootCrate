@@ -187,8 +187,10 @@ def _unlink_local_file(target: Path) -> None:
     root = target.parents[2]
     relative = Path(".local") / "config" / target.name
     if os.name == "nt":
-        helper = Path(__file__).resolve().parents[2] / "upgrade" / "_windows_mutation.py"
-        if not helper.is_file():
+        adjacent = Path(__file__).with_name("_windows_mutation.py")
+        bootstrap = Path(__file__).resolve().parents[2] / "upgrade" / "_windows_mutation.py"
+        helper = next((path for path in (adjacent, bootstrap) if path.is_file()), None)
+        if helper is None:
             raise OSError("Safe local override removal requires the Windows native mutation helper")
         spec = importlib.util.spec_from_file_location("_bootcrate_windows_mutation", helper)
         if spec is None or spec.loader is None:

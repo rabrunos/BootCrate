@@ -65,6 +65,7 @@ If write authorization is missing, report the exact blocker rather than claim su
 - Confirm version/mirrors, canonical changelog entry, tracked/untracked scope and `git diff --check`.
 - Preserve and validate the rewritten root `PROJECT_GUIDE.md`. Remove the complete `docs/.human/bootstrap/` tree, raw intake and `.github/workflows/bootcrate-validate.yml`. The bootstrap verifier, dependencies, scenario fixtures and evaluation tooling do not belong in the new project's normal runtime.
 - Remove disabled adapters/unused scripts/forms/skills; promote only selected controls and needed tooling before deleting their generic source library.
+- If retaining the Windows execution resolver's `--clear-local` commands, promote `resolve.py` and `_windows_mutation.py` into the same directory and test the copied commands after pruning. Clearing fails closed without the native helper.
 - Rewrite README for the real project; remove BootCrate version/history/branding/provenance unless attribution was requested.
 - Verify no dangling reference to removed bootstrap content. Run `verify-materialized.py <downstream-root>` from a retained copy of validation tooling and then the final project's own checks after pruning; do not retain bootstrap just to satisfy its self-test. Structural success does not certify behavior or production readiness.
 - Commit/push only as authorized, using the target token. Never publish/deploy during validation.
