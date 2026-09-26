@@ -89,6 +89,7 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
             raise ValueError("Invalid managed-policy profile allowlist")
         if requested not in allowed:
             status, reason = "unsupported", "Managed policy does not allow the requested profile."
+    policy_blocked = status == "unsupported" and allowed is not None and requested not in allowed
     effective = None
     if observation is not None:
         observed_status = observation.get("status")
@@ -97,8 +98,25 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
             raise ValueError("Invalid observed support status")
         if observed_effective is not None and observed_effective not in PROFILES:
             raise ValueError("Invalid observed effective profile")
-        status, effective = observed_status, observed_effective
-        reason = observation.get("reason") or reason
+        if observation.get("surface", surface) != surface:
+            raise ValueError("Observation belongs to another surface")
+        if not policy_blocked:
+            status, effective = observed_status, observed_effective
+            reason = observation.get("reason") or reason
+            if adapter["id"] == "claude_code" and requested != "full_access" and effective == "full_access":
+                status, effective = "unknown", None
+                reason = "Observed Full Access does not satisfy the requested protected profile."
+            if adapter["id"] == "claude_code" and requested == "full_access" and effective == "full_access":
+                capabilities = observation.get("capabilities") or {}
+                if not isinstance(capabilities, dict):
+                    raise ValueError("Invalid Claude capability observation")
+                missing = [name for name in ("approval_bypass", "filesystem_unrestricted", "network_unrestricted")
+                           if capabilities.get(name) is not True]
+                if observation.get("surface") != surface:
+                    missing.insert(0, "observed surface")
+                if status != "supported" or missing:
+                    status, effective = "unknown", None
+                    reason = "Claude Full Access not proven: " + ", ".join(missing or ["supported status"]) + "."
     return {
         "requested": requested,
         "effective": effective,

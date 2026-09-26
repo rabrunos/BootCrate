@@ -57,6 +57,11 @@
     "answers": {
       "type": "object",
       "additionalProperties": false,
+      "if": {
+        "properties": {"execution_profile": {"const": "full_access"}},
+        "required": ["execution_profile"]
+      },
+      "then": {"required": ["full_access_acknowledgement"]},
       "properties": {
         "project_name": {
           "type": "string",

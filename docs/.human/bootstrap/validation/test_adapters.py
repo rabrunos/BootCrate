@@ -54,11 +54,16 @@ class AdapterResolverTests(unittest.TestCase):
         self.assertEqual(actions["full_access"]["settings_patch"]["sandbox_mode"], "danger-full-access")
 
     def test_claude_auto_unknown_never_falls_through(self):
-        result = resolver.map_request(self.adapter("claude-code.json"), "cli",
-                                      resolver.resolve_execution(task="protected_auto"))
+        adapter = self.adapter("claude-code.json")
+        requested = resolver.resolve_execution(task="protected_auto")
+        result = resolver.map_request(adapter, "cli", requested)
         self.assertEqual((result["requested"], result["effective"], result["status"]),
                          ("protected_auto", None, "unknown"))
         self.assertNotIn("dangerously-skip-permissions", result["native_action"]["cli_args"])
+        mismatched = resolver.map_request(adapter,"cli",requested,
+            observation={"surface":"cli","status":"supported","effective":"full_access"})
+        self.assertEqual((mismatched["status"],mismatched["effective"],mismatched["applied"]),
+                         ("unknown",None,False))
 
     def test_observation_and_managed_policy_are_reported(self):
         requested = resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)
@@ -68,6 +73,37 @@ class AdapterResolverTests(unittest.TestCase):
         observed = resolver.map_request(self.adapter("codex.json"), "cli", requested,
                                         observation={"status":"supported", "effective":"full_access"})
         self.assertTrue(observed["applied"])
+
+    def test_claude_full_access_requires_bypass_and_unrestricted_boundary(self):
+        adapter = self.adapter("claude-code.json")
+        requested = resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)
+        base = {"surface":"cli", "status":"supported", "effective":"full_access"}
+        for capabilities, missing in (
+            ({"approval_bypass":True}, "filesystem_unrestricted"),
+            ({"filesystem_unrestricted":True,"network_unrestricted":True}, "approval_bypass"),
+            ({"approval_bypass":True,"filesystem_unrestricted":True}, "network_unrestricted"),
+        ):
+            result = resolver.map_request(adapter,"cli",requested,
+                                          observation={**base,"capabilities":capabilities})
+            self.assertEqual((result["status"],result["effective"],result["applied"]),
+                             ("unknown",None,False))
+            self.assertIn(missing,result["reason"])
+        result = resolver.map_request(adapter,"cli",requested,observation={**base,"capabilities":{
+            "approval_bypass":True,"filesystem_unrestricted":True,"network_unrestricted":True}})
+        self.assertEqual((result["status"],result["effective"],result["applied"]),
+                         ("supported","full_access",True))
+        no_surface = resolver.map_request(adapter,"cli",requested,observation={
+            "status":"supported","effective":"full_access","capabilities":{
+                "approval_bypass":True,"filesystem_unrestricted":True,"network_unrestricted":True}})
+        self.assertEqual((no_surface["status"],no_surface["effective"],no_surface["applied"]),
+                         ("unknown",None,False))
+        self.assertIn("observed surface",no_surface["reason"])
+        self.assertFalse(resolver.map_request(adapter,"cli",requested)["applied"])
+        blocked = resolver.map_request(adapter,"cli",requested,observation={**base,"capabilities":{
+            "approval_bypass":True,"filesystem_unrestricted":True,"network_unrestricted":True}},
+            managed_policy={"allowed_profiles":["protected_manual"]})
+        self.assertEqual((blocked["status"],blocked["effective"],blocked["applied"]),
+                         ("unsupported",None,False))
 
     def test_clear_override_returns_to_safe_default(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -74,6 +74,9 @@
         if (!q) add("unknown", "answers." + id);
         else if (!validValue(q, value)) add("value", "answers." + id);
       }
+      if (data.answers?.execution_profile === "full_access" &&
+          data.answers.full_access_acknowledgement !== "acknowledged")
+        add("required", "answers.full_access_acknowledgement");
       if (data.answer_states !== undefined) {
         if (!object(data.answer_states)) add("object", "answer_states");
         else for (const [id, state] of Object.entries(data.answer_states)) {
@@ -92,6 +95,8 @@
         if (present(value) && !validValue(q, value)) throw new Error("Invalid active answer: " + q.id);
         if (present(value)) out[q.id] = typeof value === "string" ? value.trim() : [...value];
       }
+      if (out.execution_profile === "full_access" && out.full_access_acknowledgement !== "acknowledged")
+        throw new Error("Full Access requires explicit acknowledgement");
       return out;
     }
     function exportStates(states, answers) {

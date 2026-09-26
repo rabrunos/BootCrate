@@ -19,6 +19,19 @@ verify_spec.loader.exec_module(verify_materialized)
 
 
 class ValidationTests(unittest.TestCase):
+    def test_intake_schema_requires_full_access_acknowledgement(self):
+        schema=v.load_json(v.BOOT/"schemas/project-intake.schema.json")
+        base={"schema":"bootcrate-project-intake/v2"}
+        for profile in ("protected_manual","protected_auto"):
+            v.schema_check(schema,{**base,"answers":{"execution_profile":profile}})
+        with self.assertRaises(ValueError):
+            v.schema_check(schema,{**base,"answers":{"execution_profile":"full_access"}})
+        with self.assertRaises(ValueError):
+            v.schema_check(schema,{**base,"answers":{"execution_profile":"full_access",
+                                                   "full_access_acknowledgement":"yes"}})
+        v.schema_check(schema,{**base,"answers":{"execution_profile":"full_access",
+                                              "full_access_acknowledgement":"acknowledged"}})
+
     def finalize_profile(self, profile):
         profile["project"]={"name":"Example", "kind":"static", "summary":"Synthetic fixture"}
         profile["versioning"].update(

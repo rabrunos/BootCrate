@@ -150,6 +150,20 @@ test('old v2 intake defaults safely without inferring permissions from autonomy'
   const normalized=core.normalize(envelope({autonomy:'high',consumption_preset:'economy'}));
   assert.equal(normalized.answers.execution_profile,'protected_manual');
 });
+test('intake validation and export enforce the Full Access opt-in',()=>{
+  for(const profile of ['protected_manual','protected_auto'])
+    assert.deepEqual(core.validate(envelope({execution_profile:profile})),[]);
+  const unsafe=envelope({execution_profile:'full_access'});
+  assert.ok(core.validate(unsafe).some(error=>error.path==='answers.full_access_acknowledgement'));
+  assert.throws(()=>core.normalize(unsafe),/Invalid intake envelope/);
+  assert.throws(()=>core.exportAnswers(unsafe.answers),/explicit acknowledgement/);
+  const optedIn=envelope({execution_profile:'full_access',full_access_acknowledgement:'acknowledged'});
+  assert.deepEqual(core.validate(optedIn),[]);
+  assert.deepEqual(core.exportAnswers(optedIn.answers),optedIn.answers);
+  assert.deepEqual(core.normalize(optedIn).answers,optedIn.answers);
+  assert.ok(core.validate(envelope({execution_profile:'full_access',full_access_acknowledgement:'yes'})).length);
+  assert.deepEqual(core.normalize(envelope({consumption_preset:'economy'})).answers.execution_profile,'protected_manual');
+});
 test('execution profiles have task/local/default precedence and Full Access acknowledgement',()=>{
   assert.deepEqual(Execution.resolve({task:'protected_manual',local:'protected_auto'}),{requested:'protected_manual',source:'task'});
   assert.deepEqual(Execution.resolve({local:'protected_auto'}),{requested:'protected_auto',source:'local'});

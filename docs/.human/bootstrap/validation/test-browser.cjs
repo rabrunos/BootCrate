@@ -39,6 +39,9 @@ test('file-mode Setup shows accessible required errors and preserves legacy draf
   await page.locator('#field-full_access_acknowledgement').selectOption('acknowledged');
   await page.locator('#field-execution_profile').selectOption('protected_manual');
   assert.equal(await page.locator('#field-full_access_acknowledgement').count(),0);
+  await page.locator('#importInput').setInputFiles({name:'unsafe-intake.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({schema:'bootcrate-project-intake/v2',answers:{project_name:'Unsafe',execution_profile:'full_access'}}))});
+  await page.waitForFunction(()=>document.querySelector('#inlineMessage').textContent.includes('current draft was preserved'));
+  assert.equal(await page.locator('#field-execution_profile').inputValue(),'protected_manual');
   const old = {schema:'bootcrate-project-intake/v1',answers:{project_name:'Legacy',issues_tracking:'no',primary_orchestration:'local_planner'}};
   await page.locator('#importInput').setInputFiles({name:'legacy.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(old))});
   assert.equal(await page.locator('#legacyDialog').evaluate(e=>e.open),true);
@@ -65,7 +68,7 @@ test('file-mode optional Console imports a profile without claiming remote proof
   const profile={schema:'project-profile/v3',project:{name:'Example',kind:'static'},
     workflow:{tracking:'github_issues',primary_orchestrator:'chatgpt',consumption_preset:'standard',implementation_harnesses:['codex']},
     execution_permissions:{safe_default:'protected_manual'},
-    versioning:{canonical_source:'VERSION',history_source:'CHANGELOG.md'},distribution:{mode:'none',targets:[]},
+    versioning:{canonical_source:'VERSION',reader:'plain',history_source:'CHANGELOG.md',history_format:'markdown-headings'},distribution:{mode:'none',targets:[]},
     security:{exposure:'local',modules:[],control_map:'baseline'},validation:{canonical_capabilities:['test']},skills:[]};
   await page.locator('#profile').setInputFiles({name:'profile.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(profile))});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
@@ -125,6 +128,7 @@ test('file-mode optional Console imports a profile without claiming remote proof
   assert.match(await page.locator('#localCheck').innerText(),/canonical version source file/);
   await page.locator('#version').setInputFiles({name:'VERSION',mimeType:'text/plain',buffer:Buffer.from('1.2\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version source imported'));
+  assert.match(await page.locator('#details').innerText(),/1\.2/);
   await page.locator('#preflight').setInputFiles({name:'preflight.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify([{destination:'web',channel:'stable',status:'READY',notes:'New release'},{destination:'store',channel:'stable',status:'BLOCK',reason:'Unknown baseline'}]))});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Preflight imported'));
   assert.match(await page.locator('#status').innerText(),/Preflight imported/);
@@ -150,6 +154,28 @@ test('file-mode optional Console imports a profile without claiming remote proof
   assert.equal(parsed.control_summary.control_map,'baseline');
   assert.equal(parsed.profile,undefined);
   assert.equal(parsed.code,undefined);
+  const jsonProfile={...profile,versioning:{canonical_source:'package.json',reader:'json',value_path:'/meta/release~1version',history_source:'HISTORY.md',history_format:'markdown-headings'}};
+  await page.locator('#profile').setInputFiles({name:'json-profile.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(jsonProfile))});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
+  await page.locator('#version').setInputFiles({name:'package.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({meta:{'release/version':'2.3'}}))});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version source imported'));
+  assert.match(await page.locator('#details').innerText(),/2\.3/);
+  await page.locator('#history').setInputFiles({name:'HISTORY.md',mimeType:'text/markdown',buffer:Buffer.from('# History\n## [v2.3] Release\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
+  assert.match(await page.locator('#historyNotes').innerText(),/v2\.3/);
+  const validJsonDetails=await page.locator('#details').innerText(),validJsonHistory=await page.locator('#historyNotes').innerText();
+  await page.locator('#version').setInputFiles({name:'package.json',mimeType:'application/json',buffer:Buffer.from('{"meta":{}}')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version value path not found'));
+  assert.equal(await page.locator('#details').innerText(),validJsonDetails);
+  assert.equal(await page.locator('#historyNotes').innerText(),validJsonHistory);
+  const tomlProfile={...profile,versioning:{canonical_source:'pyproject.toml',reader:'toml',history_source:'HISTORY.md',history_format:'markdown-headings'}};
+  await page.locator('#profile').setInputFiles({name:'toml-profile.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(tomlProfile))});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
+  const beforeUnsupported=await page.locator('#details').innerText();
+  await page.locator('#version').setInputFiles({name:'pyproject.toml',mimeType:'text/plain',buffer:Buffer.from('[project]\nversion="2.4"\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes("Reader 'toml' is not supported"));
+  assert.match(await page.locator('#status').innerText(),/Previous state was preserved/);
+  assert.equal(await page.locator('#details').innerText(),beforeUnsupported);
   const legacyProfile={schema:'project-profile/v2',project:{name:'Legacy profile',kind:'cli'},workflow:{tracking:'github_issues',primary_orchestrator:'chatgpt',implementation_harnesses:['codex']},versioning:{canonical_source:'VERSION'}};
   await page.locator('#profile').setInputFiles({name:'legacy-profile.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(legacyProfile))});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
