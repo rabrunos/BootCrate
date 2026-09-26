@@ -1,6 +1,7 @@
 """Shared, read-only profile and repository checks for template and downstream validation."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -11,6 +12,37 @@ import tomllib
 from typing import Any
 
 from jsonschema import Draft202012Validator
+import yaml
+
+
+class UniqueLoader(yaml.SafeLoader):
+    """Safe YAML with duplicate rejection and YAML-1.2-style booleans."""
+
+
+UniqueLoader.yaml_implicit_resolvers = copy.deepcopy(yaml.SafeLoader.yaml_implicit_resolvers)
+for key, entries in UniqueLoader.yaml_implicit_resolvers.items():
+    UniqueLoader.yaml_implicit_resolvers[key] = [entry for entry in entries
+                                                   if entry[0] != "tag:yaml.org,2002:bool"]
+UniqueLoader.add_implicit_resolver("tag:yaml.org,2002:bool",
+                                   re.compile(r"^(?:true|false|True|False|TRUE|FALSE)$"), list("tTfF"))
+
+
+def _unique_mapping(loader: UniqueLoader, node: Any, deep: bool = False) -> dict[str, Any]:
+    loader.flatten_mapping(node)
+    result: dict[str, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in result:
+            raise ValueError(f"Duplicate YAML key: {key}")
+        result[key] = loader.construct_object(value_node, deep=deep)
+    return result
+
+
+UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping)
+
+
+def load_yaml(text: str) -> Any:
+    return yaml.load(text, Loader=UniqueLoader)
 
 
 CLAUDE_CREDENTIAL_DENY_RULES = frozenset({
@@ -40,6 +72,7 @@ ALLOWED_CLAUDE_CONFIG_KEYS = {
 
 
 CODEX_AGENT_SANDBOXES = {"scout": "read-only", "worker": "workspace-write"}
+CODEX_AGENT_EFFORTS = {"scout": "medium", "worker": "low"}
 CODEX_AGENT_INSTRUCTIONS_SHA256 = {
     "scout": "c2499fae1d2a3bc3be41aada8038184432d784419c953ebd4b6e6ceb35e8c35a",
     "worker": "ce445d89179c868978504ad8fee815f1a835a37a6b7c4d4a15325a5139fca3fb",
@@ -77,10 +110,61 @@ def validate_codex_agent_configs(root: Path) -> None:
         require(hashlib.sha256(settings["developer_instructions"].encode("utf-8")).hexdigest() ==
                 CODEX_AGENT_INSTRUCTIONS_SHA256[role],
                 "Unreviewed Codex agent instructions: " + path.name)
-        for key in ("model", "model_reasoning_effort"):
-            if key in settings:
-                require(isinstance(settings[key], str) and bool(settings[key].strip()),
-                        "Invalid Codex agent setting: " + path.name + "." + key)
+        require(settings.get("model_reasoning_effort") == CODEX_AGENT_EFFORTS[role],
+                "Unexpected Codex agent effort: " + path.name)
+        if "model" in settings:
+            require(isinstance(settings["model"], str) and bool(settings["model"].strip()),
+                    "Invalid Codex agent model: " + path.name)
+
+
+CLAUDE_AGENT_BASELINE = {
+    "scout": {
+        "effort": "medium", "maxTurns": 30, "tools": "Read, Grep, Glob",
+        "description_sha256": "eeb66ca859b92ed9d3e7739faa3cc10da133e28d17acff0e22acb11826968b9c",
+        "body_sha256": "dc7d650d099d0e69df46d727f6b2312cbddeae92239f6d0b091454562ab946a9",
+    },
+    "worker": {
+        "effort": "low", "maxTurns": 20,
+        "description_sha256": "d7b33d62722a7b7b3ada66fb361545bbf5cd3eb71f2ce82c4127254dea2433e7",
+        "body_sha256": "a1ba3a8425010708de4b4e8ed3b0d15e747b011f0c66cdb76311062a584af112",
+    },
+}
+
+
+def validate_claude_agent_configs(root: Path) -> None:
+    """Bound optional v3 Claude roles to the reviewed Scout/Worker files."""
+    agents = root / ".claude/agents"
+    if not (agents.exists() or agents.is_symlink() or getattr(agents, "is_junction", lambda: False)()):
+        return
+    require(agents.is_dir() and not agents.is_symlink() and
+            not getattr(agents, "is_junction", lambda: False)(),
+            "Claude agent directory must be local and real")
+    for path in agents.iterdir():
+        role = path.stem
+        require(path.name == role + ".md" and role in CLAUDE_AGENT_BASELINE,
+                "Unselected Claude agent configuration: " + path.name)
+        require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 2 * 1024 * 1024,
+                "Claude agent configuration is linked, missing or too large: " + path.name)
+        parts = path.read_text(encoding="utf-8").split("---", 2)
+        require(len(parts) == 3 and not parts[0].strip(),
+                "Invalid Claude agent frontmatter: " + path.name)
+        settings = load_yaml(parts[1])
+        baseline = CLAUDE_AGENT_BASELINE[role]
+        require(isinstance(settings, dict) and set(settings) ==
+                ({"name", "description", "model", "effort", "maxTurns", "tools"}
+                 if role == "scout" else {"name", "description", "model", "effort", "maxTurns"}),
+                "Unselected Claude agent settings: " + path.name)
+        require(settings["name"] == role and settings["effort"] == baseline["effort"] and
+                settings["maxTurns"] == baseline["maxTurns"] and
+                (role != "scout" or settings["tools"] == baseline["tools"]),
+                "Unsafe Claude agent role settings: " + path.name)
+        require(isinstance(settings["model"], str) and bool(settings["model"].strip()),
+                "Invalid Claude agent model: " + path.name)
+        require(isinstance(settings["description"], str) and
+                hashlib.sha256(settings["description"].encode("utf-8")).hexdigest() ==
+                baseline["description_sha256"] and
+                hashlib.sha256(parts[2].encode("utf-8")).hexdigest() == baseline["body_sha256"],
+                "Unreviewed Claude agent instructions: " + path.name)
 
 
 def reject_unselected_codex_config(settings: dict) -> None:

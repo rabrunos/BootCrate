@@ -293,10 +293,56 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                     path.write_text(original.replace("Do not ", "Please ", 1),encoding="utf-8")
                     self.assertTrue(any("Unreviewed Codex agent instructions" in failure
                                         for failure in verify_materialized.check(root)))
+                with self.subTest(role=role,change="effort"):
+                    expected="medium" if role=="scout" else "low"
+                    changed="low" if role=="scout" else "medium"
+                    path.write_text(original.replace('model_reasoning_effort = "'+expected+'"',
+                                                     'model_reasoning_effort = "'+changed+'"'),encoding="utf-8")
+                    self.assertTrue(any("Unexpected Codex agent effort" in failure
+                                        for failure in verify_materialized.check(root)))
                 path.write_text(original,encoding="utf-8")
             extra=agents/"unselected.toml"
             extra.write_text('name = "unselected"\nsandbox_mode = "danger-full-access"\n',encoding="utf-8")
             self.assertTrue(any("Unselected Codex agent configuration" in failure
+                                for failure in verify_materialized.check(root)))
+            extra.unlink()
+            self.assertEqual(verify_materialized.check(root),[])
+
+    def test_selected_claude_agents_keep_reviewed_roles(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,path=self.materialized_fixture(root)
+            profile["workflow"]["implementation_harnesses"]=["codex","claude_code"]
+            path.write_text(json.dumps(profile),encoding="utf-8")
+            (root/"CLAUDE.md").write_text("# Claude rules\n",encoding="utf-8")
+            native=root/".claude/settings.json";native.parent.mkdir()
+            native.write_text(json.dumps({"effortLevel":"high",
+                                          "permissions":{"defaultMode":"default",
+                                                         "deny":list(v.CLAUDE_CREDENTIAL_DENY_RULES)},
+                                          "sandbox":{"enabled":True}}),encoding="utf-8")
+            agents=root/".claude/agents";agents.mkdir()
+            for role in ("scout","worker"):
+                shutil.copy2(v.ROOT/".claude/agents"/(role+".md"),agents/(role+".md"))
+            self.assertEqual(verify_materialized.check(root),[])
+            for role,effort in (("scout","medium"),("worker","low")):
+                agent=agents/(role+".md");original=agent.read_text(encoding="utf-8")
+                with self.subTest(role=role,change="effort"):
+                    agent.write_text(original.replace("effort: "+effort,"effort: high"),encoding="utf-8")
+                    self.assertTrue(any("Unsafe Claude agent role settings" in failure
+                                        for failure in verify_materialized.check(root)))
+                with self.subTest(role=role,change="instructions"):
+                    agent.write_text(original.replace("Do not ","Please ",1),encoding="utf-8")
+                    self.assertTrue(any("Unreviewed Claude agent instructions" in failure
+                                        for failure in verify_materialized.check(root)))
+                if role=="scout":
+                    with self.subTest(role=role,change="tools"):
+                        agent.write_text(original.replace("tools: Read, Grep, Glob",
+                                                          "tools: Read, Grep, Glob, Bash"),encoding="utf-8")
+                        self.assertTrue(any("Unsafe Claude agent role settings" in failure
+                                            for failure in verify_materialized.check(root)))
+                agent.write_text(original,encoding="utf-8")
+            extra=agents/"unselected.md"
+            extra.write_text("---\nname: unselected\n---\nUnsafe role.\n",encoding="utf-8")
+            self.assertTrue(any("Unselected Claude agent configuration" in failure
                                 for failure in verify_materialized.check(root)))
             extra.unlink()
             self.assertEqual(verify_materialized.check(root),[])

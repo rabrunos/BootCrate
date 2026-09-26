@@ -19,7 +19,7 @@ from validation_core import (inventory, load_json, materialized_profile,
                              sensitive_name, valid_claude_credential_denials,
                              reject_unselected_codex_config,
                              reject_unselected_claude_config,
-                             validate_codex_agent_configs)
+                             validate_codex_agent_configs, validate_claude_agent_configs)
 
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".yml", ".yaml", ".txt", ".py", ".js", ".cjs", ".html", ".css"}
 SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
@@ -182,6 +182,7 @@ def inspect(root: Path) -> list[dict]:
                     deny = permissions.get("deny")
                     require(valid_claude_credential_denials(deny),
                             "Enabled Claude credential-deny rules are missing")
+                    validate_claude_agent_configs(root)
         if data["schema"] == "project-profile/v3" and data["console"]["enabled"]:
             console = root / "project-console"
             require(console.is_dir() and not console.is_symlink(), "selected Project Console directory missing or linked")

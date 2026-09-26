@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 from pathlib import Path
 import re
@@ -16,7 +15,7 @@ from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_objec
                              inventory as project_inventory, sensitive_name,
                              secret_findings, local_refs_only, schema_check,
                              reject_unselected_codex_config, reject_unselected_claude_config,
-                             validate_codex_agent_configs,
+                             validate_codex_agent_configs, validate_claude_agent_configs, load_yaml,
                              materialized_profile, profile_schema,
                              valid_claude_credential_denials)
 
@@ -31,33 +30,6 @@ ROOT = HERE.parents[3]
 BOOT = ROOT / "docs/.human/bootstrap"
 SKIP = {".git", ".local", ".venv", "__pycache__", "node_modules", ".temp"}
 EXAMPLES = {".env.example", ".env.sample", ".env.template"}
-
-
-class UniqueLoader(yaml.SafeLoader):
-    """Safe YAML with duplicate rejection and YAML-1.2-style boolean spellings."""
-
-
-UniqueLoader.yaml_implicit_resolvers = copy.deepcopy(yaml.SafeLoader.yaml_implicit_resolvers)
-for key, entries in UniqueLoader.yaml_implicit_resolvers.items():
-    UniqueLoader.yaml_implicit_resolvers[key] = [e for e in entries if e[0] != "tag:yaml.org,2002:bool"]
-UniqueLoader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true|false|True|False|TRUE|FALSE)$"), list("tTfF"))
-
-
-def unique_mapping(loader: UniqueLoader, node: Any, deep: bool = False) -> dict[str, Any]:
-    loader.flatten_mapping(node)
-    result: dict[str, Any] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=deep)
-        require(key not in result, f"Duplicate YAML key: {key}")
-        result[key] = loader.construct_object(value_node, deep=deep)
-    return result
-
-
-UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
-
-
-def load_yaml(text: str) -> Any:
-    return yaml.load(text, Loader=UniqueLoader)
 
 
 def run(command: list[str], cwd: Path = ROOT) -> str:
@@ -156,9 +128,9 @@ def check_adapters() -> None:
     require((ROOT / ".codex/agents/scout.toml").is_file(), "Codex Scout configuration missing")
     require((ROOT / ".codex/agents/worker.toml").is_file(), "Codex Worker configuration missing")
     validate_codex_agent_configs(ROOT)
-    text = (ROOT / ".claude/agents/scout.md").read_text(encoding="utf-8")
-    fm = load_yaml(text.split("---", 2)[1])
-    require(set(t.strip() for t in fm["tools"].split(",")) == {"Read", "Grep", "Glob"}, "Claude Scout tool pool widened")
+    require((ROOT / ".claude/agents/scout.md").is_file(), "Claude Scout configuration missing")
+    require((ROOT / ".claude/agents/worker.md").is_file(), "Claude Worker configuration missing")
+    validate_claude_agent_configs(ROOT)
     settings = load_json(ROOT / ".claude/settings.json")
     reject_unselected_claude_config(settings)
     require(settings["effortLevel"] == "high" and settings["permissions"]["defaultMode"] == "default", "Unsafe Claude defaults")
