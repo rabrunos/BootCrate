@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 import re
 import subprocess
@@ -104,6 +105,8 @@ def version_value(root: Path, source: dict[str, Any], label: str = "canonical ve
             value = _value_at(tomllib.load(stream), source.get("value_path", ""), label)
     require(not isinstance(value, bool) and isinstance(value, (str, int, float)),
             f"{label.capitalize()} value must be scalar")
+    require(not isinstance(value, float) or math.isfinite(value),
+            f"{label.capitalize()} numeric value must be finite")
     token = str(value).strip()
     require(VERSION_TOKEN.fullmatch(token) is not None, f"Invalid {label} value")
     return token

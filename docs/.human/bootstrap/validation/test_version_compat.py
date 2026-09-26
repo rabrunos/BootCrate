@@ -152,6 +152,37 @@ class VersionCompatibilityTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "Schema failure"):
                         v.schema_check(v.profile_schema(v.ROOT / "docs/.ai/schemas", missing), missing)
 
+    def test_v3_numeric_versions_must_be_finite(self):
+        sources = (
+            ("json", "package.json", "{\"version\": NaN}"),
+            ("json", "package.json", "{\"version\": Infinity}"),
+            ("json", "package.json", "{\"version\": -Infinity}"),
+            ("json", "package.json", "{\"version\": 1e999}"),
+            ("toml", "pyproject.toml", "version = nan\n"),
+            ("toml", "pyproject.toml", "version = inf\n"),
+            ("toml", "pyproject.toml", "version = -inf\n"),
+        )
+        for reader, source, body in sources:
+            with self.subTest(reader=reader, body=body), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.support_files(root)
+                self.write(root, source, body)
+                self.write(root, "HISTORY.md", "# History\n\n## v1.25 - Release\n")
+                profile = self.v3_profile(source, reader, "/version")
+                with self.assertRaisesRegex(ValueError, "numeric value must be finite"):
+                    self.schema_and_finalization(root, profile)
+
+        for reader, source, body in (("json", "package.json", '{"version": 1.25}'),
+                                     ("toml", "pyproject.toml", "version = 1.25\n")):
+            with self.subTest(reader=reader, finite=True), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.support_files(root)
+                self.write(root, source, body)
+                self.write(root, "HISTORY.md", "# History\n\n## v1.25 - Release\n")
+                profile = self.v3_profile(source, reader, "/version")
+                self.schema_and_finalization(root, profile)
+                self.assertEqual(validate_version_contract(profile, root), "1.25")
+
 
 if __name__ == "__main__":
     unittest.main()

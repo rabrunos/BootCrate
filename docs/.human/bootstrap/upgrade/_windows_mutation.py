@@ -40,6 +40,7 @@ _FILE_RENAME_INFORMATION_CLASS = 10
 _FILE_LINK_INFORMATION_CLASS = 11
 _STATUS_OBJECT_NAME_NOT_FOUND = 0xC0000034
 _STATUS_OBJECT_NAME_COLLISION = 0xC0000035
+_STATUS_OBJECT_PATH_NOT_FOUND = 0xC000003A
 _MAX_READ_BYTES = 4 * 1024 * 1024
 
 
@@ -156,6 +157,8 @@ def _nt_open(parent: int, basename: str, access: int, disposition: int,
     if status != 0:
         if disposition == _FILE_CREATE and status & 0xffffffff == _STATUS_OBJECT_NAME_COLLISION:
             raise FileExistsError(errno.EEXIST, "Windows mutation target already exists", basename)
+        if status & 0xffffffff in {_STATUS_OBJECT_NAME_NOT_FOUND, _STATUS_OBJECT_PATH_NOT_FOUND}:
+            raise FileNotFoundError(errno.ENOENT, "Windows mutation path is absent", basename)
         raise _nt_error("NtCreateFile", status)
     handle = result.value
     try:
@@ -288,24 +291,30 @@ class WindowsMutator:
             finally:
                 _close(handle)
 
-    def read(self, relative: Path | str, *, max_bytes: int = _MAX_READ_BYTES) -> bytes:
+    def read(self, relative: Path | str, *, max_bytes: int = _MAX_READ_BYTES,
+             missing_ok: bool = False) -> bytes | None:
         if max_bytes < 0:
             raise ValueError("Negative Windows mutation read limit")
-        with self._parent(relative) as (parent, basename):
-            handle = _nt_open(parent, basename,
-                              _FILE_READ_DATA | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE,
-                              _FILE_OPEN, directory=False)
-            try:
-                import msvcrt
-                descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
-                handle = None
-                with os.fdopen(descriptor, "rb") as stream:
-                    data = stream.read(max_bytes + 1)
-                if len(data) > max_bytes:
-                    raise ValueError("Windows mutation file exceeds its read limit")
-                return data
-            finally:
-                _close(handle)
+        try:
+            with self._parent(relative) as (parent, basename):
+                handle = _nt_open(parent, basename,
+                                  _FILE_READ_DATA | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE,
+                                  _FILE_OPEN, directory=False)
+                try:
+                    import msvcrt
+                    descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+                    handle = None
+                    with os.fdopen(descriptor, "rb") as stream:
+                        data = stream.read(max_bytes + 1)
+                    if len(data) > max_bytes:
+                        raise ValueError("Windows mutation file exceeds its read limit")
+                    return data
+                finally:
+                    _close(handle)
+        except FileNotFoundError:
+            if missing_ok:
+                return None
+            raise
 
     def replace(self, source: Path | str, destination: Path | str,
                 *, expected_digest: str | None = None) -> None:
@@ -331,8 +340,8 @@ class WindowsMutator:
             try:
                 handle = _nt_open(parent, basename, _DELETE | _SYNCHRONIZE,
                                   _FILE_OPEN, directory=False)
-            except OSError as error:
-                if missing_ok and ("0x" + format(_STATUS_OBJECT_NAME_NOT_FOUND, "08x")) in str(error):
+            except FileNotFoundError:
+                if missing_ok:
                     return
                 raise
             try:

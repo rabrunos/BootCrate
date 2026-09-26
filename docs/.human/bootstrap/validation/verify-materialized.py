@@ -153,6 +153,12 @@ def inspect(root: Path) -> list[dict]:
                     workspace = settings.get("sandbox_workspace_write")
                     require(isinstance(workspace, dict) and workspace.get("network_access") is False,
                             "Enabled Codex protected manual sandbox network must be disabled")
+                    require(workspace.get("writable_roots", []) == [],
+                            "Enabled Codex protected manual sandbox writable roots must not be widened")
+                    environment = settings.get("shell_environment_policy")
+                    require(isinstance(environment, dict) and environment.get("inherit") == "core" and
+                            environment.get("ignore_default_excludes") is False,
+                            "Enabled Codex protected manual environment inheritance is too broad")
                 elif harness == "claude_code":
                     native = root / ".claude/settings.json"
                     require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Claude configuration is too large")

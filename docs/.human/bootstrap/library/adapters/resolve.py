@@ -6,6 +6,7 @@ changes native settings, or treats a permission profile as task authorization.
 from __future__ import annotations
 
 import argparse
+import errno
 import importlib.util
 import json
 import os
@@ -20,7 +21,7 @@ PRESET_OVERRIDE_SCHEMA = "bootcrate-preset-override/v1"
 MAX_LOCAL_OVERRIDE_BYTES = 64 * 1024
 
 
-def load_json(path: Path) -> dict[str, Any]:
+def _parse_json(text: str, source: str) -> dict[str, Any]:
     def no_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         value: dict[str, Any] = {}
         for key, item in pairs:
@@ -28,10 +29,14 @@ def load_json(path: Path) -> dict[str, Any]:
                 raise ValueError("Duplicate JSON key: " + key)
             value[key] = item
         return value
-    data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=no_duplicates)
+    data = json.loads(text, object_pairs_hook=no_duplicates)
     if not isinstance(data, dict):
-        raise ValueError("Expected a JSON object: " + str(path))
+        raise ValueError("Expected a JSON object: " + source)
     return data
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return _parse_json(path.read_text(encoding="utf-8"), str(path))
 
 
 def parse_execution_override(value: dict[str, Any]) -> str:
@@ -195,21 +200,78 @@ def local_preset_path(project_root: Path) -> Path:
     return _local_config_path(project_root, "preset.json")
 
 
+def _windows_mutation_module():
+    adjacent = Path(__file__).with_name("_windows_mutation.py")
+    bootstrap = Path(__file__).resolve().parents[2] / "upgrade" / "_windows_mutation.py"
+    helper = next((path for path in (adjacent, bootstrap) if path.is_file()), None)
+    if helper is None:
+        raise OSError("Safe local override access requires the Windows native mutation helper")
+    spec = importlib.util.spec_from_file_location("_bootcrate_windows_mutation", helper)
+    if spec is None or spec.loader is None:
+        raise OSError("Windows native mutation helper is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _read_local_bytes(project_root: Path, filename: str) -> bytes | None:
+    root = project_root.resolve(strict=True)
+    relative = Path(".local") / "config" / filename
+    if os.name == "nt":
+        with _windows_mutation_module().WindowsMutator(root) as mutator:
+            return mutator.read(relative, max_bytes=MAX_LOCAL_OVERRIDE_BYTES, missing_ok=True)
+
+    if (not all(hasattr(os, name) for name in ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK")) or
+            os.open not in os.supports_dir_fd):
+        raise OSError("Safe local override read requires directory-relative no-follow open")
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    leaf_flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    handles = []
+    try:
+        root_fd = os.open(root, directory_flags)
+        handles.append(root_fd)
+        parent_fd = root_fd
+        for component in (".local", "config"):
+            try:
+                parent_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+            except FileNotFoundError:
+                return None
+            handles.append(parent_fd)
+        try:
+            leaf_fd = os.open(filename, leaf_flags, dir_fd=parent_fd)
+        except FileNotFoundError:
+            return None
+        handles.append(leaf_fd)
+        metadata = os.fstat(leaf_fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("Local override must be a regular, unlinked file")
+        if metadata.st_size > MAX_LOCAL_OVERRIDE_BYTES:
+            raise ValueError("Local override exceeds its size limit")
+        with os.fdopen(os.dup(leaf_fd), "rb") as stream:
+            content = stream.read(MAX_LOCAL_OVERRIDE_BYTES + 1)
+        if len(content) > MAX_LOCAL_OVERRIDE_BYTES:
+            raise ValueError("Local override exceeds its size limit")
+        return content
+    except OSError as error:
+        if error.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise ValueError("Unsafe linked local override path") from error
+        raise
+    finally:
+        for handle in reversed(handles):
+            os.close(handle)
+
+
+def _load_local_config(project_root: Path, filename: str) -> dict[str, Any] | None:
+    _local_config_path(project_root, filename)
+    content = _read_local_bytes(project_root, filename)
+    return None if content is None else _parse_json(content.decode("utf-8"), filename)
+
+
 def _unlink_local_file(target: Path) -> None:
     root = target.parents[2]
     relative = Path(".local") / "config" / target.name
     if os.name == "nt":
-        adjacent = Path(__file__).with_name("_windows_mutation.py")
-        bootstrap = Path(__file__).resolve().parents[2] / "upgrade" / "_windows_mutation.py"
-        helper = next((path for path in (adjacent, bootstrap) if path.is_file()), None)
-        if helper is None:
-            raise OSError("Safe local override removal requires the Windows native mutation helper")
-        spec = importlib.util.spec_from_file_location("_bootcrate_windows_mutation", helper)
-        if spec is None or spec.loader is None:
-            raise OSError("Windows native mutation helper is unavailable")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        with module.WindowsMutator(root) as mutator:
+        with _windows_mutation_module().WindowsMutator(root) as mutator:
             mutator.unlink(relative)
         return
 
@@ -268,17 +330,16 @@ def main() -> int:
     parser.add_argument("--clear-local", action="store_true")
     parser.add_argument("--clear-local-preset", action="store_true")
     args = parser.parse_args()
-    override_path = local_override_path(args.project_root)
     if args.clear_local:
         clear_local_override(args.project_root)
     if args.clear_local_preset:
         clear_local_preset(args.project_root)
-    local = load_json(override_path) if override_path.exists() else None
+    local = _load_local_config(args.project_root, "execution-profile.json")
     resolved = resolve_execution(task=args.task_profile,
                                  task_risk_acknowledged=args.acknowledge_full_access_risk,
                                  local=local)
-    preset_path = local_preset_path(args.project_root)
-    local_preset = parse_preset_override(load_json(preset_path)) if preset_path.exists() else None
+    local_preset_data = _load_local_config(args.project_root, "preset.json")
+    local_preset = parse_preset_override(local_preset_data) if local_preset_data is not None else None
     project_preset = None
     if args.project_profile:
         project_preset = load_json(args.project_profile).get("workflow", {}).get("consumption_preset")

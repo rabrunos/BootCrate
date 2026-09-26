@@ -100,7 +100,9 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                                   'sandbox_mode = "workspace-write"\n'
                                   'approval_policy = "on-request"\n'
                                   'approvals_reviewer = "user"\n'
-                                  '[sandbox_workspace_write]\nnetwork_access = false\n',
+                                  '[sandbox_workspace_write]\nnetwork_access = false\n'
+                                  '[shell_environment_policy]\ninherit = "core"\n'
+                                  'ignore_default_excludes = false\n',
         }.items():
             path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body,encoding="utf-8")
         profile=self.finalize_profile(v.load_json(v.ROOT/"docs/.ai/project-profile.json"))
@@ -223,7 +225,9 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                                         for failure in verify_materialized.check(root)))
             config.write_text('sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n'
                               'approvals_reviewer = "user"\n'
-                              '[sandbox_workspace_write]\nnetwork_access = false\n',encoding="utf-8")
+                              '[sandbox_workspace_write]\nnetwork_access = false\n'
+                              '[shell_environment_policy]\ninherit = "core"\n'
+                              'ignore_default_excludes = false\n',encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])
             config.write_bytes(b"\xff")
             self.assertEqual(next(entry for entry in verify_materialized.inspect(root)
@@ -236,14 +240,41 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             self.assertEqual(verify_materialized.check(root),[])
             protected='sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n' \
                       'approvals_reviewer = "user"\n'
+            safe_environment='[shell_environment_policy]\ninherit = "core"\nignore_default_excludes = false\n'
             for network in ('[sandbox_workspace_write]\nnetwork_access = true\n',
                             '[sandbox_workspace_write]\n', ''):
                 with self.subTest(network=network):
                     config.write_text(protected+network,encoding="utf-8")
                     self.assertTrue(any("sandbox network must be disabled" in failure
                                         for failure in verify_materialized.check(root)))
-            config.write_text(protected+'[sandbox_workspace_write]\nnetwork_access = false\n',
+            config.write_text(protected+'[sandbox_workspace_write]\nnetwork_access = false\n'+safe_environment,
                               encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+            config.write_text(protected+'[sandbox_workspace_write]\nnetwork_access = false\n'
+                              'writable_roots = ["../outside"]\n'+safe_environment,encoding="utf-8")
+            self.assertTrue(any("writable roots must not be widened" in failure
+                                for failure in verify_materialized.check(root)))
+            config.write_text(protected+'[sandbox_workspace_write]\nnetwork_access = false\n'
+                              'writable_roots = []\n'+safe_environment,encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+
+    def test_v3_selected_codex_rejects_broad_environment_inheritance(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.materialized_fixture(root)
+            config=root/".codex/config.toml"
+            protected='sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n' \
+                      'approvals_reviewer = "user"\n' \
+                      '[sandbox_workspace_write]\nnetwork_access = false\n'
+            for environment in ('', '[shell_environment_policy]\ninherit = "all"\n'
+                                'ignore_default_excludes = false\n',
+                                '[shell_environment_policy]\ninherit = "core"\n'
+                                'ignore_default_excludes = true\n'):
+                with self.subTest(environment=environment):
+                    config.write_text(protected+environment,encoding="utf-8")
+                    self.assertTrue(any("environment inheritance is too broad" in failure
+                                        for failure in verify_materialized.check(root)))
+            config.write_text(protected+'[shell_environment_policy]\ninherit = "core"\n'
+                              'ignore_default_excludes = false\n',encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])
 
     def test_v3_selected_claude_config_requires_protected_manual_defaults(self):

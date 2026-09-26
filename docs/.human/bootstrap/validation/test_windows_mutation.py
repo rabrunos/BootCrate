@@ -65,6 +65,9 @@ class WindowsMutationTests(unittest.TestCase):
                 mutation.replace('dir/staged.txt', 'dir/target.txt')
                 self.assertEqual(mutation.read('dir/target.txt'), b'approved bytes')
                 mutation.unlink('dir/target.txt')
+                self.assertIsNone(mutation.read('dir/target.txt', missing_ok=True))
+                with self.assertRaises(FileNotFoundError):
+                    mutation.read('dir/target.txt')
                 mutation.unlink('dir/target.txt', missing_ok=True)
                 mutation.rmdir('dir')
             self.assertFalse((root / 'dir').exists())

@@ -224,6 +224,9 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
     if same:
         if any(r.get("candidate_id") != cid or r.get("artifact_sha256") != candidate["artifacts"][key[0]] for r in same):
             return {"status":"BLOCK","reason":"Same version has different confirmed bytes"}
+        if any(r["integration_order"] != candidate["integration_order"] or
+               r["included_changes"] != candidate["included_changes"] for r in same):
+            return {"status":"BLOCK","reason":"Same candidate receipt has inconsistent integration metadata"}
         return {"status":"SKIP","reason":"Same candidate and package already confirmed"}
     if not confirmed and target.get("baseline") != "never_published":
         return {"status":"BLOCK","reason":"Unknown baseline; verify destination history first"}

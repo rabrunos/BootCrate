@@ -317,6 +317,73 @@ class AdapterResolverTests(unittest.TestCase):
                     elif os.name == "nt" and config.is_junction():
                         os.rmdir(config)
 
+    def test_local_reads_use_bounded_handles_after_path_validation(self):
+        with tempfile.TemporaryDirectory() as empty:
+            self.assertIsNone(resolver._load_local_config(Path(empty), "execution-profile.json"))
+            self.assertIsNone(resolver._load_local_config(Path(empty), "preset.json"))
+        for filename, payload in (
+            ("execution-profile.json", {"schema": resolver.OVERRIDE_SCHEMA, "profile": "protected_manual"}),
+            ("preset.json", {"schema": resolver.PRESET_OVERRIDE_SCHEMA, "preset": "standard"}),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as project, tempfile.TemporaryDirectory() as outside:
+                root = Path(project)
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                (config / filename).write_text(json.dumps(payload), encoding="utf-8")
+                self.assertEqual(resolver._load_local_config(root, filename), payload)
+                external = Path(outside)
+                sentinel = external / filename
+                sentinel.write_bytes(b"external owner bytes")
+                displaced = root / "displaced-config"
+                original_path = resolver._local_config_path
+
+                def swap_after_validation(project_root: Path, name: str) -> Path:
+                    target = original_path(project_root, name)
+                    config.rename(displaced)
+                    if os.name == "nt":
+                        subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J",
+                                        str(config), str(external)], check=True, capture_output=True)
+                    else:
+                        config.symlink_to(external, target_is_directory=True)
+                    return target
+
+                try:
+                    with mock.patch.object(resolver, "_local_config_path", side_effect=swap_after_validation):
+                        with self.assertRaises((ValueError, OSError)):
+                            resolver._load_local_config(root, filename)
+                    self.assertEqual(sentinel.read_bytes(), b"external owner bytes")
+                    self.assertEqual(json.loads((displaced / filename).read_text(encoding="utf-8")), payload)
+                finally:
+                    if config.is_symlink():
+                        config.unlink()
+                    elif os.name == "nt" and config.is_junction():
+                        os.rmdir(config)
+
+    def test_local_read_rejects_fifo_and_oversize_swapped_after_validation(self):
+        replacements = ("oversize",) if os.name == "nt" else ("fifo", "oversize")
+        for replacement in replacements:
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                target = config / "execution-profile.json"
+                target.write_text(json.dumps({"schema": resolver.OVERRIDE_SCHEMA,
+                                              "profile": "protected_manual"}), encoding="utf-8")
+                original_path = resolver._local_config_path
+
+                def swap_after_validation(project_root: Path, name: str) -> Path:
+                    checked = original_path(project_root, name)
+                    target.unlink()
+                    if replacement == "fifo":
+                        os.mkfifo(target)
+                    else:
+                        target.write_bytes(b"x" * (resolver.MAX_LOCAL_OVERRIDE_BYTES + 1))
+                    return checked
+
+                with mock.patch.object(resolver, "_local_config_path", side_effect=swap_after_validation):
+                    with self.assertRaisesRegex(ValueError, "regular|size limit|read limit"):
+                        resolver._load_local_config(root, "execution-profile.json")
+
     @unittest.skipUnless(os.name == "nt", "Windows native helper is required")
     def test_materialized_resolver_uses_adjacent_windows_helper_for_clear(self):
         helper = HERE.parent / "upgrade" / "_windows_mutation.py"
@@ -350,6 +417,8 @@ class AdapterResolverTests(unittest.TestCase):
             missing.write_bytes(b"local override")
             with self.assertRaisesRegex(OSError, "Windows native mutation helper"):
                 copied.clear_local_override(project)
+            with self.assertRaisesRegex(OSError, "Windows native mutation helper"):
+                copied._load_local_config(project, "execution-profile.json")
             self.assertEqual(missing.read_bytes(), b"local override")
 
 

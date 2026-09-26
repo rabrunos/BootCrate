@@ -142,8 +142,12 @@ def check_adapters() -> None:
     require(codex["approval_policy"] == "on-request" and codex["sandbox_mode"] == "workspace-write" and
             codex["approvals_reviewer"] == "user", "Unsafe Codex defaults")
     require(codex["sandbox_workspace_write"]["network_access"] is False, "Sandbox network widened")
+    require(codex["sandbox_workspace_write"].get("writable_roots", []) == [],
+            "Sandbox writable roots widened")
     require(codex["agents"]["max_concurrent_threads_per_session"] <= 2, "Agent concurrency widened")
-    require(codex["shell_environment_policy"]["inherit"] == "core", "Unexpected credential environment inheritance")
+    require(codex["shell_environment_policy"]["inherit"] == "core" and
+            codex["shell_environment_policy"].get("ignore_default_excludes") is False,
+            "Unexpected credential environment inheritance")
     scout = tomllib.loads((ROOT / ".codex/agents/scout.toml").read_text(encoding="utf-8"))
     require(scout["sandbox_mode"] == "read-only", "Codex Scout may write")
     text = (ROOT / ".claude/agents/scout.md").read_text(encoding="utf-8")

@@ -158,6 +158,26 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(omitted['status'],'BLOCK')
         self.assertIn('formalized version entry',omitted['reason'])
 
+    def test_confirmed_skip_requires_matching_receipt_baseline(self):
+        current=candidate()
+        matching=receipt(current['version'],current['integration_order'],list(current['included_changes']))
+        matching.update(candidate_id=d.identity(current),artifact_sha256=current['artifacts']['github'])
+        self.assertEqual(d.plan(current,[matching],target(),self.entries)['status'],'SKIP')
+        for field,value in (
+            ('integration_order',current['integration_order']-1),
+            ('integration_order',current['integration_order']+1),
+            ('included_changes',current['included_changes'][:-1]),
+            ('included_changes',list(reversed(current['included_changes']))),
+        ):
+            with self.subTest(field=field,value=value):
+                inconsistent={**matching,'attempt_id':'other-attempt',field:value}
+                blocked=d.plan(current,[inconsistent],target(),self.entries)
+                self.assertEqual(blocked['status'],'BLOCK')
+                self.assertIn('inconsistent integration metadata',blocked['reason'])
+                mixed=d.plan(current,[matching,inconsistent],target(),self.entries)
+                self.assertEqual(mixed['status'],'BLOCK')
+                self.assertIn('inconsistent integration metadata',mixed['reason'])
+
     def test_formats_escapes_and_notes_limit(self):
         first=d.plan(candidate(),[],target(field='plain'),self.entries)
         self.assertIn('CSV',first['notes']);self.assertEqual(first['status'],'READY')
