@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import unittest
 import tempfile
 from unittest.mock import patch
@@ -31,6 +32,16 @@ class ValidationTests(unittest.TestCase):
                                                    "full_access_acknowledgement":"yes"}})
         v.schema_check(schema,{**base,"answers":{"execution_profile":"full_access",
                                               "full_access_acknowledgement":"acknowledged"}})
+
+    def test_command_failure_reports_bounded_stderr_tail(self):
+        script="import sys; sys.stderr.write('progress\\n'*1000); sys.stderr.write('test_synthetic_failure\\nTraceback marker\\n'); sys.exit(7)"
+        with self.assertRaises(ValueError) as failure:
+            v.run([sys.executable,"-c",script])
+        message=str(failure.exception)
+        self.assertIn("exit 7",message)
+        self.assertIn("test_synthetic_failure\nTraceback marker",message)
+        self.assertIn("earlier stderr characters omitted",message)
+        self.assertLess(len(message),9000)
 
     def finalize_profile(self, profile):
         profile["project"]={"name":"Example", "kind":"static", "summary":"Synthetic fixture"}
@@ -239,10 +250,12 @@ class ValidationTests(unittest.TestCase):
             self.assertEqual(verify_materialized.check(root),[])
             outside=home/"outside";outside.mkdir();(outside/"private.txt").write_text("do not read")
             self.directory_link(root/"linked",outside)
+            link=root/"linked"
             try:
                 self.assertTrue(any("symlink/external" in x for x in verify_materialized.check(root)))
             finally:
-                os.rmdir(root/"linked")
+                if link.is_symlink(): link.unlink()
+                else: os.rmdir(link)  # Windows junction fallback.
 
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.materialized_fixture(root)

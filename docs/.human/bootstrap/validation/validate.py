@@ -58,7 +58,14 @@ def load_yaml(text: str) -> Any:
 
 def run(command: list[str], cwd: Path = ROOT) -> str:
     result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=90)
-    require(result.returncode == 0, f"Command failed: {' '.join(command)}\n{result.stderr[:2000]}")
+    if result.returncode:
+        def tail(value: str, limit: int, stream: str) -> str:
+            if len(value) > limit:
+                return f"[{len(value) - limit} earlier {stream} characters omitted]\n" + value[-limit:]
+            return value
+        raise ValueError(f"Command failed (exit {result.returncode}): {' '.join(command)}\n"
+                         f"stderr:\n{tail(result.stderr, 8000, 'stderr')}\n"
+                         f"stdout:\n{tail(result.stdout, 2000, 'stdout')}")
     return result.stdout + result.stderr
 
 

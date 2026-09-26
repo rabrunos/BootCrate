@@ -179,13 +179,15 @@ class UpgradeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             home=Path(td);root,source=self.setup_roots(home);outside=home/'outside';outside.mkdir()
             self.directory_link(root/'.local',outside)
+            link = root/'.local'
             try:
                 with self.assertRaisesRegex(ValueError,'reparse point|Unsafe'):
                     m.create(root,'rev1',['update.txt'])
                 self.assertFalse((outside/'bootcrate-managed.json').exists())
                 self.assertEqual((root/'update.txt').read_text(),'base')
             finally:
-                os.rmdir(root/'.local')
+                if link.is_symlink(): link.unlink()
+                else: os.rmdir(link)  # Windows junction fallback.
 
     def test_repeat_is_idempotent_and_customization_stays_preserved(self):
         with tempfile.TemporaryDirectory() as td:
