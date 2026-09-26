@@ -132,6 +132,32 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(len(calls),1)
         self.assertEqual(skipped['status'],'SKIP')
 
+    def test_confirmed_skip_still_requires_canonical_change_history(self):
+        current=candidate()
+        same=receipt('1.3',3,current['included_changes'])
+        same.update(candidate_id=d.identity(current),artifact_sha256=current['artifacts']['github'])
+        self.assertEqual(d.plan(current,[same],target(),self.entries)['status'],'SKIP')
+
+        missing_version=d.plan(current,[same],target(),self.entries[1:])
+        self.assertEqual(missing_version['status'],'BLOCK')
+        self.assertIn('no canonical changelog entry',missing_version['reason'])
+
+        missing_change=[{**self.entries[0]},*self.entries[1:]]
+        missing_change[1]={**missing_change[1],
+                           'changes':[change for change in missing_change[1]['changes']
+                                      if change['id']!='#41/1']}
+        absent=d.plan(current,[same],target(),missing_change)
+        self.assertEqual(absent['status'],'BLOCK')
+        self.assertIn('missing changelog change',absent['reason'])
+
+        incomplete=candidate();incomplete['included_changes'].remove('#42/1')
+        incomplete_same=receipt('1.3',3,incomplete['included_changes'])
+        incomplete_same.update(candidate_id=d.identity(incomplete),
+                               artifact_sha256=incomplete['artifacts']['github'])
+        omitted=d.plan(incomplete,[incomplete_same],target(),self.entries)
+        self.assertEqual(omitted['status'],'BLOCK')
+        self.assertIn('formalized version entry',omitted['reason'])
+
     def test_formats_escapes_and_notes_limit(self):
         first=d.plan(candidate(),[],target(field='plain'),self.entries)
         self.assertIn('CSV',first['notes']);self.assertEqual(first['status'],'READY')
