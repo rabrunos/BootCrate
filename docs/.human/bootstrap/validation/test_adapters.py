@@ -40,6 +40,11 @@ class AdapterResolverTests(unittest.TestCase):
             resolver.resolve_execution(local={"schema":resolver.OVERRIDE_SCHEMA, "profile":"full_access"})
         with self.assertRaisesRegex(ValueError, "risk acknowledgement"):
             resolver.resolve_execution(task="full_access")
+        for profile in resolver.PROFILES:
+            for invalid in ("yes", 1, None, [], {}):
+                with self.subTest(profile=profile, invalid=invalid):
+                    with self.assertRaisesRegex(ValueError, "risk acknowledgement"):
+                        resolver.resolve_execution(task=profile, task_risk_acknowledged=invalid)
         self.assertEqual(resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)["requested"], "full_access")
 
     def test_local_acknowledgement_type_matches_javascript_contract(self):
@@ -183,8 +188,24 @@ class AdapterResolverTests(unittest.TestCase):
                                        managed_policy={"allowed_profiles":["protected_manual"]})
         self.assertEqual((blocked["status"], blocked["effective"]), ("unsupported", None))
         observed = resolver.map_request(self.adapter("codex.json"), "cli", requested,
-                                        observation={"status":"supported", "effective":"full_access"})
+                                        observation={"surface":"cli", "status":"supported", "effective":"full_access"})
         self.assertTrue(observed["applied"])
+
+    def test_observation_must_identify_the_requested_surface(self):
+        requested = resolver.resolve_execution(task="protected_manual")
+        for adapter_name in ("codex.json", "claude-code.json"):
+            adapter = self.adapter(adapter_name)
+            for surface in ("cli", "ide"):
+                with self.subTest(adapter=adapter_name, surface=surface):
+                    unscoped = resolver.map_request(adapter, surface, requested, observation={
+                        "status":"supported", "effective":"protected_manual"})
+                    self.assertEqual((unscoped["status"], unscoped["effective"], unscoped["applied"]),
+                                     ("unknown", None, False))
+                    self.assertIn("observed surface", unscoped["reason"])
+                    other = "ide" if surface == "cli" else "cli"
+                    with self.assertRaisesRegex(ValueError, "another surface"):
+                        resolver.map_request(adapter, surface, requested, observation={
+                            "surface":other, "status":"supported", "effective":"protected_manual"})
 
     def test_claude_full_access_requires_bypass_and_unrestricted_boundary(self):
         adapter = self.adapter("claude-code.json")

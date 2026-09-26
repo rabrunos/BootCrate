@@ -19,6 +19,11 @@ CLAUDE_CREDENTIAL_DENY_RULES = frozenset({
 })
 
 
+def valid_claude_credential_denials(value: Any) -> bool:
+    return (isinstance(value, list) and all(isinstance(rule, str) for rule in value)
+            and CLAUDE_CREDENTIAL_DENY_RULES.issubset(value))
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
@@ -150,10 +155,9 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
     history = version_source_file(root, history_source, "canonical version history")
     require(history_format == "markdown-headings", "Unsupported canonical history reader")
     require(history.stat().st_size <= 2 * 1024 * 1024, "Canonical version history is too large")
-    heading = re.compile(
-        r"^##\s+\[?v?" + re.escape(version) + r"\]?(?:\s|$|[—:–-])",
-        re.MULTILINE,
-    )
+    token = re.escape(version)
+    heading = re.compile(r"^##[ \t]+(?:\[v?" + token + r"\]|v?" + token + r")(?=[ \t]|$)",
+                         re.MULTILINE)
     require(heading.search(history.read_text(encoding="utf-8")) is not None,
             "Canonical history has no entry for integrated version " + version)
     return version

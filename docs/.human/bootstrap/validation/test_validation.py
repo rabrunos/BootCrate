@@ -296,7 +296,7 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             def write_settings(mode,enabled,*,deny=None,effort="high"):
                 settings.write_text(json.dumps({"effortLevel":effort,
                                                 "permissions":{"defaultMode":mode,
-                                                               "deny":list(verify_materialized.CLAUDE_CREDENTIAL_DENY_RULES)
+                                                               "deny":list(v.CLAUDE_CREDENTIAL_DENY_RULES)
                                                                if deny is None else deny},
                                                 "sandbox":{"enabled":enabled}}),encoding="utf-8")
             write_settings("default",True)
@@ -308,12 +308,15 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                                         for failure in verify_materialized.check(root)))
             write_settings("default",True)
             self.assertEqual(verify_materialized.check(root),[])
-            for missing in verify_materialized.CLAUDE_CREDENTIAL_DENY_RULES:
+            for missing in v.CLAUDE_CREDENTIAL_DENY_RULES:
                 with self.subTest(missing=missing):
-                    write_settings("default",True,deny=list(verify_materialized.CLAUDE_CREDENTIAL_DENY_RULES-{missing}))
+                    write_settings("default",True,deny=list(v.CLAUDE_CREDENTIAL_DENY_RULES-{missing}))
                     self.assertTrue(any("Claude credential-deny rules are missing" in failure
                                         for failure in verify_materialized.check(root)))
             write_settings("default",True,deny=[])
+            self.assertTrue(any("Claude credential-deny rules are missing" in failure
+                                for failure in verify_materialized.check(root)))
+            write_settings("default",True,deny={rule:True for rule in v.CLAUDE_CREDENTIAL_DENY_RULES})
             self.assertTrue(any("Claude credential-deny rules are missing" in failure
                                 for failure in verify_materialized.check(root)))
             write_settings("default",True,effort="low")
@@ -321,6 +324,13 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                                 for failure in verify_materialized.check(root)))
             write_settings("default",True)
             self.assertEqual(verify_materialized.check(root),[])
+
+    def test_claude_credential_denials_are_a_string_array_on_both_surfaces(self):
+        allowed = list(v.CLAUDE_CREDENTIAL_DENY_RULES)
+        self.assertTrue(v.valid_claude_credential_denials(allowed))
+        for malformed in (None, {}, {rule:True for rule in allowed}, allowed[:-1], allowed+[1]):
+            with self.subTest(malformed=malformed):
+                self.assertFalse(v.valid_claude_credential_denials(malformed))
 
     def test_native_default_gate_is_v3_and_selected_executor_only(self):
         with tempfile.TemporaryDirectory() as td:

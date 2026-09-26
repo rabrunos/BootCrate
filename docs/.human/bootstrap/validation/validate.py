@@ -12,10 +12,11 @@ import sys
 import tomllib
 from typing import Any
 
-from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_object,
-                             load_json, inventory as project_inventory, sensitive_name,
+from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_object, load_json,
+                             inventory as project_inventory, sensitive_name,
                              secret_findings, local_refs_only, schema_check,
-                             materialized_profile, profile_schema)
+                             materialized_profile, profile_schema,
+                             valid_claude_credential_denials)
 
 try:
     import yaml
@@ -157,7 +158,7 @@ def check_adapters() -> None:
     settings = load_json(ROOT / ".claude/settings.json")
     require(settings["effortLevel"] == "high" and settings["permissions"]["defaultMode"] == "default", "Unsafe Claude defaults")
     require(settings.get("sandbox", {}).get("enabled") is True, "Claude sandbox baseline disabled")
-    require(CLAUDE_CREDENTIAL_DENY_RULES.issubset(settings["permissions"]["deny"]),
+    require(valid_claude_credential_denials(settings["permissions"].get("deny")),
             "Claude credential-deny rules missing")
     for canonical in (BOOT / "library/skills").glob("*/SKILL.md"):
         relative = canonical.relative_to(BOOT / "library/skills")

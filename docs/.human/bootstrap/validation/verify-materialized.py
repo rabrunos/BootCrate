@@ -14,9 +14,9 @@ import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
 
-from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, inventory, load_json,
-                             materialized_profile, profile_schema, schema_check,
-                             secret_findings, sensitive_name)
+from validation_core import (inventory, load_json, materialized_profile,
+                             profile_schema, schema_check, secret_findings,
+                             sensitive_name, valid_claude_credential_denials)
 
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".yml", ".yaml", ".txt", ".py", ".js", ".cjs", ".html", ".css"}
 SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
@@ -174,8 +174,7 @@ def inspect(root: Path) -> list[dict]:
                             isinstance(sandbox, dict) and sandbox.get("enabled") is True,
                             "Enabled Claude protected manual defaults are not configured")
                     deny = permissions.get("deny")
-                    require(isinstance(deny, list) and all(isinstance(rule, str) for rule in deny) and
-                            CLAUDE_CREDENTIAL_DENY_RULES.issubset(deny),
+                    require(valid_claude_credential_denials(deny),
                             "Enabled Claude credential-deny rules are missing")
         if data["schema"] == "project-profile/v3" and data["console"]["enabled"]:
             console = root / "project-console"

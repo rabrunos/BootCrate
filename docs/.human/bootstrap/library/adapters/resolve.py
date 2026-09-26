@@ -56,10 +56,12 @@ def parse_execution_override(value: dict[str, Any]) -> str:
 
 def resolve_execution(*, task: str | None = None, task_risk_acknowledged: bool = False,
                       local: dict[str, Any] | None = None) -> dict[str, str]:
+    if type(task_risk_acknowledged) is not bool:
+        raise ValueError("Invalid task risk acknowledgement")
     if task:
         if task not in PROFILES:
             raise ValueError("Invalid task execution profile")
-        if task == "full_access" and not task_risk_acknowledged:
+        if task == "full_access" and task_risk_acknowledged is not True:
             raise ValueError("Full Access task override requires explicit risk acknowledgement")
         return {"requested": task, "source": "task"}
     if local is not None:
@@ -111,7 +113,7 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
             raise ValueError("Invalid observed support status")
         if observed_effective is not None and observed_effective not in PROFILES:
             raise ValueError("Invalid observed effective profile")
-        if observation.get("surface", surface) != surface:
+        if observation.get("surface") not in (None, surface):
             raise ValueError("Observation belongs to another surface")
         if not policy_blocked:
             status, effective = observed_status, observed_effective
@@ -148,6 +150,9 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
                     reason = "Claude Full Access not proven: " + ", ".join(missing or ["supported status"]) + "."
             if status != "supported":
                 effective = None
+            if observation.get("surface") is None:
+                status, effective = ("unsupported" if status == "unsupported" else "unknown"), None
+                reason = "Permission observation has no observed surface; requested " + surface + " is not proven."
     return {
         "requested": requested,
         "effective": effective,

@@ -152,6 +152,23 @@ class VersionCompatibilityTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "Schema failure"):
                         v.schema_check(v.profile_schema(v.ROOT / "docs/.ai/schemas", missing), missing)
 
+    def test_v3_history_requires_exact_version_token(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.support_files(root)
+            self.write(root, "VERSION", "1.0\n")
+            profile = self.v3_profile("VERSION", "plain", "")
+            profile["versioning"].pop("value_path")
+            for heading in ("## v1.0-beta — Prerelease", "## v1.0+build — Build"):
+                with self.subTest(heading=heading):
+                    self.write(root, "HISTORY.md", "# History\n\n" + heading + "\n")
+                    with self.assertRaisesRegex(ValueError, "no entry for integrated version 1.0"):
+                        self.schema_and_finalization(root, profile)
+            for heading in ("## v1.0 — Release", "## [v1.0] - Release"):
+                with self.subTest(heading=heading):
+                    self.write(root, "HISTORY.md", "# History\n\n" + heading + "\n")
+                    self.schema_and_finalization(root, profile)
+
     def test_v3_numeric_versions_must_be_finite(self):
         sources = (
             ("json", "package.json", "{\"version\": NaN}"),
