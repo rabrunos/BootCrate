@@ -31,7 +31,8 @@ class _PosixMutator:
     """Perform every mutation relative to checked, open directory descriptors."""
 
     def __init__(self, root: Path):
-        required = (os.open, os.mkdir, os.unlink, os.rmdir, os.replace, os.link)
+        # CPython exposes replace's renameat support through os.rename in this set.
+        required = (os.open, os.mkdir, os.unlink, os.rmdir, os.rename, os.link)
         if not all(operation in os.supports_dir_fd for operation in required):
             raise RuntimeError("Managed update requires directory-relative filesystem operations")
         self.root = root
