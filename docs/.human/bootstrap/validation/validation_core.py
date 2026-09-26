@@ -291,6 +291,24 @@ def materialized_profile(profile: dict[str, Any], root: Path | None = None) -> N
             for skill in profile.get("skills", []):
                 require(re.fullmatch(r"[a-z0-9-]+", skill) is not None, "Invalid selected skill name")
                 project_file(root, f"{skills}/{skill}/SKILL.md", "selected executor skill")
+        if profile["schema"] == "project-profile/v3":
+            disabled_paths = {
+                "codex": ("AGENTS.md", ".agents/skills", ".codex"),
+                "claude_code": ("CLAUDE.md", ".claude", ".mcp.json"),
+            }
+            selected = set(profile["workflow"]["implementation_harnesses"])
+            def present(relative: str) -> bool:
+                path = root / relative
+                return path.exists() or path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+            for harness, paths in disabled_paths.items():
+                if harness in selected:
+                    continue
+                for relative in paths:
+                    require(not present(relative), "Disabled executor artifact remains: " + relative)
+            # Neither local Claude overrides nor project MCP servers are declared
+            # by v3, even when Claude itself is selected.
+            for relative in (".claude/settings.local.json", ".mcp.json"):
+                require(not present(relative), "Unselected project-local configuration remains: " + relative)
 
 
 EXAMPLES = {".env.example", ".env.sample", ".env.template"}

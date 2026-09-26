@@ -368,6 +368,26 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                       "sandbox":{"enabled":True}}
             native.write_text(json.dumps(baseline),encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])
+            subprocess.run(["git","init","-q",str(root)],check=True)
+            (root/".gitignore").write_text(".claude/settings.local.json\n",encoding="utf-8")
+            local=root/".claude/settings.local.json"
+            local.write_text(json.dumps({"permissions":{"defaultMode":"bypassPermissions"},
+                                         "hooks":{"SessionStart":[{"hooks":[{"type":"command",
+                                                                             "command":"synthetic-command"}]}]}}),
+                             encoding="utf-8")
+            tracked,untracked=v.project_inventory(root)
+            self.assertNotIn(local,tracked+untracked)
+            self.assertTrue(any("Unselected project-local configuration remains: .claude/settings.local.json"
+                                in failure for failure in verify_materialized.check(root)))
+            with self.assertRaisesRegex(ValueError,"Unselected project-local configuration remains"):
+                v.materialized_profile(profile,root)
+            local.unlink()
+            mcp=root/".mcp.json"
+            mcp.write_text('{"mcpServers":{"synthetic":{"command":"synthetic-command"}}}',encoding="utf-8")
+            self.assertTrue(any("Unselected project-local configuration remains: .mcp.json"
+                                in failure for failure in verify_materialized.check(root)))
+            mcp.unlink()
+            self.assertEqual(verify_materialized.check(root),[])
             extensions=(
                 ("hook", {"hooks":{"SessionStart":[{"hooks":[{"type":"command",
                                                                "command":"synthetic-command"}]}]}}),
@@ -405,14 +425,19 @@ process.stdout.write(JSON.stringify(values.map(repository=>
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);profile,path=self.materialized_fixture(root)
             claude=root/".claude/settings.json";claude.parent.mkdir()
-            claude.write_text('{"permissions":{"defaultMode":"bypassPermissions"}}',encoding="utf-8")
-            self.assertEqual(verify_materialized.check(root),[])  # Claude is not selected.
+            claude.write_text('{"hooks":{"SessionStart":[{"hooks":[{"type":"command",'
+                              '"command":"synthetic-command"}]}]},'
+                              '"mcpServers":{"synthetic":{"command":"synthetic-command"}}}',encoding="utf-8")
+            self.assertTrue(any("Disabled executor artifact remains: .claude" in failure
+                                for failure in verify_materialized.check(root)))
+            with self.assertRaisesRegex(ValueError,"Disabled executor artifact remains: .claude"):
+                v.materialized_profile(profile,root)
             profile={
                 "schema":"project-profile/v2",
                 "project":{"name":"Legacy example","kind":"static","summary":"Synthetic fixture"},
                 "owner":{"repository_language":"en","report_language":"pt-BR"},
                 "workflow":{"tracking":"github_issues","primary_orchestrator":"chatgpt",
-                            "fallback_planners":[],"implementation_harnesses":["codex","claude_code"]},
+                            "fallback_planners":[],"implementation_harnesses":["codex"]},
                 "versioning":{"required":True,"canonical_source":"VERSION","format":"native",
                               "target_version_in_prompt_h1":True,"target_version_in_commit":True,
                               "target_version_in_report_h1":True,"continuations_reuse_target":True},
@@ -429,6 +454,9 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                                                   'approval_policy = "never"\n'
                                                   '[mcp_servers.legacy]\n'
                                                   'command = "synthetic-command"\n',encoding="utf-8")
+            (root/".claude/settings.local.json").write_text('{"hooks":{"SessionStart":[]}}',encoding="utf-8")
+            (root/".mcp.json").write_text('{"mcpServers":{"synthetic":{"command":"synthetic-command"}}}',
+                                          encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])  # v2 had no native-default contract.
 
     def test_materialized_profile_negative_cases(self):
@@ -491,6 +519,53 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             self.assertEqual(verify_materialized.check(root),[])
             (console/"index.html").write_text('<!doctype html><script src="missing.js"></script>')
             self.assertTrue(any("reference missing" in x for x in verify_materialized.check(root)))
+
+    def test_v3_disabled_executor_artifacts_must_be_pruned_in_both_directions(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,path=self.materialized_fixture(root)
+            self.assertEqual(verify_materialized.check(root),[])
+            for relative in ("CLAUDE.md", ".claude/settings.json", ".claude/agents/scout.md",
+                             ".mcp.json"):
+                with self.subTest(disabled="claude_code", path=relative):
+                    extra=root/relative;extra.parent.mkdir(parents=True,exist_ok=True)
+                    content=('{"mcpServers":{"synthetic":{"command":"synthetic-command"}}}'
+                             if relative == ".mcp.json" else "synthetic unselected artifact\n")
+                    extra.write_text(content,encoding="utf-8")
+                    self.assertTrue(any("Disabled executor artifact remains" in failure
+                                        for failure in verify_materialized.check(root)))
+                    extra.unlink()
+                    if relative.startswith(".claude/"):
+                        for directory in (extra.parent,root/".claude"):
+                            if directory.exists():
+                                directory.rmdir()
+            self.assertEqual(verify_materialized.check(root),[])
+
+            (root/"AGENTS.md").unlink()
+            (root/".codex/config.toml").unlink()
+            (root/".codex").rmdir()
+            profile["workflow"]["implementation_harnesses"]=["claude_code"]
+            path.write_text(json.dumps(profile),encoding="utf-8")
+            (root/"CLAUDE.md").write_text("# Claude rules\n",encoding="utf-8")
+            native=root/".claude/settings.json";native.parent.mkdir()
+            native.write_text(json.dumps({"effortLevel":"high",
+                                          "permissions":{"defaultMode":"default",
+                                                         "deny":list(v.CLAUDE_CREDENTIAL_DENY_RULES)},
+                                          "sandbox":{"enabled":True}}),encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+            for relative in ("AGENTS.md", ".codex/config.toml", ".codex/agents/scout.toml"):
+                with self.subTest(disabled="codex", path=relative):
+                    extra=root/relative;extra.parent.mkdir(parents=True,exist_ok=True)
+                    content=('[mcp_servers.synthetic]\ncommand = "synthetic-command"\n'
+                             if relative == ".codex/config.toml" else "synthetic unselected artifact\n")
+                    extra.write_text(content,encoding="utf-8")
+                    self.assertTrue(any("Disabled executor artifact remains" in failure
+                                        for failure in verify_materialized.check(root)))
+                    extra.unlink()
+                    if relative.startswith(".codex/"):
+                        for directory in (extra.parent,root/".codex"):
+                            if directory.exists():
+                                directory.rmdir()
+            self.assertEqual(verify_materialized.check(root),[])
 
     def test_inventory_distinguishes_binary_assets_from_text_scan_limits(self):
         with tempfile.TemporaryDirectory() as td:
