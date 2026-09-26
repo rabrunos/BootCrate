@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 
@@ -209,6 +211,39 @@ class AdapterResolverTests(unittest.TestCase):
             preset.write_text(json.dumps({"schema":resolver.PRESET_OVERRIDE_SCHEMA,"preset":"economy"}),encoding="utf-8")
             self.assertTrue(resolver.clear_local_preset(root))
             self.assertFalse(preset.exists())
+
+    def test_linked_local_override_parents_are_rejected_without_removing_other_files(self):
+        for linked_parent in (".local", ".local/config"):
+            for filename, path_for, clear in (
+                ("execution-profile.json", resolver.local_override_path, resolver.clear_local_override),
+                ("preset.json", resolver.local_preset_path, resolver.clear_local_preset),
+            ):
+                with self.subTest(parent=linked_parent, filename=filename), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    other = root / "tracked"
+                    destination = other / "config" if linked_parent == ".local" else other
+                    destination.mkdir(parents=True)
+                    sentinel = destination / filename
+                    sentinel.write_bytes(b"owner data")
+                    link = root / linked_parent
+                    if linked_parent == ".local/config":
+                        link.parent.mkdir()
+                    if os.name == "nt":
+                        subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J",
+                                        str(link), str(destination)], check=True, capture_output=True)
+                    else:
+                        link.symlink_to(destination, target_is_directory=True)
+                    try:
+                        with self.assertRaisesRegex(ValueError, "[Uu]nsafe|[Ll]ink"):
+                            path_for(root)
+                        with self.assertRaisesRegex(ValueError, "[Uu]nsafe|[Ll]ink"):
+                            clear(root)
+                        self.assertEqual(sentinel.read_bytes(), b"owner data")
+                    finally:
+                        if link.is_symlink():
+                            link.unlink()
+                        elif os.name == "nt" and link.is_junction():
+                            os.rmdir(link)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -149,20 +150,35 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
     }
 
 
-def local_override_path(project_root: Path) -> Path:
+def _local_config_path(project_root: Path, filename: str) -> Path:
     root = project_root.resolve(strict=True)
-    target = root / ".local" / "config" / "execution-profile.json"
+    local = root / ".local"
+    config = local / "config"
+    # Both parents must be actual directories, even when a link resolves to
+    # another location inside the project root.
+    for parent in (local, config):
+        try:
+            metadata = parent.lstat()
+        except FileNotFoundError:
+            continue
+        reparse = (getattr(metadata, "st_file_attributes", 0) &
+                   getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+        if stat.S_ISLNK(metadata.st_mode) or reparse:
+            raise ValueError("Unsafe linked local config directory")
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError("Local config parent is not a directory")
+    target = config / filename
     if not target.resolve(strict=False).is_relative_to(root):
-        raise ValueError("Unsafe local override path")
+        raise ValueError("Unsafe local config path")
     return target
+
+
+def local_override_path(project_root: Path) -> Path:
+    return _local_config_path(project_root, "execution-profile.json")
 
 
 def local_preset_path(project_root: Path) -> Path:
-    root = project_root.resolve(strict=True)
-    target = root / ".local" / "config" / "preset.json"
-    if not target.resolve(strict=False).is_relative_to(root):
-        raise ValueError("Unsafe local preset path")
-    return target
+    return _local_config_path(project_root, "preset.json")
 
 
 def clear_local_override(project_root: Path) -> bool:
