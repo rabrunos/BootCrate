@@ -398,10 +398,28 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
     return version
 
 
+def _git_worktree_environment(root: Path) -> dict[str, str] | None:
+    """Recognize a checkout even when the project lives below its Git root."""
+    root = root.resolve(strict=True)
+    if not any((parent / ".git").exists() or (parent / ".git").is_symlink()
+               for parent in (root, *root.parents)):
+        return None
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    try:
+        result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"],
+                                cwd=root, capture_output=True, check=True, timeout=10,
+                                env=environment)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise ValueError("Cannot verify Git worktree for project") from error
+    require(result.stdout.strip() == b"true", "Project is not inside a Git worktree")
+    return environment
+
+
 def reject_tracked_local_overrides(root: Path) -> None:
     """A checkout cannot supply a machine-local choice from its Git index."""
     root = root.resolve()
-    if not (root / ".git").exists():
+    environment = _git_worktree_environment(root)
+    if environment is None:
         return
     paths = (".local/config/execution-profile.json", ".local/config/preset.json")
     try:
@@ -409,7 +427,7 @@ def reject_tracked_local_overrides(root: Path) -> None:
             ["git", "ls-files", "--cached", "-z", "--",
              *(":(icase,literal)" + path for path in paths)],
             cwd=root, capture_output=True, check=True, timeout=10,
-            env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")})
+            env=environment)
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
     tracked = {entry.lower() for entry in result.stdout.split(b"\0")}
@@ -526,10 +544,12 @@ def secret_findings(text: str) -> bool:
 
 def inventory(root: Path) -> tuple[list[Path], list[Path]]:
     """Return tracked and untracked (not ignored) paths, without reading ignored files."""
-    if (root / ".git").exists():
+    environment = _git_worktree_environment(root)
+    if environment is not None:
         def listed(*args: str) -> list[Path]:
             result = subprocess.run(["git", "ls-files", "-z", *args], cwd=root,
-                                    capture_output=True, timeout=30, check=True)
+                                    capture_output=True, timeout=30, check=True,
+                                    env=environment)
             return [root / n.decode("utf-8") for n in result.stdout.split(b"\0") if n]
         return listed("--cached"), listed("--others", "--exclude-standard")
     skip = {".git", ".local", ".venv", "__pycache__", "node_modules", ".temp"}

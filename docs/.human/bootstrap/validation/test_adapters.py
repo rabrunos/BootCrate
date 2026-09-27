@@ -99,6 +99,33 @@ class AdapterResolverTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
                     resolver._load_local_config(root,filename)
 
+    def test_nested_git_project_rejects_tracked_local_overrides(self):
+        for filename,payload in (("execution-profile.json",
+                                 {"schema":resolver.OVERRIDE_SCHEMA,"profile":"full_access",
+                                  "risk_acknowledged":True}),
+                                 ("preset.json",{"schema":resolver.PRESET_OVERRIDE_SCHEMA,
+                                                 "preset":"economy"})):
+            with self.subTest(filename=filename),tempfile.TemporaryDirectory() as directory:
+                checkout=Path(directory)
+                subprocess.run(["git","init","-q",str(checkout)],check=True)
+                root=checkout/"project";config=root/".local/config";config.mkdir(parents=True)
+                (root/".gitignore").write_text(".local/\n",encoding="utf-8")
+                target=config/filename;target.write_text(json.dumps(payload),encoding="utf-8")
+                self.assertEqual(resolver._load_local_config(root,filename),payload)
+                relative=str(target.relative_to(checkout))
+                subprocess.run(["git","add","-f","--",relative],cwd=checkout,
+                               check=True,capture_output=True)
+                with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                    resolver._load_local_config(root,filename)
+                clear=(resolver.clear_local_override if filename=="execution-profile.json"
+                       else resolver.clear_local_preset)
+                with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                    clear(root)
+                self.assertEqual(json.loads(target.read_text(encoding="utf-8")),payload)
+                subprocess.run(["git","rm","--cached","-f","--",relative],cwd=checkout,
+                               check=True,capture_output=True)
+                self.assertEqual(resolver._load_local_config(root,filename),payload)
+
     def test_task_local_and_preset_precedence_are_independent(self):
         local = {"schema":resolver.OVERRIDE_SCHEMA, "profile":"protected_auto"}
         self.assertEqual(resolver.resolve_execution(local=local)["source"], "local")
@@ -258,6 +285,20 @@ class AdapterResolverTests(unittest.TestCase):
             observation={"executor":"claude_code","surface":"cli","status":"supported","effective":"full_access"})
         self.assertEqual((mismatched["status"],mismatched["effective"],mismatched["applied"]),
                          ("unknown",None,False))
+
+    def test_claude_protected_patches_include_credential_denials(self):
+        adapter=self.adapter("claude-code.json")
+        expected={"Read(./.env)","Read(./.env.*)","Read(./**/.env)",
+                  "Read(./**/.env.*)","Read(./**/secrets.*)",
+                  "Read(./**/credentials.*)","Read(./**/*.key)",
+                  "Read(./**/*.p12)","Read(./**/*.pfx)"}
+        for profile in ("protected_manual","protected_auto"):
+            with self.subTest(profile=profile):
+                patch=resolver.map_request(adapter,"cli",resolver.resolve_execution(task=profile))[
+                    "native_action"]["settings_patch"]
+                self.assertEqual(set(patch["permissions"]["deny"]),expected)
+                self.assertEqual(len(patch["permissions"]["deny"]),len(expected))
+                self.assertTrue(patch["sandbox"]["enabled"])
 
     def test_observation_and_managed_policy_are_reported(self):
         requested = resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)

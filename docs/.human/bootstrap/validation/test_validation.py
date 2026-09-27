@@ -210,6 +210,31 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                 target.unlink()
             self.assertEqual(verify_materialized.check(root),[])
 
+    def test_nested_git_project_rejects_tracked_local_overrides(self):
+        with tempfile.TemporaryDirectory() as td:
+            checkout=Path(td)
+            subprocess.run(["git","init","-q",str(checkout)],check=True)
+            root=checkout/"project";root.mkdir()
+            profile,_=self.materialized_fixture(root)
+            (root/".gitignore").write_text(".local/\n",encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+            config=root/".local/config";config.mkdir(parents=True)
+            for filename in ("execution-profile.json","preset.json"):
+                target=config/filename;target.write_text("{}",encoding="utf-8")
+                self.assertNotIn(target,v.project_inventory(root)[0])
+                relative=str(target.relative_to(checkout))
+                subprocess.run(["git","add","-f","--",relative],cwd=checkout,
+                               check=True,capture_output=True)
+                self.assertIn(target,v.project_inventory(root)[0])
+                with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                    v.materialized_profile(profile,root)
+                self.assertTrue(any("Tracked machine-local configuration" in failure
+                                    for failure in verify_materialized.check(root)))
+                subprocess.run(["git","rm","--cached","-f","--",relative],cwd=checkout,
+                               check=True,capture_output=True)
+                self.assertEqual(verify_materialized.check(root),[])
+                target.unlink()
+
     def directory_link(self, link, target):
         try:
             link.symlink_to(target,target_is_directory=True)

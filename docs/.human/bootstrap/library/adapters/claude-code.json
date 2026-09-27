@@ -18,13 +18,13 @@
       "protected_manual": {
         "surfaces": {"cli": "supported", "ide": "unknown"},
         "cli_args": ["--permission-mode", "default"],
-        "native_settings": {"permissions": {"defaultMode": "default"}, "sandbox": {"enabled": true}},
+        "native_settings": {"permissions": {"defaultMode": "default", "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./**/.env)", "Read(./**/.env.*)", "Read(./**/secrets.*)", "Read(./**/credentials.*)", "Read(./**/*.key)", "Read(./**/*.p12)", "Read(./**/*.pfx)"]}, "sandbox": {"enabled": true}},
         "limits": "Normal permission prompts, sandbox boundaries, deny rules, hooks and managed policy remain in force."
       },
       "protected_auto": {
         "surfaces": {"cli": "unknown", "ide": "unknown"},
         "cli_args": ["--permission-mode", "auto"],
-        "native_settings": {"permissions": {"defaultMode": "auto"}, "sandbox": {"enabled": true}},
+        "native_settings": {"permissions": {"defaultMode": "auto", "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./**/.env)", "Read(./**/.env.*)", "Read(./**/secrets.*)", "Read(./**/credentials.*)", "Read(./**/*.key)", "Read(./**/*.p12)", "Read(./**/*.pfx)"]}, "sandbox": {"enabled": true}},
         "limits": "Auto mode is surface/account/model dependent. Unknown support blocks activation and never falls through to Full Access."
       },
       "full_access": {

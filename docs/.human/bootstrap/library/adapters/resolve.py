@@ -289,14 +289,21 @@ def _load_local_config(project_root: Path, filename: str) -> dict[str, Any] | No
 
 def _reject_tracked_local_config(project_root: Path, filename: str) -> None:
     root = project_root.resolve(strict=True)
-    if not (root / ".git").exists():
+    if not any((parent / ".git").exists() or (parent / ".git").is_symlink()
+               for parent in (root, *root.parents)):
         return
     relative = ".local/config/" + filename
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     try:
+        worktree = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"], cwd=root,
+            capture_output=True, check=True, timeout=10, env=environment)
+        if worktree.stdout.strip() != b"true":
+            raise ValueError("Machine-local configuration requires a Git worktree")
         result = subprocess.run(
             ["git", "ls-files", "--cached", "-z", "--", ":(icase,literal)" + relative],
             cwd=root, capture_output=True, check=True, timeout=10,
-            env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")})
+            env=environment)
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
     if relative.encode("ascii") in (entry.lower() for entry in result.stdout.split(b"\0")):
