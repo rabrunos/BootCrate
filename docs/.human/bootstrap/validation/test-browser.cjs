@@ -36,6 +36,14 @@ test('file-mode Setup shows accessible required errors and preserves legacy draf
   assert.match(await page.locator('.optionDetails').innerText(),/network/i);
   await page.locator('#field-execution_profile').selectOption('full_access');
   assert.equal(await page.locator('#field-full_access_acknowledgement').isVisible(),true);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bootcrate-project-intake-v2')).answers.project_name),'Example');
+  await page.reload();
+  await page.getByRole('button',{name:'AI workflow'}).click();
+  assert.equal(await page.locator('#field-execution_profile').inputValue(),'full_access');
+  assert.equal(await page.locator('#field-full_access_acknowledgement').inputValue(),'');
+  await page.getByRole('button',{name:'Project'}).click();
+  assert.equal(await page.locator('#field-project_name').inputValue(),'Example');
+  await page.getByRole('button',{name:'AI workflow'}).click();
   await page.locator('#field-full_access_acknowledgement').selectOption('acknowledged');
   await page.locator('#field-execution_profile').selectOption('protected_manual');
   assert.equal(await page.locator('#field-full_access_acknowledgement').count(),0);

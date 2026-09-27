@@ -110,9 +110,12 @@
         throw new Error("Invalid answer states");
       return out;
     }
-    function normalize(data) {
+    function normalize(data, {draft = false} = {}) {
       const errors = validate(data);
-      if (errors.length) throw new Error("Invalid intake envelope");
+      const pendingAcknowledgement = draft && data?.answers?.execution_profile === "full_access" &&
+        (data.answers.full_access_acknowledgement === undefined || data.answers.full_access_acknowledgement === "");
+      if (errors.some(error => !(pendingAcknowledgement && error.path === "answers.full_access_acknowledgement" &&
+          ["required", "value"].includes(error.code)))) throw new Error("Invalid intake envelope");
       const answers = {};
       for (const [id, value] of Object.entries(data.answers)) answers[id] = typeof value === "string" ? value.trim() : [...value];
       if (!answers.execution_profile) answers.execution_profile = "protected_manual";

@@ -190,6 +190,22 @@ test('intake validation and export enforce the Full Access opt-in',()=>{
   assert.ok(core.validate(envelope({execution_profile:'full_access',full_access_acknowledgement:'yes'})).length);
   assert.deepEqual(core.normalize(envelope({consumption_preset:'economy'})).answers.execution_profile,'protected_manual');
 });
+test('pending Full Access acknowledgement reloads only as an unapproved draft',()=>{
+  const pending=envelope({project_name:'Preserved',execution_profile:'full_access'});
+  assert.equal(core.normalize(pending,{draft:true}).answers.project_name,'Preserved');
+  assert.ok(core.missing(core.normalize(pending,{draft:true}).answers)
+    .some(question=>question.id==='full_access_acknowledgement'));
+  assert.throws(()=>core.normalize(pending),/Invalid intake envelope/);
+  assert.throws(()=>core.exportAnswers(pending.answers),/explicit acknowledgement/);
+  assert.equal(core.normalize(envelope({...pending.answers,full_access_acknowledgement:''}),{draft:true})
+    .answers.full_access_acknowledgement,'');
+  for(const invalid of [
+    envelope({...pending.answers,full_access_acknowledgement:'yes'}),
+    {...pending,answers:{...pending.answers,unexpected:'value'}},
+    {...pending,repository:'owner/..'},
+    envelope({execution_profile:'protected_manual',full_access_acknowledgement:'acknowledged'})
+  ])assert.throws(()=>core.normalize(invalid,{draft:true}),/Invalid intake envelope/);
+});
 test('execution profiles have task/local/default precedence and Full Access acknowledgement',()=>{
   assert.deepEqual(Execution.resolve({task:'protected_manual',local:'protected_auto'}),{requested:'protected_manual',source:'task'});
   assert.deepEqual(Execution.resolve({local:'protected_auto'}),{requested:'protected_auto',source:'local'});

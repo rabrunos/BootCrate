@@ -25,14 +25,19 @@
   try {
     const draft = JSON.parse(get(KEY) || "null");
     const envelope = {schema:C.SCHEMA, answers:draft?.answers, answer_states:draft?.answer_states, session:draft?.sessionMeta,
-      repository:draft?.repository, bootstrap_source:draft?.bootstrap_source};
-    if (draft && !core.validate(envelope).length) {
-      const normalized = core.normalize(envelope);
-      answers = normalized.answers;
-      states = normalized.states;
-      repository = normalized.repository;
-      session = {...session, ...(normalized.session || {})};
-    } else {
+      repository:draft?.repository === "" ? undefined : draft?.repository, bootstrap_source:draft?.bootstrap_source};
+    let loaded = false;
+    if (draft) {
+      try {
+        const normalized = core.normalize(envelope, {draft:true});
+        answers = normalized.answers;
+        states = normalized.states;
+        repository = normalized.repository;
+        session = {...session, ...(normalized.session || {})};
+        loaded = true;
+      } catch { /* Invalid current draft may still leave a convertible legacy draft. */ }
+    }
+    if (!loaded) {
       const old = JSON.parse(get("bootcrate-project-intake-v1") || "null");
       if (old?.answers) pendingLegacy = core.upgradeLegacy({schema:"bootcrate-project-intake/v1", answers:old.answers, session:old.sessionMeta});
     }

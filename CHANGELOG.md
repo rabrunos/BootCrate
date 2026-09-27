@@ -15,6 +15,7 @@
 - Adicionados três perfis independentes de permissões de execução, com default protegido/manual, opt-in de risco para Acesso Total e adaptadores Codex/Claude que distinguem solicitado de efetivo.
 - Reforçado o opt-in de Acesso Total no contrato do Intake, a comprovação de permissões e sandbox no adapter Claude e a leitura declarativa de versão e histórico no Console.
 - A finalização exige o conjunto exato de skills selecionadas em cada executor, e overrides locais rastreados pelo Git deixam de ser aceitos; a fronteira de isolamento da atualização gerenciada foi explicitada.
+- O Setup agora restaura rascunhos locais ainda sem repositório ou confirmação de Acesso Total, mantendo a confirmação obrigatória para exportação e execução solicitada.
 
 ## v0.8 — Setup guiado
 
