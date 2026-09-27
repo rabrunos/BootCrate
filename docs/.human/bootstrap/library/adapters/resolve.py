@@ -36,7 +36,7 @@ def _parse_json(text: str, source: str) -> dict[str, Any]:
         value: dict[str, Any] = {}
         for key, item in pairs:
             if key in value:
-                raise ValueError("Duplicate JSON key: " + key)
+                raise ValueError("Duplicate JSON key")
             value[key] = item
         return value
     data = json.loads(text, object_pairs_hook=no_duplicates)
@@ -46,7 +46,7 @@ def _parse_json(text: str, source: str) -> dict[str, Any]:
 
 
 def load_json(path: Path) -> dict[str, Any]:
-    return _parse_json(path.read_text(encoding="utf-8"), str(path))
+    return _parse_json(path.read_text(encoding="utf-8"), path.name)
 
 
 def parse_execution_override(value: dict[str, Any]) -> str:
@@ -90,7 +90,8 @@ def resolve_preset(*, task: str | None = None, local: str | None = None,
 
 
 def parse_preset_override(value: dict[str, Any]) -> str:
-    if set(value) != {"schema", "preset"} or value.get("schema") != PRESET_OVERRIDE_SCHEMA or value.get("preset") not in PRESETS:
+    if (not isinstance(value, dict) or set(value) != {"schema", "preset"} or
+            value.get("schema") != PRESET_OVERRIDE_SCHEMA or value.get("preset") not in PRESETS):
         raise ValueError("Invalid consumption-preset override")
     return value["preset"]
 
@@ -465,7 +466,10 @@ def main() -> int:
     local_preset = parse_preset_override(local_preset_data) if local_preset_data is not None else None
     project_preset = None
     if args.project_profile:
-        project_preset = load_json(args.project_profile).get("workflow", {}).get("consumption_preset")
+        workflow = load_json(args.project_profile).get("workflow", {})
+        if not isinstance(workflow, dict):
+            raise ValueError("Invalid project workflow configuration")
+        project_preset = workflow.get("consumption_preset")
     consumption = resolve_preset(task=args.task_preset, local=local_preset, project=project_preset)
     consumption.update({"effective":None,"status":"prepared","applied":False,
                         "application":"The orchestrator uses this strategy for optional context/delegation; no client setting is claimed."})
@@ -475,4 +479,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except ValueError as error:
+        print("BLOCKED: " + str(error), file=sys.stderr)
+        raise SystemExit(2)
+    except OSError:
+        print("BLOCKED: Cannot read resolver input or local configuration", file=sys.stderr)
+        raise SystemExit(2)

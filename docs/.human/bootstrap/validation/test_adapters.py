@@ -145,6 +145,45 @@ class AdapterResolverTests(unittest.TestCase):
                         resolver.resolve_execution(task=profile, task_risk_acknowledged=invalid)
         self.assertEqual(resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)["requested"], "full_access")
 
+    def test_resolver_cli_blocks_invalid_inputs_without_tracebacks_or_local_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base = [sys.executable, str(ADAPTERS / "resolve.py"),
+                    "--adapter", str(ADAPTERS / "codex.json"),
+                    "--surface", "cli", "--project-root", str(root)]
+
+            def blocked(extra: list[str], expected: str):
+                result = subprocess.run(base + extra, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("BLOCKED: " + expected, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertNotIn(str(root), result.stderr)
+
+            blocked(["--task-profile", "full_access", "--task-preset", "standard"],
+                    "Full Access task override requires explicit risk acknowledgement")
+            config = root / ".local" / "config"
+            config.mkdir(parents=True)
+            (config / "execution-profile.json").write_text("{invalid", encoding="utf-8")
+            blocked(["--task-preset", "standard"], "Expecting property name")
+            (config / "preset.json").write_text("[]", encoding="utf-8")
+            blocked(["--task-profile", "protected_manual"], "Expected a JSON object: preset.json")
+            project = root / "project-profile.json"
+            project.write_text('{"workflow":[]}', encoding="utf-8")
+            blocked(["--task-profile", "protected_manual", "--task-preset", "standard",
+                     "--project-profile", str(project)], "Invalid project workflow configuration")
+            missing = subprocess.run([sys.executable, str(ADAPTERS / "resolve.py"),
+                                      "--adapter", str(root / "missing.json"),
+                                      "--surface", "cli", "--project-root", str(root),
+                                      "--task-profile", "protected_manual",
+                                      "--task-preset", "standard"],
+                                     capture_output=True, text=True, timeout=10)
+            self.assertEqual(missing.returncode, 2)
+            self.assertEqual(missing.stdout, "")
+            self.assertIn("BLOCKED: Cannot read resolver input", missing.stderr)
+            self.assertNotIn("Traceback", missing.stderr)
+            self.assertNotIn(str(root), missing.stderr)
+
     def test_local_acknowledgement_type_matches_javascript_contract(self):
         for profile in resolver.PROFILES:
             for invalid in ("yes", 1, None, [], {}):
