@@ -334,7 +334,7 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
     in_comment = False
     raw_html = False
     html_until_blank = False
-    content_tag = re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?=[\t >])", re.I)
+    content_tag = re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?=[\t >]|$)", re.I)
     content_end = re.compile(r"</(?:script|pre|style|textarea)[ \t]*>", re.I)
     for raw_line in markdown.splitlines():
         if fence is not None:
