@@ -389,6 +389,21 @@ class AdapterResolverTests(unittest.TestCase):
                                      ("unsupported", None, False))
                     self.assertIsNone(blocked["native_action"])
 
+    def test_unsupported_surface_or_observation_has_no_native_action(self):
+        for adapter_name in ("codex.json", "claude-code.json"):
+            adapter = self.adapter(adapter_name)
+            requested = resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)
+            for surface, observation in (("unsupported_surface", None),
+                                         ("cli", {"executor": adapter["id"], "surface": "cli",
+                                                  "status": "unsupported", "effective": "full_access"})):
+                with self.subTest(adapter=adapter_name, surface=surface, observation=observation):
+                    blocked = resolver.map_request(adapter, surface, requested, observation=observation)
+                    self.assertEqual((blocked["status"], blocked["effective"], blocked["applied"]),
+                                     ("unsupported", None, False))
+                    self.assertIsNone(blocked["native_action"])
+            available = resolver.map_request(adapter, "cli", requested)
+            self.assertIsNotNone(available["native_action"])
+
     def test_observation_must_identify_the_requested_surface(self):
         requested = resolver.resolve_execution(task="protected_manual")
         for adapter_name in ("codex.json", "claude-code.json"):

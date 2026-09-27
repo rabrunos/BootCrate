@@ -457,21 +457,25 @@ def create(root: Path, revision: str, paths: list[str]) -> dict:
         raise ValueError("Source revision is required")
     if not paths or len(paths) != len(set(paths)):
         raise ValueError("Supply distinct explicitly approved paths")
-    files = {}
-    for path in paths:
-        data = content(root, path)
-        if data is None:
-            raise ValueError("Managed source missing: " + path)
-        files[path] = hash_bytes(data)
-    manifest = {"schema": "bootcrate-managed/v1", "source_revision": revision, "files": files}
-    raw = _manifest_bytes(manifest)
     with _locked(root) as control:
         target = _control_path(root, MANIFEST)
         if _lexists(target):
             raise ValueError("Manifest already exists")
+        files = {}
+        for path in paths:
+            data = content(root, path)
+            if data is None:
+                raise ValueError("Managed source missing: " + path)
+            files[path] = hash_bytes(data)
+        manifest = {"schema": "bootcrate-managed/v1", "source_revision": revision, "files": files}
+        raw = _manifest_bytes(manifest)
         staged = control / ("manifest-create-" + secrets.token_hex(12))
         _write_file(staged, raw)
         try:
+            for path, expected in files.items():
+                data = content(root, path)
+                if data is None or hash_bytes(data) != expected:
+                    raise ValueError("Managed source changed before manifest publication: " + path)
             # A hard-link publishes the fully written bytes without replacing a concurrent file.
             source_relative = _relative(staged)
             _mutator().link(

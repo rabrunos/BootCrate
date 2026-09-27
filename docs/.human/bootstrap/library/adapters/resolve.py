@@ -175,7 +175,7 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
                 if observation.get("surface") != surface:
                     missing.insert(0, "observed surface")
                 if status != "supported" or missing:
-                    status, effective = "unknown", None
+                    status, effective = ("unsupported" if status == "unsupported" else "unknown"), None
                     reason = "Claude Full Access not proven: " + ", ".join(missing or ["supported status"]) + "."
             if status != "supported":
                 effective = None
@@ -193,7 +193,7 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
         "surface": surface,
         "status": status,
         "applied": status == "supported" and effective == requested,
-        "native_action": (None if policy_blocked else {
+        "native_action": (None if status == "unsupported" else {
             "cli_args": profile.get("cli_args", []),
             "settings_patch": profile.get("native_settings", {}),
         }),

@@ -56,6 +56,42 @@ class UpgradeTests(unittest.TestCase):
         replacement.write_bytes(data)
         os.replace(replacement,target)
 
+    def test_init_snapshots_after_lock_and_rechecks_before_manifest_publish(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,_=self.setup_roots(Path(td))
+            original_locked=m._locked
+            original_content=m.content
+
+            def edit_before_lock(selected_root):
+                self.atomic_owner_replace(root/'update.txt',b'owner bytes before lock')
+                return original_locked(selected_root)
+
+            def read_under_lock(selected_root,relative):
+                self.assertIsNotNone(m._active_mutator.get())
+                return original_content(selected_root,relative)
+
+            with patch.object(m,'_locked',side_effect=edit_before_lock), \
+                    patch.object(m,'content',side_effect=read_under_lock):
+                manifest=m.create(root,'rev1',['update.txt'])
+            self.assertEqual(manifest['files']['update.txt'],m.hash_bytes(b'owner bytes before lock'))
+            self.assertEqual(m.read(root),manifest)
+
+        with tempfile.TemporaryDirectory() as td:
+            root,_=self.setup_roots(Path(td))
+            original_write=m._write_file
+
+            def edit_after_stage(path,data):
+                original_write(path,data)
+                if path.name.startswith('manifest-create-'):
+                    self.atomic_owner_replace(root/'update.txt',b'owner bytes after stage')
+
+            with patch.object(m,'_write_file',side_effect=edit_after_stage):
+                with self.assertRaisesRegex(ValueError,'Managed source changed before manifest publication'):
+                    m.create(root,'rev1',['update.txt'])
+            self.assertEqual((root/'update.txt').read_bytes(),b'owner bytes after stage')
+            self.assertFalse((root/m.MANIFEST).exists())
+            self.assertEqual(list((root/'.local').glob('manifest-create-*')),[])
+
     def test_lock_replacement_before_release_displacement_is_preserved(self):
         with tempfile.TemporaryDirectory() as td:
             root,_=self.setup_roots(Path(td))
