@@ -192,7 +192,10 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
         "surface": surface,
         "status": status,
         "applied": status == "supported" and effective == requested,
-        "native_action": {"cli_args": profile.get("cli_args", []), "settings_patch": profile.get("native_settings", {})},
+        "native_action": (None if policy_blocked else {
+            "cli_args": profile.get("cli_args", []),
+            "settings_patch": profile.get("native_settings", {}),
+        }),
         "reason": reason,
         "authorization": "Technical permissions do not authorize push, publication, production changes, purchases, or secret access."
     }

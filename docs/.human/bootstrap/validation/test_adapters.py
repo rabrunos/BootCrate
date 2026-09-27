@@ -329,9 +329,26 @@ class AdapterResolverTests(unittest.TestCase):
         blocked = resolver.map_request(self.adapter("codex.json"), "cli", requested,
                                        managed_policy={"allowed_profiles":["protected_manual"]})
         self.assertEqual((blocked["status"], blocked["effective"]), ("unsupported", None))
+        self.assertIsNone(blocked["native_action"])
         observed = resolver.map_request(self.adapter("codex.json"), "cli", requested,
                                         observation={"executor":"codex", "surface":"cli", "status":"supported", "effective":"full_access"})
         self.assertTrue(observed["applied"])
+
+    def test_managed_policy_never_returns_a_blocked_native_action(self):
+        for adapter_name, bypass in (("codex.json", "--dangerously-bypass-approvals-and-sandbox"),
+                                     ("claude-code.json", "--dangerously-skip-permissions")):
+            adapter = self.adapter(adapter_name)
+            requested = resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)
+            self.assertIn(bypass, resolver.map_request(adapter, "cli", requested)["native_action"]["cli_args"])
+            for observation in (None, {"executor": adapter["id"], "surface": "cli",
+                                      "status": "supported", "effective": "full_access"}):
+                with self.subTest(adapter=adapter_name, observation=observation):
+                    blocked = resolver.map_request(
+                        adapter, "cli", requested, observation=observation,
+                        managed_policy={"allowed_profiles": ["protected_manual"]})
+                    self.assertEqual((blocked["status"], blocked["effective"], blocked["applied"]),
+                                     ("unsupported", None, False))
+                    self.assertIsNone(blocked["native_action"])
 
     def test_observation_must_identify_the_requested_surface(self):
         requested = resolver.resolve_execution(task="protected_manual")
