@@ -204,6 +204,7 @@ class VersionCompatibilityTests(unittest.TestCase):
                 "<style>\n## v1.0 - Draft\n</style>",
                 "<textarea>\n## v1.0 - Draft\n</textarea>",
                 "<div>\n## v1.0 - Draft\n</div>",
+                "<custom>\n## v1.0 - Draft\n</custom>",
             )
             for section in hidden:
                 with self.subTest(section=section):
@@ -221,7 +222,8 @@ class VersionCompatibilityTests(unittest.TestCase):
             self.write(root, "HISTORY.md", "<PRE>\n</script>\n## v1.0 - Release\n")
             self.schema_and_finalization(root, profile)
             for preceding in ("Document `<!--`", "Document ``<!--``",
-                              "`<!--` is a literal delimiter"):
+                              "`<!--` is a literal delimiter",
+                              "<https://example.com>", "<mailto:owner@example.com>"):
                 with self.subTest(inline_code=preceding):
                     self.write(root, "HISTORY.md", preceding + "\n## v1.0 - Release\n")
                     self.schema_and_finalization(root, profile)

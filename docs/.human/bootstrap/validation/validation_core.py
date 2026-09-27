@@ -336,6 +336,13 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
     html_until_blank = False
     content_tag = re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?=[\t >]|$)", re.I)
     content_end = re.compile(r"</(?:script|pre|style|textarea)[ \t]*>", re.I)
+    block_tags = ("address article aside base basefont blockquote body caption center col colgroup "
+                  "dd details dialog dir div dl dt fieldset figcaption figure footer form frame "
+                  "frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main "
+                  "menu menuitem meta nav noframes ol optgroup option p param search section "
+                  "source summary table tbody td tfoot th thead title tr track ul").split()
+    type_six = re.compile(r"^ {0,3}</?(?:" + "|".join(block_tags) + r")(?=[ \t>]|/>|$)", re.I)
+    type_seven = re.compile(r"^ {0,3}</?[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[^<>]*)?/?>[ \t]*$")
     for raw_line in markdown.splitlines():
         if fence is not None:
             if re.fullmatch(r" {0,3}" + re.escape(fence[0]) +
@@ -388,9 +395,9 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
             if ">" not in line[declaration.end():]:
                 raw_delimiter = ">"
             continue
-        if re.match(r"^ {0,3}<(?:/?[A-Za-z]|[!?])", line):
-            # Other raw HTML blocks end at a blank line; conservatively skip
-            # unknown tags rather than accepting a hidden version heading.
+        if type_six.match(line) or type_seven.fullmatch(line):
+            # CommonMark type 6/7 blocks end at a blank line; autolinks and
+            # other inline angle-bracket content do not start an HTML block.
             html_until_blank = True
             continue
         if heading.match(line):

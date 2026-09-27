@@ -277,6 +277,23 @@ class DeliveryTests(unittest.TestCase):
         incomplete=candidate();incomplete['included_changes'].remove('#42/1')
         self.assertIn('formalized version entry',d.plan(incomplete,[],target(),self.entries)['reason'])
 
+    def test_candidate_cannot_claim_changes_from_later_history_entries(self):
+        earlier=candidate()
+        earlier['version']='1.2'
+        earlier['integration_order']=2
+        blocked=d.plan(earlier,[],target(),self.entries)
+        self.assertEqual(blocked['status'],'BLOCK')
+        self.assertIn('later or missing changelog change',blocked['reason'])
+        same=receipt('1.2',2,earlier['included_changes'])
+        same.update(candidate_id=d.identity(earlier),
+                    artifact_sha256=earlier['artifacts']['github'])
+        self.assertEqual(d.plan(earlier,[same],target(),self.entries)['status'],'BLOCK')
+        earlier['included_changes']=['#40/1','#41/1']
+        ready=d.plan(earlier,[],target(),self.entries)
+        self.assertEqual(ready['status'],'READY')
+        self.assertEqual(ready['new_change_ids'],['#40/1','#41/1'])
+        self.assertNotIn('v1.3',ready['notes'])
+
     def test_internal_version_and_skipped_versions_keep_canonical_history(self):
         internal={'version':'1.1','source_commit':'b'*40,'payload_sha256':'c'*64,
                   'artifacts':{'github':'d'*64},'included_changes':['#40/1'],'integration_order':1}

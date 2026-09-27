@@ -230,15 +230,18 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
     if any(r.get("integration_order",-1)>=candidate["integration_order"] and r.get("version")!=candidate["version"] for r in confirmed):
         return {"status":"BLOCK","reason":"Later candidate active; rollback requires separate authorization"}
     # A confirmed receipt does not waive the candidate's canonical history.
-    version_entry=next((entry for entry in entries if entry.get("version")==candidate["version"]),None)
-    if version_entry is None:
+    version_index=next((index for index,entry in enumerate(entries)
+                        if entry.get("version")==candidate["version"]),None)
+    if version_index is None:
         return {"status":"BLOCK","reason":"Candidate version has no canonical changelog entry"}
+    version_entry=entries[version_index]
+    eligible_entries=entries[version_index:] # candidate and older, excluding newer entries
     version_changes={change["id"] for change in version_entry["changes"]}
     if not version_changes <= set(candidate["included_changes"]):
         return {"status":"BLOCK","reason":"Candidate omits a change from its formalized version entry"}
-    known_changes={change["id"] for entry in entries for change in entry["changes"]}
+    known_changes={change["id"] for entry in eligible_entries for change in entry["changes"]}
     if not set(candidate["included_changes"]) <= known_changes:
-        return {"status":"BLOCK","reason":"Candidate references a missing changelog change"}
+        return {"status":"BLOCK","reason":"Candidate references a later or missing changelog change"}
     same=[r for r in confirmed if r.get("version")==candidate["version"]]
     if same:
         if any(r.get("candidate_id") != cid or r.get("artifact_sha256") != candidate["artifacts"][key[0]] for r in same):
@@ -262,7 +265,7 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
     else:
         baseline=None;already=set()
     selected=[];selected_ids=[]
-    for entry in reversed(entries): # newest-first source to oldest-first delivery interval
+    for entry in reversed(eligible_entries): # candidate and older entries, oldest first
         changes=[]
         for change in entry["changes"]:
             if change["id"] in candidate["included_changes"] and change["id"] not in already:
