@@ -332,7 +332,7 @@ def _load_local_config(project_root: Path, filename: str, *,
     _local_config_path(project_root, filename)
     content = _read_local_bytes(project_root, filename)
     if content is not None and not git_provenance and not acknowledge_unverified_source:
-        raise ValueError("Local override source cannot be verified without Git; explicitly acknowledge its source")
+        raise ValueError("Local override source cannot be verified for this project; explicitly acknowledge its source")
     return None if content is None else _parse_json(content.decode("utf-8"), filename)
 
 
@@ -342,6 +342,7 @@ def _reject_tracked_local_config(project_root: Path, filename: str) -> bool:
                for parent in (root, *root.parents)):
         return False
     relative = ".local/config/" + filename
+    project_marker = "docs/.ai/project-profile.json"
     environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     try:
         worktree = subprocess.run(
@@ -349,15 +350,20 @@ def _reject_tracked_local_config(project_root: Path, filename: str) -> bool:
             capture_output=True, check=True, timeout=10, env=environment)
         if worktree.stdout.strip() != b"true":
             raise ValueError("Machine-local configuration requires a Git worktree")
+        prefix = subprocess.run(
+            ["git", "rev-parse", "--show-prefix"], cwd=root,
+            capture_output=True, check=True, timeout=10, env=environment)
         result = subprocess.run(
-            ["git", "ls-files", "--cached", "-z", "--", ":(icase,literal)" + relative],
+            ["git", "ls-files", "--cached", "-z", "--",
+             ":(icase,literal)" + relative, ":(literal)" + project_marker],
             cwd=root, capture_output=True, check=True, timeout=10,
             env=environment)
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
-    if relative.encode("ascii") in (entry.lower() for entry in result.stdout.split(b"\0")):
+    tracked = {entry for entry in result.stdout.split(b"\0") if entry}
+    if relative.encode("ascii") in (entry.lower() for entry in tracked):
         raise ValueError("Tracked machine-local configuration is invalid: " + relative)
-    return True
+    return prefix.stdout in (b"", b"\n", b"\r\n") or project_marker.encode("ascii") in tracked
 
 
 def _rename_local_noreplace(parent_fd: int, source: str, destination: str) -> None:

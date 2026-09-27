@@ -123,7 +123,7 @@ class AdapterResolverTests(unittest.TestCase):
                     blocked = invoke("--task-preset", "standard", *flags)
                     self.assertEqual(blocked.returncode, 2)
                     self.assertEqual(blocked.stdout, "")
-                    self.assertIn("Local override source cannot be verified without Git", blocked.stderr)
+                    self.assertIn("Local override source cannot be verified for this project", blocked.stderr)
                     self.assertNotIn("Traceback", blocked.stderr)
             local = invoke("--task-preset", "standard", "--acknowledge-unverified-local-source")
             self.assertEqual(local.returncode, 0, local.stderr)
@@ -134,7 +134,7 @@ class AdapterResolverTests(unittest.TestCase):
 
             preset_blocked = invoke("--task-profile", "protected_manual")
             self.assertEqual(preset_blocked.returncode, 2)
-            self.assertIn("Local override source cannot be verified without Git", preset_blocked.stderr)
+            self.assertIn("Local override source cannot be verified for this project", preset_blocked.stderr)
             preset_local = invoke("--task-profile", "protected_manual",
                                   "--acknowledge-unverified-local-source")
             self.assertEqual(preset_local.returncode, 0, preset_local.stderr)
@@ -143,6 +143,40 @@ class AdapterResolverTests(unittest.TestCase):
                           "--task-preset", "standard")
             self.assertEqual(task.returncode, 0, task.stderr)
             self.assertEqual(json.loads(task.stdout)["execution"]["source"], "task")
+
+            host = home / "unrelated-worktree"
+            host.mkdir()
+            subprocess.run(["git", "init", "-q", str(host)], check=True)
+            (host / "README.md").write_text("# Unrelated repository\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=host,
+                           check=True, capture_output=True)
+            nested = host / "extracted"
+            nested.mkdir()
+            with zipfile.ZipFile(archive) as bundle:
+                bundle.extractall(nested)
+            self.assertFalse((nested / ".git").exists())
+            nested_base = [sys.executable, str(ADAPTERS / "resolve.py"),
+                           "--adapter", str(ADAPTERS / "codex.json"), "--surface", "cli",
+                           "--project-root", str(nested)]
+            def nested_invoke(*args: str):
+                return subprocess.run(nested_base + list(args), capture_output=True,
+                                      text=True, timeout=10)
+            for args in (("--task-preset", "standard"), ("--task-profile", "protected_manual")):
+                with self.subTest(args=args):
+                    blocked = nested_invoke(*args)
+                    self.assertEqual(blocked.returncode, 2)
+                    self.assertIn("Local override source cannot be verified for this project", blocked.stderr)
+                    self.assertEqual(blocked.stdout, "")
+            local = nested_invoke("--task-preset", "standard", "--acknowledge-unverified-local-source")
+            self.assertEqual(local.returncode, 0, local.stderr)
+            execution = json.loads(local.stdout)["execution"]
+            self.assertEqual((execution["requested"], execution["source"]), ("full_access", "local"))
+            self.assertIn("--dangerously-bypass-approvals-and-sandbox",
+                          execution["native_action"]["cli_args"])
+            explicit = nested_invoke("--task-profile", "full_access", "--acknowledge-full-access-risk",
+                                     "--task-preset", "standard")
+            self.assertEqual(explicit.returncode, 0, explicit.stderr)
+            self.assertEqual(json.loads(explicit.stdout)["execution"]["source"], "task")
 
     def test_case_variant_tracked_local_overrides_are_rejected(self):
         for filename,payload in (("execution-profile.json",
@@ -175,6 +209,10 @@ class AdapterResolverTests(unittest.TestCase):
                 subprocess.run(["git","init","-q",str(checkout)],check=True)
                 root=checkout/"project";config=root/".local/config";config.mkdir(parents=True)
                 (root/".gitignore").write_text(".local/\n",encoding="utf-8")
+                marker=root/"docs/.ai/project-profile.json";marker.parent.mkdir(parents=True)
+                marker.write_text("{}\n",encoding="utf-8")
+                subprocess.run(["git","add","--",str(marker.relative_to(checkout))],
+                               cwd=checkout,check=True,capture_output=True)
                 target=config/filename;target.write_text(json.dumps(payload),encoding="utf-8")
                 self.assertEqual(resolver._load_local_config(root,filename),payload)
                 relative=str(target.relative_to(checkout))
