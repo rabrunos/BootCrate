@@ -201,6 +201,8 @@ class VersionCompatibilityTests(unittest.TestCase):
                 "<PRE class=\"sample\">\n## v1.0 - Draft\n</PRE>",
                 "<style>\n## v1.0 - Draft\n</style>",
                 "<textarea>\n## v1.0 - Draft\n</textarea>",
+                "<pre>\n</script>\n## v1.0 - Draft\n</pre>",
+                "<SCRIPT>\n</PRE>\n## v1.0 - Draft\n</SCRIPT>",
                 "<div>\n## v1.0 - Draft\n</div>",
             )
             for section in hidden:
@@ -213,6 +215,9 @@ class VersionCompatibilityTests(unittest.TestCase):
                     self.schema_and_finalization(root, profile)
             self.write(root, "HISTORY.md", "<script>\n## v1.0 - Draft\n</script>\n"
                        "## v1.0 - Release\n")
+            self.schema_and_finalization(root, profile)
+            self.write(root, "HISTORY.md", "<PRE>\n</script>\n## v1.0 - Draft\n"
+                       "</pre>\n## v1.0 - Release\n")
             self.schema_and_finalization(root, profile)
             for block in ("<![CDATA[\n\n## v1.0 - Draft\n]]>",
                           "<?history\n\n## v1.0 - Draft\n?>"):

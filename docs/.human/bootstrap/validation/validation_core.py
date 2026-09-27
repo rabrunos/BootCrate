@@ -332,10 +332,9 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
     fence: str | None = None
     raw_delimiter: str | None = None
     in_comment = False
-    raw_html = False
+    raw_html_tag: str | None = None
     html_until_blank = False
-    content_tag = re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?=[\t >])", re.I)
-    content_end = re.compile(r"</(?:script|pre|style|textarea)[ \t]*>", re.I)
+    content_tag = re.compile(r"^ {0,3}<(script|pre|style|textarea)(?=[\t >])", re.I)
     for raw_line in markdown.splitlines():
         if fence is not None:
             if re.fullmatch(r" {0,3}" + re.escape(fence[0]) +
@@ -346,9 +345,9 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
             if raw_delimiter in raw_line:
                 raw_delimiter = None
             continue
-        if raw_html:
-            if content_end.search(raw_line):
-                raw_html = False
+        if raw_html_tag is not None:
+            if re.search(r"</" + re.escape(raw_html_tag) + r"[ \t]*>", raw_line, re.I):
+                raw_html_tag = None
             continue
         if html_until_blank:
             if not raw_line.strip():
@@ -375,8 +374,11 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
         if opening and (opening[1][0] == "~" or "`" not in opening[2]):
             fence = opening[1]
             continue
-        if content_tag.match(line):
-            raw_html = content_end.search(line) is None
+        content_open = content_tag.match(line)
+        if content_open:
+            tag = content_open[1]
+            if not re.search(r"</" + re.escape(tag) + r"[ \t]*>", line, re.I):
+                raw_html_tag = tag
             continue
         declaration = re.match(r"^ {0,3}<![A-Z]", line)
         if declaration:
