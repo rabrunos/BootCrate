@@ -193,9 +193,12 @@ test('file-mode optional Console imports a profile without claiming remote proof
   await page.locator('#exportExecution').click();
   const execution=await executionDownload;
   assert.equal(execution.suggestedFilename(),'execution-profile.json');
-  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n## v1.2 — Search\n- Added search.\n')});
+  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n    ## v1.2 — Code block\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
+  assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
+  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n  ## v1.2 — Search\n- Added search.\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
-  assert.match(await page.locator('#historyNotes').innerText(),/v1.2 — Search/);
+  assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 — Search/m);
   await page.locator('#validateLocal').click();
   assert.match(await page.locator('#localCheck').innerText(),/canonical version source file/);
   await page.locator('#version').setInputFiles({name:'VERSION',mimeType:'text/plain',buffer:Buffer.from('1.2\n')});
@@ -234,7 +237,7 @@ test('file-mode optional Console imports a profile without claiming remote proof
   await page.locator('#version').setInputFiles({name:'package.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({meta:{'release/version':'2.3'}}))});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version source imported'));
   assert.match(await page.locator('#details').innerText(),/2\.3/);
-  await page.locator('#history').setInputFiles({name:'HISTORY.md',mimeType:'text/markdown',buffer:Buffer.from('# History\n## [v2.3] Release\n')});
+  await page.locator('#history').setInputFiles({name:'HISTORY.md',mimeType:'text/markdown',buffer:Buffer.from('# History\n   ## [v2.3] Release\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
   assert.match(await page.locator('#historyNotes').innerText(),/v2\.3/);
   const validJsonDetails=await page.locator('#details').innerText(),validJsonHistory=await page.locator('#historyNotes').innerText();
