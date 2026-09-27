@@ -528,6 +528,9 @@ class AdapterResolverTests(unittest.TestCase):
             adapter = self.adapter(adapter_name)
             requested = resolver.resolve_execution(task="full_access", task_risk_acknowledged=True)
             for surface, observation in (("unsupported_surface", None),
+                                         ("unsupported_surface", {"executor": adapter["id"],
+                                                                  "surface": "unsupported_surface",
+                                                                  "status": "supported", "effective": "full_access"}),
                                          ("cli", {"executor": adapter["id"], "surface": "cli",
                                                   "status": "unsupported", "effective": "full_access"})):
                 with self.subTest(adapter=adapter_name, surface=surface, observation=observation):

@@ -140,7 +140,8 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
     profile = adapter.get("execution_permissions", {}).get("profiles", {}).get(requested)
     if not isinstance(profile, dict):
         raise ValueError("Adapter lacks requested execution profile")
-    status = profile.get("surfaces", {}).get(surface, "unsupported")
+    declared_surfaces = profile.get("surfaces", {})
+    status = declared_surfaces.get(surface, "unsupported")
     if status not in {"supported", "unsupported", "unknown"}:
         raise ValueError("Invalid adapter support status")
     reason = profile.get("limits")
@@ -163,7 +164,7 @@ def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
             raise ValueError("Observation belongs to another executor")
         if observation.get("surface") not in (None, surface):
             raise ValueError("Observation belongs to another surface")
-        if not policy_blocked:
+        if not policy_blocked and surface in declared_surfaces:
             status, effective = observed_status, observed_effective
             reason = observation.get("reason") or reason
             # An observed profile cannot satisfy a different requested profile,
