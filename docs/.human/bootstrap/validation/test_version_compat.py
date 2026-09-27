@@ -205,6 +205,8 @@ class VersionCompatibilityTests(unittest.TestCase):
                 "<textarea>\n## v1.0 - Draft\n</textarea>",
                 "<div>\n## v1.0 - Draft\n</div>",
                 "<custom>\n## v1.0 - Draft\n</custom>",
+                '<x data=">">\n## v1.0 - Draft',
+                '<x data="<">\n## v1.0 - Draft',
             )
             for section in hidden:
                 with self.subTest(section=section):
