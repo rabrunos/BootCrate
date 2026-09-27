@@ -228,9 +228,9 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
     for previous,current in zip(ordered,ordered[1:]):
         if previous["integration_order"] == current["integration_order"]:
             if (previous["candidate_id"],previous["artifact_sha256"],previous["version"],
-                set(previous["included_changes"])) != (
+                set(previous["included_changes"]),previous["notes_sha256"]) != (
                 current["candidate_id"],current["artifact_sha256"],current["version"],
-                set(current["included_changes"])):
+                set(current["included_changes"]),current["notes_sha256"]):
                 return {"status":"BLOCK","reason":"Ambiguous confirmed integration order requires reconciliation"}
         elif not set(previous["included_changes"]) <= set(current["included_changes"]):
             return {"status":"BLOCK","reason":"Confirmed integration history is not cumulative"}

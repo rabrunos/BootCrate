@@ -69,9 +69,23 @@
     return token;
   }
   function historyEntries(source) {
-    const atx=[...source.matchAll(/^ {0,3}##[ \t]+\[?v?([0-9A-Za-z][0-9A-Za-z._+-]{0,127})\]?(?:[ \t]|$|[\u2014:\u2013-])[^\r\n]*$/gm)]
+    let fence=null;
+    const visible=source.split(/\r\n|\n|\r/).map(line=>{
+      if(fence){
+        const closing=/^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+        if(closing&&closing[1][0]===fence.marker&&closing[1].length>=fence.length)fence=null;
+        return "";
+      }
+      const opening=/^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if(opening&&(opening[1][0]==="~"||!opening[2].includes("`"))){
+        fence={marker:opening[1][0],length:opening[1].length};
+        return "";
+      }
+      return line;
+    }).join("\n");
+    const atx=[...visible.matchAll(/^ {0,3}##[ \t]+\[?v?([0-9A-Za-z][0-9A-Za-z._+-]{0,127})\]?(?:[ \t]|$|[\u2014:\u2013-])[^\r\n]*$/gm)]
       .map(match=>({index:match.index,version:match[1],title:match[0].replace(/^ {0,3}##[ \t]+/,"")}));
-    const setext=[...source.matchAll(/^ {0,3}(\[?v?([0-9A-Za-z][0-9A-Za-z._+-]{0,127})\]?(?:[ \t]|[\u2014:\u2013-]|$)[^\r\n]*)\r?\n {0,3}-{3,}[ \t]*$/gm)]
+    const setext=[...visible.matchAll(/^ {0,3}(\[?v?([0-9A-Za-z][0-9A-Za-z._+-]{0,127})\]?(?:[ \t]|[\u2014:\u2013-]|$)[^\r\n]*)\r?\n {0,3}-{3,}[ \t]*$/gm)]
       .map(match=>({index:match.index,version:match[2],title:match[1]}));
     return [...atx,...setext].sort((left,right)=>left.index-right.index);
   }

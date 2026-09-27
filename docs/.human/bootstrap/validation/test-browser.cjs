@@ -202,6 +202,13 @@ test('file-mode optional Console imports a profile without claiming remote proof
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\nv1.2 Setext release\n---\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
   assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
+  for(const marker of ['```markdown','~~~markdown']){
+    const close=marker.slice(0,3);
+    await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from(`# Changelog\n${marker}\nv1.2 Fenced example\n---\n${close}\n`)});
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
+    assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
+    assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
+  }
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n## v1.2 ATX release\nv1.2 Setext release\n---\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
   assert.match(await page.locator('#status').innerText(),/No unique version headings found/);

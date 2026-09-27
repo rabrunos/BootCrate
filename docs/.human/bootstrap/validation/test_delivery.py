@@ -129,6 +129,13 @@ class DeliveryTests(unittest.TestCase):
         independent=receipt('1.2',2,['#41/1'],id='nexus')
         self.assertEqual(d.plan(candidate(),[first,independent],target('github',baseline='unknown'),self.entries)['status'],'READY')
 
+    def test_equal_order_confirmations_must_agree_on_notes_digest(self):
+        first=receipt('1.2',2,['#40/1','#41/1'],attempt='first')
+        second=receipt('1.2',2,['#40/1','#41/1'],attempt='second',notes_sha256='1'*64)
+        blocked=d.plan(candidate(),[first,second],target(baseline='unknown'),self.entries)
+        self.assertEqual(blocked['status'],'BLOCK')
+        self.assertIn('Ambiguous confirmed integration order',blocked['reason'])
+
     def test_unknown_partial_and_duplicate_behaviors(self):
         self.assertEqual(d.plan(candidate(),[],target(baseline='unknown'),self.entries)['status'],'BLOCK')
         self.assertEqual(d.plan(candidate(),[receipt('1.2',2,['#40/1','#41/1'],status='unknown')],target(),self.entries)['status'],'BLOCK')
