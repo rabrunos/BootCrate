@@ -169,6 +169,15 @@ class VersionCompatibilityTests(unittest.TestCase):
                     self.write(root, "HISTORY.md", "# History\n\n" + heading + "\n")
                     self.schema_and_finalization(root, profile)
 
+            for indent in range(1,4):
+                with self.subTest(indent=indent):
+                    self.write(root, "HISTORY.md", "# History\n\n" +
+                               " " * indent + "## v1.0 - Release\n")
+                    self.schema_and_finalization(root, profile)
+            self.write(root, "HISTORY.md", "# History\n\n    ## v1.0 - Code block\n")
+            with self.assertRaisesRegex(ValueError, "no entry for integrated version 1.0"):
+                self.schema_and_finalization(root, profile)
+
     def test_v3_history_ignores_fenced_and_commented_headings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -178,8 +187,10 @@ class VersionCompatibilityTests(unittest.TestCase):
             profile["versioning"].pop("value_path")
             hidden = (
                 "```markdown\n## v1.0 - Example\n```",
+                "  ```markdown\n  ## v1.0 - Example\n  ```",
                 "~~~~ markdown\n## v1.0 - Example\n~~~~",
                 "<!--\n## v1.0 - Draft\n-->",
+                "<!--\n  ## v1.0 - Draft\n-->",
                 "<!-- ## v1.0 - Draft -->",
                 "<!-- note -->## v1.0 - Draft",
                 "```markdown\n<!-- unfinished comment\n```",

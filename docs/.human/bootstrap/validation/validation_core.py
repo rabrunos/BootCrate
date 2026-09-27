@@ -392,7 +392,7 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
     require(history_format == "markdown-headings", "Unsupported canonical history reader")
     require(history.stat().st_size <= 2 * 1024 * 1024, "Canonical version history is too large")
     token = re.escape(version)
-    heading = re.compile(r"^##[ \t]+(?:\[v?" + token + r"\]|v?" + token + r")(?=[ \t]|$)")
+    heading = re.compile(r"^ {0,3}##[ \t]+(?:\[v?" + token + r"\]|v?" + token + r")(?=[ \t]|$)")
     require(_history_has_heading(history.read_text(encoding="utf-8"), heading),
             "Canonical history has no entry for integrated version " + version)
     return version
