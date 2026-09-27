@@ -156,13 +156,15 @@ def _observed_time(value: Any) -> datetime:
 
 
 def _receipt_identity(receipt: dict) -> tuple:
-    required=("attempt_id","destination","channel","version","candidate_id","artifact_sha256")
+    required=("attempt_id","destination","channel","version","candidate_id","artifact_sha256","notes_sha256")
     if any(not isinstance(receipt.get(key),str) or not receipt[key] for key in required):
         raise ValueError("Receipt attempt identity is incomplete")
     if not re.fullmatch(r"[0-9a-f]{64}",receipt["candidate_id"]):
         raise ValueError("Receipt candidate identity is invalid")
     if not re.fullmatch(r"[0-9a-f]{64}",receipt["artifact_sha256"]):
         raise ValueError("Receipt artifact digest is invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}",receipt["notes_sha256"]):
+        raise ValueError("Receipt notes digest is invalid")
     if type(receipt.get("integration_order")) is not int or receipt["integration_order"]<0:
         raise ValueError("Receipt integration order missing")
     changes=receipt.get("included_changes")
@@ -254,10 +256,11 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
         if any(r["integration_order"] != candidate["integration_order"] or
                r["included_changes"] != candidate["included_changes"] for r in same):
             return {"status":"BLOCK","reason":"Same candidate receipt has inconsistent integration metadata"}
-        return {"status":"SKIP","reason":"Same candidate and package already confirmed"}
-    if not confirmed and target.get("baseline") != "never_published":
+        prior=[r for r in confirmed if r["integration_order"]<candidate["integration_order"]]
+        baseline=max(prior,key=lambda r:r["integration_order"]) if prior else None
+    elif not confirmed and target.get("baseline") != "never_published":
         return {"status":"BLOCK","reason":"Unknown baseline; verify destination history first"}
-    if confirmed:
+    elif confirmed:
         # Sequence is a confirmed integration order, not lexicographic version sorting.
         if any(type(r.get("integration_order")) is not int for r in confirmed):
             return {"status":"BLOCK","reason":"Receipt integration order missing"}
@@ -266,9 +269,9 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
             return {"status":"BLOCK","reason":"Candidate does not contain the confirmed baseline"}
         if baseline["integration_order"] >= candidate.get("integration_order",-1):
             return {"status":"BLOCK","reason":"Later or equal candidate already active; rollback requires separate authorization"}
-        already=set(baseline["included_changes"])
     else:
-        baseline=None;already=set()
+        baseline=None
+    already=set(baseline["included_changes"]) if baseline else set()
     selected=[];selected_ids=[]
     for entry in reversed(eligible_entries): # candidate and older entries, oldest first
         changes=[]
@@ -281,10 +284,15 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
     notes=render(selected,target["field"],target.get("audience","public"))
     if len(notes.encode("utf-8")) > target.get("max_bytes",65536):
         return {"status":"BLOCK","reason":"Notes exceed verified destination field limit"}
+    notes_sha256=digest(notes.encode("utf-8"))
+    if same:
+        if any(r["notes_sha256"]!=notes_sha256 for r in same):
+            return {"status":"BLOCK","reason":"Same candidate has different confirmed notes"}
+        return {"status":"SKIP","reason":"Same candidate, package and notes already confirmed"}
     return {"status":"READY","candidate_id":cid,"destination":key[0],"channel":key[1],
             "artifact_sha256":candidate["artifacts"][key[0]],"baseline":baseline["version"] if baseline else "never_published",
             "included_changes":list(candidate["included_changes"]),"new_change_ids":selected_ids,
-            "notes":notes,"notes_sha256":digest(notes.encode("utf-8")),
+            "notes":notes,"notes_sha256":notes_sha256,
             "warning":"Preview only; verify provider state and authorize the exact operation separately"}
 
 

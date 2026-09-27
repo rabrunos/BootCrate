@@ -39,11 +39,15 @@ def target(id='github',field='markdown',baseline='never_published'):
     return {'id':id,'channel':'stable','field':field,'baseline':baseline,'max_bytes':5000}
 
 
-def receipt(version,order,changes,id='github',status='confirmed',attempt=None,observed_at='2026-09-24T00:00:00Z'):
+def receipt(version,order,changes,id='github',status='confirmed',attempt=None,observed_at='2026-09-24T00:00:00Z',notes_sha256=None):
+    if notes_sha256 is None:
+        notes_sha256=(d.digest(d.render(list(reversed(d.changelog(SOURCE))),'markdown').encode('utf-8'))
+                      if version=='1.3' else '0'*64)
     return {'schema':'bootcrate-receipt/v1','destination':id,'channel':'stable','version':version,
             'integration_order':order,'included_changes':changes,'status':status,
             'attempt_id':attempt or 'attempt-'+id+'-'+version,
-            'candidate_id':'f'*64,'artifact_sha256':'e'*64,'evidence_ref':'https://example.invalid/release',
+            'candidate_id':'f'*64,'artifact_sha256':'e'*64,'notes_sha256':notes_sha256,
+            'evidence_ref':'https://example.invalid/release',
             'observed_by':'authorized operator','observed_at':observed_at}
 
 
@@ -113,7 +117,7 @@ class DeliveryTests(unittest.TestCase):
 
         recorded=receipt('1.3',3,ready['included_changes'],attempt='new-attempt')
         recorded.update(candidate_id=ready['candidate_id'],
-                        artifact_sha256=ready['artifact_sha256'])
+                        artifact_sha256=ready['artifact_sha256'],notes_sha256=ready['notes_sha256'])
         self.assertEqual(d.plan(candidate(),[first,cumulative,recorded],
                                 target(baseline='unknown'),self.entries)['status'],'SKIP')
 
@@ -173,6 +177,37 @@ class DeliveryTests(unittest.TestCase):
         skipped=d.plan(candidate(),[same],target(),self.entries);simulated_publisher(skipped)
         self.assertEqual(len(calls),1)
         self.assertEqual(skipped['status'],'SKIP')
+
+    def test_confirmed_skip_requires_the_same_rendered_notes(self):
+        current=candidate()
+        destination=target()
+        ready=d.plan(current,[],destination,self.entries)
+        same=receipt('1.3',3,ready['included_changes'],notes_sha256=ready['notes_sha256'])
+        same.update(candidate_id=ready['candidate_id'],artifact_sha256=ready['artifact_sha256'])
+        self.assertEqual(d.plan(current,[same],destination,self.entries)['status'],'SKIP')
+
+        edited=[{**entry,'changes':[dict(change) for change in entry['changes']]}
+                for entry in self.entries]
+        edited[0]['changes'][0]['text']='Corrigidos filtros e ordenacao ao reabrir a busca.'
+        for changed_entries,changed_target in (
+            (edited,destination),
+            (self.entries,target(field='plain')),
+            (self.entries,{**destination,'audience':'maintainers'}),
+        ):
+            with self.subTest(field=changed_target['field'],audience=changed_target.get('audience')):
+                blocked=d.plan(current,[same],changed_target,changed_entries)
+                self.assertEqual(blocked['status'],'BLOCK')
+                self.assertIn('different confirmed notes',blocked['reason'])
+
+        without_digest={key:value for key,value in same.items() if key!='notes_sha256'}
+        invalid_digest={**same,'notes_sha256':'x'*64}
+        for invalid in (without_digest,invalid_digest):
+            blocked=d.plan(current,[invalid],destination,self.entries)
+            self.assertEqual(blocked['status'],'BLOCK')
+            self.assertIn('Receipt',blocked['reason'])
+        changed_event={**same,'notes_sha256':'0'*64,'status':'unknown'}
+        self.assertIn('Attempt identity changed',
+                      d.plan(current,[same,changed_event],destination,self.entries)['reason'])
 
     def test_confirmed_skip_still_requires_canonical_change_history(self):
         current=candidate()
@@ -238,7 +273,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(ready['status'],'READY')
         confirmed=receipt('1.3',3,ready['included_changes'])
         confirmed.update(candidate_id=ready['candidate_id'],
-                         artifact_sha256=ready['artifact_sha256'])
+                         artifact_sha256=ready['artifact_sha256'],notes_sha256=ready['notes_sha256'])
         self.assertEqual(d.plan(current,[confirmed],target(),entries)['status'],'SKIP')
 
     def test_artifacts_must_be_a_mapping_before_cli_planning(self):
