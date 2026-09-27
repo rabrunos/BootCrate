@@ -8,15 +8,17 @@ import argparse
 import hashlib
 from html.parser import HTMLParser
 import json
+import os
 from pathlib import Path
 import re
+import stat
 import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
 
 from validation_core import (inventory, load_json, materialized_profile,
                              profile_schema, schema_check, secret_findings,
-                             sensitive_name, valid_claude_credential_denials,
+                             sensitive_name, unique_object, valid_claude_credential_denials,
                              reject_unselected_codex_config,
                              reject_unselected_claude_config,
                              validate_codex_agent_configs, validate_claude_agent_configs,
@@ -118,6 +120,29 @@ def console_asset_matches(path: Path, expected: str) -> bool:
     return hashlib.sha256(normalized).hexdigest() == expected
 
 
+def read_native_config(path: Path, executor: str) -> str:
+    """Reject links and special leaves, then read at most the configured limit."""
+    before = path.lstat()
+    reparse = (getattr(before, "st_file_attributes", 0) &
+               getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    require_regular = stat.S_ISREG(before.st_mode) and not reparse
+    if not require_regular:
+        raise ValueError(f"Enabled {executor} configuration must be a regular, unlinked file")
+    if before.st_size > MAX_TEXT_BYTES:
+        raise ValueError(f"Enabled {executor} configuration is too large")
+    flags = (os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) |
+             getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+    with os.fdopen(os.open(path, flags), "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(opened.st_mode) or opened.st_size > MAX_TEXT_BYTES or
+                (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)):
+            raise ValueError(f"Enabled {executor} configuration changed or is too large")
+        content = stream.read(MAX_TEXT_BYTES + 1)
+    if len(content) > MAX_TEXT_BYTES:
+        raise ValueError(f"Enabled {executor} configuration is too large")
+    return content.decode("utf-8")
+
+
 def inspect(root: Path) -> list[dict]:
     root = root.resolve()
     results = []
@@ -149,8 +174,7 @@ def inspect(root: Path) -> list[dict]:
             for harness in data["workflow"]["implementation_harnesses"]:
                 if harness == "codex":
                     native = root / ".codex/config.toml"
-                    require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Codex configuration is too large")
-                    settings = tomllib.loads(native.read_text(encoding="utf-8"))
+                    settings = tomllib.loads(read_native_config(native, "Codex"))
                     reject_unselected_codex_config(settings)
                     require(settings.get("model_reasoning_effort") == "high",
                             "Enabled Codex Main default must remain High")
@@ -177,8 +201,8 @@ def inspect(root: Path) -> list[dict]:
                     validate_codex_agent_configs(root)
                 elif harness == "claude_code":
                     native = root / ".claude/settings.json"
-                    require(native.stat().st_size <= MAX_TEXT_BYTES, "Enabled Claude configuration is too large")
-                    settings = load_json(native)
+                    settings = json.loads(read_native_config(native, "Claude"),
+                                          object_pairs_hook=unique_object)
                     reject_unselected_claude_config(settings)
                     permissions = settings.get("permissions") if isinstance(settings, dict) else None
                     sandbox = settings.get("sandbox") if isinstance(settings, dict) else None

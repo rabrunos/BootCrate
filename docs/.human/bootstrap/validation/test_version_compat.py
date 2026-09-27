@@ -201,8 +201,6 @@ class VersionCompatibilityTests(unittest.TestCase):
                 "<PRE class=\"sample\">\n## v1.0 - Draft\n</PRE>",
                 "<style>\n## v1.0 - Draft\n</style>",
                 "<textarea>\n## v1.0 - Draft\n</textarea>",
-                "<pre>\n</script>\n## v1.0 - Draft\n</pre>",
-                "<SCRIPT>\n</PRE>\n## v1.0 - Draft\n</SCRIPT>",
                 "<div>\n## v1.0 - Draft\n</div>",
             )
             for section in hidden:
@@ -216,9 +214,15 @@ class VersionCompatibilityTests(unittest.TestCase):
             self.write(root, "HISTORY.md", "<script>\n## v1.0 - Draft\n</script>\n"
                        "## v1.0 - Release\n")
             self.schema_and_finalization(root, profile)
-            self.write(root, "HISTORY.md", "<PRE>\n</script>\n## v1.0 - Draft\n"
-                       "</pre>\n## v1.0 - Release\n")
+            # CommonMark type-1 raw HTML ends on any content-tag closer,
+            # regardless of the opening tag's name.
+            self.write(root, "HISTORY.md", "<PRE>\n</script>\n## v1.0 - Release\n")
             self.schema_and_finalization(root, profile)
+            for preceding in ("Document `<!--`", "Document ``<!--``",
+                              "`<!--` is a literal delimiter"):
+                with self.subTest(inline_code=preceding):
+                    self.write(root, "HISTORY.md", preceding + "\n## v1.0 - Release\n")
+                    self.schema_and_finalization(root, profile)
             for block in ("<![CDATA[\n\n## v1.0 - Draft\n]]>",
                           "<?history\n\n## v1.0 - Draft\n?>"):
                 with self.subTest(closed_block=block):
@@ -232,7 +236,7 @@ class VersionCompatibilityTests(unittest.TestCase):
             self.write(root, "VERSION", "1.0\n")
             profile = self.v3_profile("VERSION", "plain", "")
             profile["versioning"].pop("value_path")
-            for declaration in ("<!DOCTYPE html>",
+            for declaration in ("<!DOCTYPE html>", "<!doctype html>",
                                 "<!DOCTYPE html\n PUBLIC \"example\">",
                                 "   <!CUSTOM\n\n## v1.0 - Draft\n>"):
                 with self.subTest(declaration=declaration):

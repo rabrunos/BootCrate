@@ -517,6 +517,39 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                               'writable_roots = []\n'+safe_environment,encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])
 
+    def test_native_config_reader_rejects_links_and_special_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self.materialized_fixture(root)
+            for relative, executor in ((".codex/config.toml", "Codex"),
+                                       (".claude/settings.json", "Claude")):
+                with self.subTest(executor=executor):
+                    native = root / relative
+                    native.parent.mkdir(parents=True, exist_ok=True)
+                    native.write_bytes(b"synthetic settings\n")
+                    self.assertEqual(verify_materialized.read_native_config(native, executor),
+                                     "synthetic settings\n")
+                    with native.open("wb") as stream:
+                        stream.truncate(verify_materialized.MAX_TEXT_BYTES + 1)
+                    with self.assertRaisesRegex(ValueError, "too large"):
+                        verify_materialized.read_native_config(native, executor)
+                    native.unlink()
+                    outside = root / "outside.txt"
+                    outside.write_text("synthetic outside\n", encoding="utf-8")
+                    try:
+                        native.symlink_to(outside)
+                    except OSError:
+                        pass  # Windows may deny symlink creation without developer mode.
+                    else:
+                        with self.assertRaisesRegex(ValueError, "regular, unlinked file"):
+                            verify_materialized.read_native_config(native, executor)
+                        native.unlink()
+                    if hasattr(os, "mkfifo"):
+                        os.mkfifo(native)
+                        with self.assertRaisesRegex(ValueError, "regular, unlinked file"):
+                            verify_materialized.read_native_config(native, executor)
+                        native.unlink()
+
     def test_v3_selected_codex_rejects_broad_environment_inheritance(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.materialized_fixture(root)

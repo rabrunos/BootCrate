@@ -332,9 +332,10 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
     fence: str | None = None
     raw_delimiter: str | None = None
     in_comment = False
-    raw_html_tag: str | None = None
+    raw_html = False
     html_until_blank = False
-    content_tag = re.compile(r"^ {0,3}<(script|pre|style|textarea)(?=[\t >])", re.I)
+    content_tag = re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?=[\t >])", re.I)
+    content_end = re.compile(r"</(?:script|pre|style|textarea)[ \t]*>", re.I)
     for raw_line in markdown.splitlines():
         if fence is not None:
             if re.fullmatch(r" {0,3}" + re.escape(fence[0]) +
@@ -345,9 +346,9 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
             if raw_delimiter in raw_line:
                 raw_delimiter = None
             continue
-        if raw_html_tag is not None:
-            if re.search(r"</" + re.escape(raw_html_tag) + r"[ \t]*>", raw_line, re.I):
-                raw_html_tag = None
+        if raw_html:
+            if content_end.search(raw_line):
+                raw_html = False
             continue
         if html_until_blank:
             if not raw_line.strip():
@@ -367,20 +368,20 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
             if closing not in raw_line[delimiter_block.end():]:
                 raw_delimiter = closing
             continue
-        line, marker, rest = raw_line.partition("<!--")
-        if marker and "-->" not in rest:
-            in_comment = True
+        comment = re.match(r"^ {0,3}<!--", raw_line)
+        if comment:
+            if "-->" not in raw_line[comment.end():]:
+                in_comment = True
+            continue
+        line = raw_line
         opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
         if opening and (opening[1][0] == "~" or "`" not in opening[2]):
             fence = opening[1]
             continue
-        content_open = content_tag.match(line)
-        if content_open:
-            tag = content_open[1]
-            if not re.search(r"</" + re.escape(tag) + r"[ \t]*>", line, re.I):
-                raw_html_tag = tag
+        if content_tag.match(line):
+            raw_html = content_end.search(line) is None
             continue
-        declaration = re.match(r"^ {0,3}<![A-Z]", line)
+        declaration = re.match(r"^ {0,3}<![A-Za-z]", line)
         if declaration:
             # CommonMark declarations end at the first closing bracket, even
             # when the next release heading follows without a blank line.

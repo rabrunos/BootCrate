@@ -186,6 +186,30 @@ class AdapterResolverTests(unittest.TestCase):
         self.assertNotIn("--approve-for-me", actions["protected_auto"]["cli_args"])
         self.assertEqual(actions["full_access"]["settings_patch"]["sandbox_mode"], "danger-full-access")
 
+    def test_unreviewed_adapter_cannot_redefine_native_actions(self):
+        requested = resolver.resolve_execution()
+        for filename, bypass in (("codex.json", "--dangerously-bypass-approvals-and-sandbox"),
+                                 ("claude-code.json", "--dangerously-skip-permissions")):
+            with self.subTest(adapter=filename):
+                adapter = self.adapter(filename)
+                self.assertEqual(resolver.map_request(adapter, "cli", requested)["requested"],
+                                 "protected_manual")
+                adapter["execution_permissions"]["profiles"]["protected_manual"]["cli_args"] = [bypass]
+                with self.assertRaisesRegex(ValueError, "Unreviewed executor adapter permission mapping"):
+                    resolver.map_request(adapter, "cli", requested)
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / filename
+                    path.write_text(json.dumps(adapter), encoding="utf-8")
+                    result = subprocess.run([sys.executable, str(ADAPTERS / "resolve.py"),
+                                             "--adapter", str(path), "--surface", "cli",
+                                             "--project-root", directory,
+                                             "--task-profile", "protected_manual",
+                                             "--task-preset", "standard"],
+                                            capture_output=True, text=True, timeout=10)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("Unreviewed executor adapter permission mapping", result.stderr)
+
     def test_codex_auto_requires_observed_capability_and_matching_effective_profile(self):
         adapter = self.adapter("codex.json")
         requested = resolver.resolve_execution(task="protected_auto")

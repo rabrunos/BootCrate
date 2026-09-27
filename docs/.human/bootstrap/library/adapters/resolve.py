@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import errno
+import hashlib
 import importlib.util
 import json
 import os
@@ -24,6 +25,10 @@ OVERRIDE_SCHEMA = "bootcrate-execution-profile-override/v1"
 PRESET_OVERRIDE_SCHEMA = "bootcrate-preset-override/v1"
 MAX_LOCAL_OVERRIDE_BYTES = 64 * 1024
 _RENAME_NOREPLACE = 1
+REVIEWED_PERMISSION_MAPPINGS = {
+    "codex": "502e630e40e074999bad7ce4c6c1a7e4f40ff42571d3a1f960ce6b841c81e74b",
+    "claude_code": "8e60fcc683aeb5d818040648ed81260cde72e7082c1a2b631bc5566b6047092a",
+}
 
 
 def _parse_json(text: str, source: str) -> dict[str, Any]:
@@ -90,12 +95,28 @@ def parse_preset_override(value: dict[str, Any]) -> str:
     return value["preset"]
 
 
+def _validate_permission_mapping(adapter: dict[str, Any]) -> None:
+    """Bind executable native actions to the reviewed adapter permission maps."""
+    if not isinstance(adapter, dict) or adapter.get("schema") != "bootcrate-adapter/v1":
+        raise ValueError("Invalid executor adapter")
+    executor = adapter.get("id")
+    if executor not in REVIEWED_PERMISSION_MAPPINGS:
+        raise ValueError("Unsupported executor adapter")
+    try:
+        encoded = json.dumps({"id": executor,
+                              "execution_permissions": adapter["execution_permissions"]},
+                             sort_keys=True, separators=(",", ":")).encode("utf-8")
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("Invalid executor adapter permission mapping") from error
+    if hashlib.sha256(encoded).hexdigest() != REVIEWED_PERMISSION_MAPPINGS[executor]:
+        raise ValueError("Unreviewed executor adapter permission mapping")
+
+
 def map_request(adapter: dict[str, Any], surface: str, resolved: dict[str, str],
                 observation: dict[str, Any] | None = None,
                 managed_policy: dict[str, Any] | None = None) -> dict[str, Any]:
+    _validate_permission_mapping(adapter)
     requested = resolved["requested"]
-    if adapter.get("id") not in {"codex", "claude_code"}:
-        raise ValueError("Unsupported executor adapter")
     profile = adapter.get("execution_permissions", {}).get("profiles", {}).get(requested)
     if not isinstance(profile, dict):
         raise ValueError("Adapter lacks requested execution profile")
