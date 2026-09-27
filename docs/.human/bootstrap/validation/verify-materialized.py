@@ -36,7 +36,7 @@ CONSOLE_ASSETS = {
     "styles.css": "5a68eafb183298afb563bf2a80e037b78cf9fea92ff334bdd0239607255dbb8f",
     "preset.js": "1d518102c7238d85a0f3e478844f893695a52d62b114bf01d3091f5103f41487",
     "execution-profile.js": "f803f1a9357404cea1dbdd19e01a8aca7460efb81b2db6066333e0c272bc8198",
-    "console.js": "1baa73993cdc8e6314d8b3f5f0080aaaefa737e2fe45f72197de6f8d92c6b11c",
+    "console.js": "211c8c05023ef14df886a83fbe11b2b9e6f51e2c8051036f88e611adb6bb4bfc",
 }
 CSS_URL = re.compile(r"url\s*\(\s*(?P<quote>['\"]?)(?P<reference>.*?)(?P=quote)\s*\)", re.I | re.S)
 CSS_IMPORT = re.compile(r"@import\b", re.I)
@@ -114,9 +114,7 @@ def css_references(content: str) -> list[str]:
 
 
 def console_asset_matches(path: Path, expected: str) -> bool:
-    if path.stat().st_size > MAX_TEXT_BYTES:
-        return False
-    normalized = path.read_text(encoding="utf-8").encode("utf-8")
+    normalized = read_native_config(path, "Project Console asset").replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
     return hashlib.sha256(normalized).hexdigest() == expected
 
 
@@ -222,7 +220,7 @@ def inspect(root: Path) -> list[dict]:
                 require((console / name).is_file() and not (console / name).is_symlink(),
                         "selected Project Console dependency missing: " + name)
             parser = LocalReferences()
-            parser.feed((console / "index.html").read_text(encoding="utf-8"))
+            parser.feed(read_native_config(console / "index.html", "Project Console HTML"))
             require(not parser.has_base, "selected Project Console base URL is unsupported")
             stylesheets = [console / "styles.css"]
             for reference, stylesheet in parser.resources:
@@ -240,9 +238,7 @@ def inspect(root: Path) -> list[dict]:
                 if stylesheet in seen:
                     continue
                 seen.add(stylesheet)
-                require(stylesheet.stat().st_size <= MAX_TEXT_BYTES,
-                        "selected Project Console CSS exceeds local resource check limit: " + str(stylesheet))
-                for reference in css_references(stylesheet.read_text(encoding="utf-8")):
+                for reference in css_references(read_native_config(stylesheet, "Project Console CSS")):
                     target = local_console_resource(reference, stylesheet.parent, console)
                     if target.suffix.lower() == ".css":
                         stylesheets.append(target)

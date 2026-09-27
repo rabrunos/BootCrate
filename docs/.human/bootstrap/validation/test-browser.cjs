@@ -199,6 +199,13 @@ test('file-mode optional Console imports a profile without claiming remote proof
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n  ## v1.2 — Search\n- Added search.\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
   assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 — Search/m);
+  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\nv1.2 Setext release\n---\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
+  assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
+  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n## v1.2 ATX release\nv1.2 Setext release\n---\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
+  assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
+  assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
   await page.locator('#validateLocal').click();
   assert.match(await page.locator('#localCheck').innerText(),/canonical version source file/);
   await page.locator('#version').setInputFiles({name:'VERSION',mimeType:'text/plain',buffer:Buffer.from('1.2\n')});

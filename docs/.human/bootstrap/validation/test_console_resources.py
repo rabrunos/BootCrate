@@ -74,6 +74,16 @@ class ConsoleResourceTests(unittest.TestCase):
                 with self.subTest(name=name):
                     self.assertTrue(verify_materialized.console_asset_matches(console / name, digest))
 
+    def test_oversized_console_html_is_rejected_before_parsing(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            console = self.fixture(root)
+            with (console / "index.html").open("wb") as stream:
+                stream.truncate(verify_materialized.MAX_TEXT_BYTES + 1)
+            result = self.profile_check(root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("Project Console HTML configuration is too large", result["summary"])
+
     def test_added_local_script_inline_code_and_modified_assets_are_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
