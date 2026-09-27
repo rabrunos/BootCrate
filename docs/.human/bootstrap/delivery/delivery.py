@@ -124,6 +124,7 @@ def render(entries: list[dict], field: str, audience: str = "public") -> str:
 
 
 def identity(candidate: dict) -> str:
+    if not isinstance(candidate,dict): raise ValueError("Candidate must be an object")
     required={"version","source_commit","payload_sha256","artifacts","included_changes"}
     if not required <= candidate.keys(): raise ValueError("Candidate identity incomplete")
     if type(candidate.get("integration_order")) is not int or candidate["integration_order"] < 0:
@@ -135,8 +136,12 @@ def identity(candidate: dict) -> str:
         raise ValueError("Candidate change identity list is invalid")
     if len(changes) != len(set(changes)):
         raise ValueError("Duplicate change in candidate")
-    for artifact in candidate["artifacts"].values():
-        if not re.fullmatch(r"[0-9a-f]{64}",artifact): raise ValueError("Invalid artifact digest")
+    artifacts=candidate["artifacts"]
+    if not isinstance(artifacts,dict) or not artifacts or any(not isinstance(key,str) for key in artifacts):
+        raise ValueError("Candidate artifacts mapping is invalid")
+    for artifact in artifacts.values():
+        if not isinstance(artifact,str) or not re.fullmatch(r"[0-9a-f]{64}",artifact):
+            raise ValueError("Invalid artifact digest")
     return digest(canonical(candidate))
 
 

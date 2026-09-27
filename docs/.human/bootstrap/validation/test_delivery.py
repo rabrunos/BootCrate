@@ -1,6 +1,8 @@
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -238,6 +240,29 @@ class DeliveryTests(unittest.TestCase):
         confirmed.update(candidate_id=ready['candidate_id'],
                          artifact_sha256=ready['artifact_sha256'])
         self.assertEqual(d.plan(current,[confirmed],target(),entries)['status'],'SKIP')
+
+    def test_artifacts_must_be_a_mapping_before_cli_planning(self):
+        for invalid in ([], None, "github", {"github": 1}, {}):
+            with self.subTest(artifacts=invalid), tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                malformed={**candidate(),"artifacts":invalid}
+                with self.assertRaisesRegex(ValueError,"artifacts mapping|artifact digest"):
+                    d.identity(malformed)
+                paths={name:root/name for name in ("candidate.json","receipts.json",
+                                                 "target.json","CHANGELOG.md")}
+                paths["candidate.json"].write_text(json.dumps(malformed),encoding="utf-8")
+                paths["receipts.json"].write_text("[]",encoding="utf-8")
+                paths["target.json"].write_text(json.dumps(target()),encoding="utf-8")
+                paths["CHANGELOG.md"].write_text(SOURCE,encoding="utf-8")
+                result=subprocess.run([sys.executable,str(Path(d.__file__)),
+                                       "--candidate",str(paths["candidate.json"]),
+                                       "--receipts",str(paths["receipts.json"]),
+                                       "--target",str(paths["target.json"]),
+                                       "--changelog",str(paths["CHANGELOG.md"])],
+                                      capture_output=True,text=True,timeout=10)
+                self.assertEqual(result.returncode,2)
+                self.assertIn("BLOCKED:",result.stderr)
+                self.assertNotIn("Traceback",result.stderr)
 
     def test_formats_escapes_and_notes_limit(self):
         first=d.plan(candidate(),[],target(field='plain'),self.entries)

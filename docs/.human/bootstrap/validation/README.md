@@ -21,7 +21,7 @@ python docs/.human/bootstrap/validation/validate.py --materialized-profile <prof
 
 That gate validates a profile, not the project's actual security implementation.
 For each enabled executor, it requires the actual skill directories to equal `profile.skills`; undeclared directories, links and files in the skill root fail finalization. In a Git checkout it also rejects tracked `.local/config/execution-profile.json` and `.local/config/preset.json`, even if ignore rules match them.
-For v3 `markdown-headings` history, the pinned CommonMark parser must emit a top-level H2 on the original line with the exact integrated version token. Headings inside lists, block quotes, fences, comments or raw HTML do not satisfy the canonical changelog entry.
+For v3 `markdown-headings` history, the pinned CommonMark parser must emit a top-level H2 on the original line with the exact integrated version token and meaningful title text or a following note in that version's section. Headings inside lists, block quotes, fences, comments or raw HTML do not satisfy the canonical changelog entry.
 
 ## Browser smoke (maintenance-only)
 

@@ -270,6 +270,27 @@ class VersionCompatibilityTests(unittest.TestCase):
                                "\n\n## v1.0 - Release\n")
                     self.schema_and_finalization(root, profile)
 
+    def test_v3_history_entry_requires_effect_text_or_note(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.support_files(root)
+            self.write(root, "VERSION", "1.0\n")
+            profile = self.v3_profile("VERSION", "plain", "")
+            profile["versioning"].pop("value_path")
+            for history in ("## v1.0\n", "## [v1.0]\n",
+                            "## v1.0 -\n", "## v1.0 <!-- hidden -->\n",
+                            "## v1.0\n## v1.1 - Other\n- Added other work\n"):
+                with self.subTest(history=history):
+                    self.write(root, "HISTORY.md", "# History\n\n" + history)
+                    with self.assertRaisesRegex(ValueError, "no entry for integrated version 1.0"):
+                        self.schema_and_finalization(root, profile)
+            for history in ("## v1.0 - Release\n",
+                            "## v1.0\n- Added a useful change\n",
+                            "## [v1.0]\n\nNotes for this version.\n"):
+                with self.subTest(useful=history):
+                    self.write(root, "HISTORY.md", "# History\n\n" + history)
+                    self.schema_and_finalization(root, profile)
+
     def test_v3_numeric_versions_must_be_finite(self):
         sources = (
             ("json", "package.json", "{\"version\": NaN}"),
