@@ -69,13 +69,26 @@
     return token;
   }
   function historyEntries(source) {
-    let fence=null;
+    let fence=null,comment=false;
     const visible=source.split(/\r\n|\n|\r/).map(line=>{
       if(fence){
         const closing=/^ {0,3}(`+|~+)[ \t]*$/.exec(line);
         if(closing&&closing[1][0]===fence.marker&&closing[1].length>=fence.length)fence=null;
         return "";
       }
+      let commentLine=comment,position=0;
+      while(position<line.length){
+        if(comment){
+          const end=line.indexOf("-->",position);
+          if(end<0)break;
+          comment=false;position=end+3;
+        }else{
+          const start=line.indexOf("<!--",position);
+          if(start<0)break;
+          comment=true;commentLine=true;position=start+4;
+        }
+      }
+      if(commentLine)return "";
       const opening=/^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
       if(opening&&(opening[1][0]==="~"||!opening[2].includes("`"))){
         fence={marker:opening[1][0],length:opening[1].length};

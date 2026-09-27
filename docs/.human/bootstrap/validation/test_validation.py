@@ -837,6 +837,31 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             self.assertEqual(next(x for x in results if x["check_id"]=="source.inventory")["status"],"pass")
             self.assertEqual(next(x for x in results if x["check_id"]=="security.text_scan")["status"],"blocked")
 
+    def test_text_scan_rejects_leaf_replaced_after_inventory(self):
+        with tempfile.TemporaryDirectory() as td:
+            home=Path(td);root=home/"product";root.mkdir();self.materialized_fixture(root)
+            target=root/"z_last.txt";target.write_text("ordinary candidate\n",encoding="utf-8")
+            outside=home/"outside.txt";outside.write_text("outside remains intact\n",encoding="utf-8")
+            original=verify_materialized.secret_findings
+            swapped=[]
+            def replace_before_next_candidate(content):
+                if not swapped:
+                    target.unlink()
+                    try:
+                        target.symlink_to(outside)
+                    except OSError:
+                        self.skipTest("File symlink unavailable on this platform")
+                    swapped.append(True)
+                return original(content)
+            with patch.object(verify_materialized,"secret_findings",side_effect=replace_before_next_candidate):
+                results=verify_materialized.inspect(root)
+            self.assertTrue(swapped)
+            self.assertEqual(next(x for x in results if x["check_id"]=="source.inventory")["status"],"pass")
+            text_result=next(x for x in results if x["check_id"]=="security.text_scan")
+            self.assertEqual(text_result["status"],"fail")
+            self.assertIn("regular, unlinked file",text_result["summary"])
+            self.assertEqual(outside.read_text(encoding="utf-8"),"outside remains intact\n")
+
     def test_inventory_limits_tracked_secret_and_external_link(self):
         with tempfile.TemporaryDirectory() as td:
             home=Path(td);root=home/"product";root.mkdir();self.materialized_fixture(root)

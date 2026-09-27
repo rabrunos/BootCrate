@@ -209,6 +209,10 @@ test('file-mode optional Console imports a profile without claiming remote proof
     assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
     assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
   }
+  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n<!--\nv1.2 Commented example\n---\n-->\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
+  assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
+  assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n## v1.2 ATX release\nv1.2 Setext release\n---\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
   assert.match(await page.locator('#status').innerText(),/No unique version headings found/);

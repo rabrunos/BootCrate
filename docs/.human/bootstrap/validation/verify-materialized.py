@@ -36,7 +36,7 @@ CONSOLE_ASSETS = {
     "styles.css": "5a68eafb183298afb563bf2a80e037b78cf9fea92ff334bdd0239607255dbb8f",
     "preset.js": "1d518102c7238d85a0f3e478844f893695a52d62b114bf01d3091f5103f41487",
     "execution-profile.js": "f803f1a9357404cea1dbdd19e01a8aca7460efb81b2db6066333e0c272bc8198",
-    "console.js": "8d7d93e8297c26a1b926c91ac955944336233fc6ce707ae769b27e64f0dee095",
+    "console.js": "27dc7b1869d1c6d433a02b4c7aa86d34dd8387549657938f909064b3bd1b8852",
 }
 CSS_URL = re.compile(r"url\s*\(\s*(?P<quote>['\"]?)(?P<reference>.*?)(?P=quote)\s*\)", re.I | re.S)
 CSS_IMPORT = re.compile(r"@import\b", re.I)
@@ -296,11 +296,11 @@ def inspect(root: Path) -> list[dict]:
             rel = path.relative_to(root)
             if path.suffix.lower() not in TEXT_SUFFIXES:
                 continue
-            if path.stat().st_size > MAX_TEXT_BYTES:
+            if path.lstat().st_size > MAX_TEXT_BYTES:
                 oversized.append(str(rel))
                 continue
             try:
-                content = path.read_text(encoding="utf-8")
+                content = read_native_config(path, "project text candidate")
             except UnicodeDecodeError as error:
                 raise BlockedCheck("text candidate is not UTF-8 and was not scanned: " + str(rel)) from error
             scanned += 1
