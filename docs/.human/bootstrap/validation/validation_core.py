@@ -330,6 +330,7 @@ def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dic
 def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
     """Find a history heading outside fences, comments and raw HTML blocks."""
     fence: str | None = None
+    raw_delimiter: str | None = None
     in_comment = False
     raw_html = False
     html_until_blank = False
@@ -340,6 +341,10 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
             if re.fullmatch(r" {0,3}" + re.escape(fence[0]) +
                             "{" + str(len(fence)) + r",}[ \t]*", raw_line):
                 fence = None
+            continue
+        if raw_delimiter is not None:
+            if raw_delimiter in raw_line:
+                raw_delimiter = None
             continue
         if raw_html:
             if content_end.search(raw_line):
@@ -356,6 +361,12 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
             in_comment = False
             # A heading after a comment terminator on the same line is not
             # a standalone Markdown heading.
+            continue
+        delimiter_block = re.match(r"^ {0,3}(<!\[CDATA\[|<\?)", raw_line)
+        if delimiter_block:
+            closing = "]]>" if delimiter_block[1] == "<![CDATA[" else "?>"
+            if closing not in raw_line[delimiter_block.end():]:
+                raw_delimiter = closing
             continue
         line, marker, rest = raw_line.partition("<!--")
         if marker and "-->" not in rest:

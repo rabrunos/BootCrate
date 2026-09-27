@@ -191,6 +191,9 @@ class VersionCompatibilityTests(unittest.TestCase):
                 "~~~~ markdown\n## v1.0 - Example\n~~~~",
                 "<!--\n## v1.0 - Draft\n-->",
                 "<!--\n  ## v1.0 - Draft\n-->",
+                "<![CDATA[\n\n## v1.0 - Draft\n]]>",
+                "  <![CDATA[\n\n  ## v1.0 - Draft\n  ]]>",
+                "<?history\n\n## v1.0 - Draft\n?>",
                 "<!-- ## v1.0 - Draft -->",
                 "<!-- note -->## v1.0 - Draft",
                 "```markdown\n<!-- unfinished comment\n```",
@@ -211,6 +214,11 @@ class VersionCompatibilityTests(unittest.TestCase):
             self.write(root, "HISTORY.md", "<script>\n## v1.0 - Draft\n</script>\n"
                        "## v1.0 - Release\n")
             self.schema_and_finalization(root, profile)
+            for block in ("<![CDATA[\n\n## v1.0 - Draft\n]]>",
+                          "<?history\n\n## v1.0 - Draft\n?>"):
+                with self.subTest(closed_block=block):
+                    self.write(root, "HISTORY.md", block + "\n## v1.0 - Release\n")
+                    self.schema_and_finalization(root, profile)
 
     def test_v3_numeric_versions_must_be_finite(self):
         sources = (
