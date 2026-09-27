@@ -24,6 +24,7 @@ PRESETS = ("standard", "economy")
 OVERRIDE_SCHEMA = "bootcrate-execution-profile-override/v1"
 PRESET_OVERRIDE_SCHEMA = "bootcrate-preset-override/v1"
 MAX_LOCAL_OVERRIDE_BYTES = 64 * 1024
+MAX_RESOLVER_JSON_BYTES = 2 * 1024 * 1024
 _RENAME_NOREPLACE = 1
 REVIEWED_PERMISSION_MAPPINGS = {
     "codex": "502e630e40e074999bad7ce4c6c1a7e4f40ff42571d3a1f960ce6b841c81e74b",
@@ -46,7 +47,25 @@ def _parse_json(text: str, source: str) -> dict[str, Any]:
 
 
 def load_json(path: Path) -> dict[str, Any]:
-    return _parse_json(path.read_text(encoding="utf-8"), path.name)
+    path = Path(path)
+    if os.name == "nt":
+        with _windows_mutation_module().WindowsMutator(path.absolute().parent) as mutator:
+            content = mutator.read(path.name, max_bytes=MAX_RESOLVER_JSON_BYTES)
+    else:
+        if not all(hasattr(os, name) for name in ("O_NOFOLLOW", "O_NONBLOCK")):
+            raise OSError("Safe resolver JSON read requires no-follow nonblocking open")
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("Resolver JSON input must be a regular file")
+            if metadata.st_size > MAX_RESOLVER_JSON_BYTES:
+                raise ValueError("Resolver JSON input exceeds its size limit")
+            content = stream.read(MAX_RESOLVER_JSON_BYTES + 1)
+    if len(content) > MAX_RESOLVER_JSON_BYTES:
+        raise ValueError("Resolver JSON input exceeds its size limit")
+    return _parse_json(content.decode("utf-8"), path.name)
 
 
 def parse_execution_override(value: dict[str, Any]) -> str:
@@ -305,18 +324,23 @@ def _read_local_bytes(project_root: Path, filename: str) -> bytes | None:
             os.close(handle)
 
 
-def _load_local_config(project_root: Path, filename: str) -> dict[str, Any] | None:
-    _reject_tracked_local_config(project_root, filename)
+def _load_local_config(project_root: Path, filename: str, *,
+                       acknowledge_unverified_source: bool = False) -> dict[str, Any] | None:
+    if type(acknowledge_unverified_source) is not bool:
+        raise ValueError("Invalid local override source acknowledgement")
+    git_provenance = _reject_tracked_local_config(project_root, filename)
     _local_config_path(project_root, filename)
     content = _read_local_bytes(project_root, filename)
+    if content is not None and not git_provenance and not acknowledge_unverified_source:
+        raise ValueError("Local override source cannot be verified without Git; explicitly acknowledge its source")
     return None if content is None else _parse_json(content.decode("utf-8"), filename)
 
 
-def _reject_tracked_local_config(project_root: Path, filename: str) -> None:
+def _reject_tracked_local_config(project_root: Path, filename: str) -> bool:
     root = project_root.resolve(strict=True)
     if not any((parent / ".git").exists() or (parent / ".git").is_symlink()
                for parent in (root, *root.parents)):
-        return
+        return False
     relative = ".local/config/" + filename
     environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     try:
@@ -333,6 +357,7 @@ def _reject_tracked_local_config(project_root: Path, filename: str) -> None:
         raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
     if relative.encode("ascii") in (entry.lower() for entry in result.stdout.split(b"\0")):
         raise ValueError("Tracked machine-local configuration is invalid: " + relative)
+    return True
 
 
 def _rename_local_noreplace(parent_fd: int, source: str, destination: str) -> None:
@@ -445,6 +470,7 @@ def main() -> int:
     parser.add_argument("--task-preset", choices=PRESETS)
     parser.add_argument("--project-profile", type=Path)
     parser.add_argument("--acknowledge-full-access-risk", action="store_true")
+    parser.add_argument("--acknowledge-unverified-local-source", action="store_true")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     parser.add_argument("--clear-local", action="store_true")
     parser.add_argument("--clear-local-preset", action="store_true")
@@ -458,11 +484,15 @@ def main() -> int:
         clear_local_override(args.project_root)
     if args.clear_local_preset:
         clear_local_preset(args.project_root)
-    local = None if args.task_profile else _load_local_config(args.project_root, "execution-profile.json")
+    local = None if args.task_profile else _load_local_config(
+        args.project_root, "execution-profile.json",
+        acknowledge_unverified_source=args.acknowledge_unverified_local_source)
     resolved = resolve_execution(task=args.task_profile,
                                  task_risk_acknowledged=args.acknowledge_full_access_risk,
                                  local=local)
-    local_preset_data = None if args.task_preset else _load_local_config(args.project_root, "preset.json")
+    local_preset_data = None if args.task_preset else _load_local_config(
+        args.project_root, "preset.json",
+        acknowledge_unverified_source=args.acknowledge_unverified_local_source)
     local_preset = parse_preset_override(local_preset_data) if local_preset_data is not None else None
     project_preset = None
     if args.project_profile:

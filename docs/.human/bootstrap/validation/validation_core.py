@@ -335,11 +335,12 @@ def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dic
     return source, versioning["mirrors"], versioning["history_source"], versioning["history_format"]
 
 
-def _history_has_heading(markdown: str, heading: re.Pattern[str], version: str) -> bool:
+def _history_has_heading(markdown: str, version: str) -> bool:
     """Require a top-level CommonMark H2 with title text or a useful note."""
     lines = markdown.splitlines()
     tokens = MarkdownIt("commonmark").parse(markdown)
-    version_prefix = re.compile(r"^\[?v?" + re.escape(version) + r"\]?(?=[ \t]|$)")
+    version_prefix = re.compile(r"^(?:\[v?" + re.escape(version) + r"\]|v?" +
+                                re.escape(version) + r")(?=[ \t]|$)")
 
     def visible_text(token: Any) -> str:
         return "".join(child.content for child in (token.children or [])
@@ -347,9 +348,12 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str], version: str) 
 
     for index, token in enumerate(tokens):
         if (token.type == "heading_open" and token.tag == "h2" and token.level == 0 and
-                token.map and token.map[0] < len(lines) and heading.match(lines[token.map[0]])):
+                token.map and token.map[0] < len(lines)):
             title = visible_text(tokens[index + 1])
-            title = version_prefix.sub("", title, count=1).strip()
+            match = version_prefix.match(title)
+            if match is None:
+                continue
+            title = title[match.end():].strip()
             if any(char.isalnum() for char in title):
                 return True
             for note_index in range(index + 3, len(tokens)):
@@ -377,9 +381,7 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
     history = version_source_file(root, history_source, "canonical version history")
     require(history_format == "markdown-headings", "Unsupported canonical history reader")
     require(history.stat().st_size <= 2 * 1024 * 1024, "Canonical version history is too large")
-    token = re.escape(version)
-    heading = re.compile(r"^ {0,3}##[ \t]+(?:\[v?" + token + r"\]|v?" + token + r")(?=[ \t]|$)")
-    require(_history_has_heading(history.read_text(encoding="utf-8"), heading, version),
+    require(_history_has_heading(history.read_text(encoding="utf-8"), version),
             "Canonical history has no entry for integrated version " + version)
     return version
 

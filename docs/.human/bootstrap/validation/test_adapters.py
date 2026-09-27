@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
@@ -78,6 +79,70 @@ class AdapterResolverTests(unittest.TestCase):
                            cwd=root,check=True,capture_output=True)
             self.assertEqual(resolver.parse_preset_override(
                 resolver._load_local_config(root,preset.name)),"economy")
+
+    def test_force_tracked_archive_overrides_need_runtime_source_acknowledgement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            source = home / "source"
+            source.mkdir()
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            (source / ".gitignore").write_text(".local/\n", encoding="utf-8")
+            config = source / ".local" / "config"
+            config.mkdir(parents=True)
+            (config / "execution-profile.json").write_text(json.dumps({
+                "schema": resolver.OVERRIDE_SCHEMA, "profile": "full_access",
+                "risk_acknowledged": True}), encoding="utf-8")
+            (config / "preset.json").write_text(json.dumps({
+                "schema": resolver.PRESET_OVERRIDE_SCHEMA, "preset": "economy"}), encoding="utf-8")
+            subprocess.run(["git", "add", "-f", "--", ".gitignore",
+                            ".local/config/execution-profile.json", ".local/config/preset.json"],
+                           cwd=source, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.name=Fixture",
+                            "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"],
+                           cwd=source, check=True, capture_output=True)
+            archive = home / "source.zip"
+            subprocess.run(["git", "archive", "--format=zip", "--output", str(archive), "HEAD"],
+                           cwd=source, check=True, capture_output=True)
+            extracted = home / "extracted"
+            extracted.mkdir()
+            with zipfile.ZipFile(archive) as bundle:
+                bundle.extractall(extracted)
+            self.assertFalse((extracted / ".git").exists())
+            self.assertTrue((extracted / ".gitignore").is_file())
+            self.assertTrue((extracted / ".local/config/execution-profile.json").is_file())
+
+            base = [sys.executable, str(ADAPTERS / "resolve.py"),
+                    "--adapter", str(ADAPTERS / "codex.json"), "--surface", "cli",
+                    "--project-root", str(extracted)]
+
+            def invoke(*args: str):
+                return subprocess.run(base + list(args), capture_output=True, text=True, timeout=10)
+
+            for flags in ((), ("--acknowledge-full-access-risk",)):
+                with self.subTest(flags=flags):
+                    blocked = invoke("--task-preset", "standard", *flags)
+                    self.assertEqual(blocked.returncode, 2)
+                    self.assertEqual(blocked.stdout, "")
+                    self.assertIn("Local override source cannot be verified without Git", blocked.stderr)
+                    self.assertNotIn("Traceback", blocked.stderr)
+            local = invoke("--task-preset", "standard", "--acknowledge-unverified-local-source")
+            self.assertEqual(local.returncode, 0, local.stderr)
+            execution = json.loads(local.stdout)["execution"]
+            self.assertEqual((execution["requested"], execution["source"]), ("full_access", "local"))
+            self.assertIn("--dangerously-bypass-approvals-and-sandbox",
+                          execution["native_action"]["cli_args"])
+
+            preset_blocked = invoke("--task-profile", "protected_manual")
+            self.assertEqual(preset_blocked.returncode, 2)
+            self.assertIn("Local override source cannot be verified without Git", preset_blocked.stderr)
+            preset_local = invoke("--task-profile", "protected_manual",
+                                  "--acknowledge-unverified-local-source")
+            self.assertEqual(preset_local.returncode, 0, preset_local.stderr)
+            self.assertEqual(json.loads(preset_local.stdout)["consumption"]["source"], "local")
+            task = invoke("--task-profile", "full_access", "--acknowledge-full-access-risk",
+                          "--task-preset", "standard")
+            self.assertEqual(task.returncode, 0, task.stderr)
+            self.assertEqual(json.loads(task.stdout)["execution"]["source"], "task")
 
     def test_case_variant_tracked_local_overrides_are_rejected(self):
         for filename,payload in (("execution-profile.json",
@@ -165,9 +230,11 @@ class AdapterResolverTests(unittest.TestCase):
             config = root / ".local" / "config"
             config.mkdir(parents=True)
             (config / "execution-profile.json").write_text("{invalid", encoding="utf-8")
-            blocked(["--task-preset", "standard"], "Expecting property name")
+            blocked(["--task-preset", "standard", "--acknowledge-unverified-local-source"],
+                    "Expecting property name")
             (config / "preset.json").write_text("[]", encoding="utf-8")
-            blocked(["--task-profile", "protected_manual"], "Expected a JSON object: preset.json")
+            blocked(["--task-profile", "protected_manual", "--acknowledge-unverified-local-source"],
+                    "Expected a JSON object: preset.json")
             project = root / "project-profile.json"
             project.write_text('{"workflow":[]}', encoding="utf-8")
             blocked(["--task-profile", "protected_manual", "--task-preset", "standard",
@@ -183,6 +250,35 @@ class AdapterResolverTests(unittest.TestCase):
             self.assertIn("BLOCKED: Cannot read resolver input", missing.stderr)
             self.assertNotIn("Traceback", missing.stderr)
             self.assertNotIn(str(root), missing.stderr)
+
+    def test_adapter_and_project_profile_json_reads_are_bounded_and_nonblocking(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            oversized = root / "oversized.json"
+            oversized.write_bytes(b"x" * (resolver.MAX_RESOLVER_JSON_BYTES + 1))
+            invalid = [oversized, root]
+            if os.name != "nt":
+                fifo = root / "config-fifo"
+                os.mkfifo(fifo)
+                invalid.append(fifo)
+                if Path("/dev/zero").exists():
+                    linked_device = root / "linked-device"
+                    linked_device.symlink_to("/dev/zero")
+                    invalid.append(linked_device)
+            for option in ("--adapter", "--project-profile"):
+                for path in invalid:
+                    with self.subTest(option=option, path=path.name):
+                        command = [sys.executable, str(ADAPTERS / "resolve.py"),
+                                   "--adapter", str(ADAPTERS / "codex.json"),
+                                   "--surface", "cli", "--project-root", str(root),
+                                   "--task-profile", "protected_manual", "--task-preset", "standard",
+                                   option, str(path)]
+                        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+                        self.assertEqual(result.returncode, 2)
+                        self.assertEqual(result.stdout, "")
+                        self.assertIn("BLOCKED:", result.stderr)
+                        self.assertNotIn("Traceback", result.stderr)
+                        self.assertNotIn(str(root), result.stderr)
 
     def test_local_acknowledgement_type_matches_javascript_contract(self):
         for profile in resolver.PROFILES:
@@ -739,7 +835,8 @@ class AdapterResolverTests(unittest.TestCase):
                 config = root / ".local" / "config"
                 config.mkdir(parents=True)
                 (config / filename).write_text(json.dumps(payload), encoding="utf-8")
-                self.assertEqual(resolver._load_local_config(root, filename), payload)
+                self.assertEqual(resolver._load_local_config(
+                    root, filename, acknowledge_unverified_source=True), payload)
                 external = Path(outside)
                 sentinel = external / filename
                 sentinel.write_bytes(b"external owner bytes")
@@ -759,7 +856,8 @@ class AdapterResolverTests(unittest.TestCase):
                 try:
                     with mock.patch.object(resolver, "_local_config_path", side_effect=swap_after_validation):
                         with self.assertRaises((ValueError, OSError)):
-                            resolver._load_local_config(root, filename)
+                            resolver._load_local_config(
+                                root, filename, acknowledge_unverified_source=True)
                     self.assertEqual(sentinel.read_bytes(), b"external owner bytes")
                     self.assertEqual(json.loads((displaced / filename).read_text(encoding="utf-8")), payload)
                 finally:

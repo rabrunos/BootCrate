@@ -291,6 +291,26 @@ class VersionCompatibilityTests(unittest.TestCase):
                     self.write(root, "HISTORY.md", "# History\n\n" + history)
                     self.schema_and_finalization(root, profile)
 
+    def test_v3_history_accepts_top_level_setext_h2_with_effect(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.support_files(root)
+            self.write(root, "VERSION", "1.0\n")
+            profile = self.v3_profile("VERSION", "plain", "")
+            profile["versioning"].pop("value_path")
+            for history in ("v1.0 - Search\n---\n",
+                            "[v1.0]\n---\n\n- Added a useful change.\n"):
+                with self.subTest(history=history):
+                    self.write(root, "HISTORY.md", "# History\n\n" + history)
+                    self.schema_and_finalization(root, profile)
+            for history in ("v1.0\n---\n", "v1.01 - Different version\n---\n",
+                            "> v1.0 - Quoted\n> ---\n",
+                            "- v1.0 - Nested\n  ---\n"):
+                with self.subTest(invalid=history):
+                    self.write(root, "HISTORY.md", "# History\n\n" + history)
+                    with self.assertRaisesRegex(ValueError, "no entry for integrated version 1.0"):
+                        self.schema_and_finalization(root, profile)
+
     def test_v3_numeric_versions_must_be_finite(self):
         sources = (
             ("json", "package.json", "{\"version\": NaN}"),
