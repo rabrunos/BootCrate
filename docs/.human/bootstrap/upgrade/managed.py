@@ -321,6 +321,7 @@ def _locked(root: Path):
                 _write_file(_control_path(root, LOCK), token)
             except FileExistsError as error:
                 raise ValueError("Another managed update or unrecovered lock is present") from error
+            lock_identity = filesystem.identity(LOCK)
             try:
                 yield control
             finally:
@@ -329,10 +330,27 @@ def _locked(root: Path):
                     current = filesystem.read(LOCK)
                 except (OSError, ValueError):
                     pass
-                if current == token:
-                    _unlink_file(_control_path(root, LOCK))
-                else:
+                if current != token:
                     raise RuntimeError("Managed-update lock changed; it was preserved for reconciliation")
+                displaced = CONTROL / ("bootcrate-managed-lock-release-" + secrets.token_hex(16))
+                try:
+                    _displace_file(_control_path(root, LOCK), _control_path(root, displaced))
+                except (OSError, ValueError) as error:
+                    raise RuntimeError("Managed-update lock changed; it was preserved for reconciliation") from error
+                try:
+                    own_lock = (filesystem.identity(displaced) == lock_identity and
+                                filesystem.read(displaced) == token)
+                except (OSError, ValueError):
+                    own_lock = False
+                if not own_lock:
+                    try:
+                        _displace_file(_control_path(root, displaced), _control_path(root, LOCK))
+                    except (OSError, ValueError) as error:
+                        raise RuntimeError(
+                            "Managed-update lock changed; displaced entry needs reconciliation: " +
+                            displaced.as_posix()) from error
+                    raise RuntimeError("Managed-update lock changed; it was preserved for reconciliation")
+                _unlink_file(_control_path(root, displaced))
         finally:
             _active_mutator.reset(marker)
 

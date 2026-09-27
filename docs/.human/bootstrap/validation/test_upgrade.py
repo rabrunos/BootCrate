@@ -56,6 +56,47 @@ class UpgradeTests(unittest.TestCase):
         replacement.write_bytes(data)
         os.replace(replacement,target)
 
+    def test_lock_replacement_before_release_displacement_is_preserved(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,_=self.setup_roots(Path(td))
+            lock=root/m.LOCK
+            original_displace=m._displace_file
+            injected=False
+
+            def replace_before_release(source,retained):
+                nonlocal injected
+                if source==lock and not injected:
+                    self.atomic_owner_replace(lock,b'concurrent owner lock')
+                    injected=True
+                return original_displace(source,retained)
+
+            with patch.object(m,'_displace_file',side_effect=replace_before_release):
+                with self.assertRaisesRegex(RuntimeError,'Managed-update lock changed'):
+                    m.create(root,'rev1',['update.txt'])
+            self.assertTrue(injected)
+            self.assertEqual(lock.read_bytes(),b'concurrent owner lock')
+            self.assertEqual(list((root/'.local').glob('bootcrate-managed-lock-release-*')),[])
+
+    def test_lock_replacement_after_release_displacement_is_preserved(self):
+        with tempfile.TemporaryDirectory() as td:
+            root,_=self.setup_roots(Path(td))
+            lock=root/m.LOCK
+            original_displace=m._displace_file
+            injected=False
+
+            def replace_after_release(source,retained):
+                nonlocal injected
+                original_displace(source,retained)
+                if source==lock and not injected:
+                    lock.write_bytes(b'concurrent owner lock')
+                    injected=True
+
+            with patch.object(m,'_displace_file',side_effect=replace_after_release):
+                m.create(root,'rev1',['update.txt'])
+            self.assertTrue(injected)
+            self.assertEqual(lock.read_bytes(),b'concurrent owner lock')
+            self.assertEqual(list((root/'.local').glob('bootcrate-managed-lock-release-*')),[])
+
     def test_swapped_parent_cannot_redirect_update_or_add(self):
         for action in ('update', 'add'):
             with self.subTest(action=action), tempfile.TemporaryDirectory() as td:
