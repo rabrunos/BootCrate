@@ -105,9 +105,10 @@ def validate_codex_agent_configs(root: Path) -> None:
         role = path.stem
         require(path.name == role + ".toml" and role in CODEX_AGENT_SANDBOXES,
                 "Unselected Codex agent configuration: " + path.name)
-        require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 2 * 1024 * 1024,
+        require(path.is_file() and not path.is_symlink(),
                 "Codex agent configuration is linked, missing or too large: " + path.name)
-        settings = tomllib.loads(path.read_text(encoding="utf-8"))
+        settings = tomllib.loads(read_bounded_text(path, 2 * 1024 * 1024,
+                                                   "Codex agent configuration"))
         require(set(settings) <= ALLOWED_CODEX_AGENT_KEYS,
                 "Unselected Codex agent configuration key: " + path.name)
         require(settings.get("name") == role and
@@ -157,9 +158,11 @@ def validate_claude_agent_configs(root: Path) -> None:
         role = path.stem
         require(path.name == role + ".md" and role in CLAUDE_AGENT_BASELINE,
                 "Unselected Claude agent configuration: " + path.name)
-        require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 2 * 1024 * 1024,
+        require(path.is_file() and not path.is_symlink(),
                 "Claude agent configuration is linked, missing or too large: " + path.name)
-        parts = path.read_text(encoding="utf-8").split("---", 2)
+        content = read_bounded_text(path, 2 * 1024 * 1024,
+                                    "Claude agent configuration").replace("\r\n", "\n").replace("\r", "\n")
+        parts = content.split("---", 2)
         require(len(parts) == 3 and not parts[0].strip(),
                 "Invalid Claude agent frontmatter: " + path.name)
         settings = load_yaml(parts[1])

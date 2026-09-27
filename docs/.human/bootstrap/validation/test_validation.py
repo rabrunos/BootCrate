@@ -12,6 +12,7 @@ import tempfile
 import tomllib
 from unittest.mock import patch
 import validate as v
+import validation_core as core
 from validation_core import reject_unselected_codex_config, reject_unselected_claude_config
 
 spec = importlib.util.spec_from_file_location("evaluate", v.BOOT / "evals/evaluate.py")
@@ -496,6 +497,26 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                                 for failure in verify_materialized.check(root)))
             extra.unlink()
             self.assertEqual(verify_materialized.check(root),[])
+
+    def test_agent_configs_recheck_bounded_handle_after_preflight(self):
+        for directory,extension,validate in (
+            (".codex/agents",".toml",core.validate_codex_agent_configs),
+            (".claude/agents",".md",core.validate_claude_agent_configs),
+        ):
+            with self.subTest(directory=directory), tempfile.TemporaryDirectory() as td:
+                root=Path(td)
+                agents=root/directory;agents.mkdir(parents=True)
+                path=agents/("scout"+extension)
+                shutil.copy2(v.ROOT/directory/path.name,path)
+                original_reader=core.read_bounded_text
+                def replace_after_preflight(candidate,limit,label):
+                    candidate.unlink()
+                    with candidate.open("wb") as stream:
+                        stream.truncate(limit+1)
+                    return original_reader(candidate,limit,label)
+                with patch.object(core,"read_bounded_text",side_effect=replace_after_preflight):
+                    with self.assertRaisesRegex(ValueError,"agent configuration is too large"):
+                        validate(root)
 
     def test_v3_selected_codex_rejects_widened_sandbox_network(self):
         with tempfile.TemporaryDirectory() as td:
