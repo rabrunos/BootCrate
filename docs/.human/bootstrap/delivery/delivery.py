@@ -130,7 +130,10 @@ def identity(candidate: dict) -> str:
         raise ValueError("Candidate integration order missing")
     if not re.fullmatch(r"[0-9a-f]{40}",candidate["source_commit"]): raise ValueError("Invalid source commit")
     if not re.fullmatch(r"[0-9a-f]{64}",candidate["payload_sha256"]): raise ValueError("Invalid payload digest")
-    if len(candidate["included_changes"]) != len(set(candidate["included_changes"])):
+    changes=candidate["included_changes"]
+    if not isinstance(changes,list) or any(not isinstance(change,str) for change in changes):
+        raise ValueError("Candidate change identity list is invalid")
+    if len(changes) != len(set(changes)):
         raise ValueError("Duplicate change in candidate")
     for artifact in candidate["artifacts"].values():
         if not re.fullmatch(r"[0-9a-f]{64}",artifact): raise ValueError("Invalid artifact digest")

@@ -210,6 +210,26 @@ class DeliveryTests(unittest.TestCase):
                 self.assertTrue('inconsistent integration metadata' in mixed['reason'] or
                                 'Ambiguous confirmed integration order' in mixed['reason'])
 
+    def test_candidate_change_list_is_typed_before_ready(self):
+        entries=[{'version':'1.3','title':'Two changes','changes':[
+            {'id':'a','text':'First change','audience':'public'},
+            {'id':'b','text':'Second change','audience':'public'}]}]
+        current=candidate()
+        for invalid in ('ab', {'a':'b'}, None, ['a',1], ['a',['b']]):
+            with self.subTest(invalid=invalid):
+                malformed={**current,'included_changes':invalid}
+                with self.assertRaisesRegex(ValueError,'Candidate change identity list is invalid'):
+                    d.identity(malformed)
+                with self.assertRaisesRegex(ValueError,'Candidate change identity list is invalid'):
+                    d.plan(malformed,[],target(),entries)
+        current['included_changes']=['a','b']
+        ready=d.plan(current,[],target(),entries)
+        self.assertEqual(ready['status'],'READY')
+        confirmed=receipt('1.3',3,ready['included_changes'])
+        confirmed.update(candidate_id=ready['candidate_id'],
+                         artifact_sha256=ready['artifact_sha256'])
+        self.assertEqual(d.plan(current,[confirmed],target(),entries)['status'],'SKIP')
+
     def test_formats_escapes_and_notes_limit(self):
         first=d.plan(candidate(),[],target(field='plain'),self.entries)
         self.assertIn('CSV',first['notes']);self.assertEqual(first['status'],'READY')
