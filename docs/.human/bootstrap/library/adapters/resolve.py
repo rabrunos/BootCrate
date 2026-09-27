@@ -368,6 +368,7 @@ def _unlink_local_file(target: Path, expected_identity: tuple[int, int]) -> None
 
 
 def clear_local_override(project_root: Path) -> bool:
+    _reject_tracked_local_config(project_root, "execution-profile.json")
     target = local_override_path(project_root)
     try:
         metadata = target.lstat()
@@ -386,6 +387,7 @@ def clear_local_override(project_root: Path) -> bool:
 
 
 def clear_local_preset(project_root: Path) -> bool:
+    _reject_tracked_local_config(project_root, "preset.json")
     target = local_preset_path(project_root)
     try:
         metadata = target.lstat()
@@ -415,6 +417,11 @@ def main() -> int:
     parser.add_argument("--clear-local", action="store_true")
     parser.add_argument("--clear-local-preset", action="store_true")
     args = parser.parse_args()
+    # Validate every requested clear before either file can be moved or removed.
+    if args.clear_local:
+        _reject_tracked_local_config(args.project_root, "execution-profile.json")
+    if args.clear_local_preset:
+        _reject_tracked_local_config(args.project_root, "preset.json")
     if args.clear_local:
         clear_local_override(args.project_root)
     if args.clear_local_preset:

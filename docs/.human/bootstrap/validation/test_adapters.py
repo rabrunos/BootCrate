@@ -349,6 +349,67 @@ class AdapterResolverTests(unittest.TestCase):
             self.assertTrue(resolver.clear_local_preset(root))
             self.assertFalse(preset.exists())
 
+    def test_tracked_local_overrides_cannot_be_cleared(self):
+        for filename, clear in (
+            ("execution-profile.json", resolver.clear_local_override),
+            ("preset.json", resolver.clear_local_preset),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                subprocess.run(["git", "init", "-q", str(root)], check=True)
+                (root / ".gitignore").write_text(".local/\n", encoding="utf-8")
+                config = root / ".local" / "config"
+                config.mkdir(parents=True)
+                target = config / filename
+                target.write_bytes(b"tracked owner content")
+                relative = str(target.relative_to(root))
+                subprocess.run(["git", "add", "-f", "--", relative], cwd=root,
+                               check=True, capture_output=True)
+
+                with self.assertRaisesRegex(ValueError, "Tracked machine-local configuration"):
+                    clear(root)
+                command = [sys.executable, str(ADAPTERS / "resolve.py"),
+                           "--adapter", str(ADAPTERS / "codex.json"), "--surface", "cli",
+                           "--project-root", str(root),
+                           "--task-profile", "full_access", "--acknowledge-full-access-risk",
+                           "--task-preset", "standard",
+                           "--clear-local" if filename == "execution-profile.json" else "--clear-local-preset"]
+                result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Tracked machine-local configuration", result.stderr)
+                self.assertEqual(target.read_bytes(), b"tracked owner content")
+                self.assertEqual(list(config.glob(".clear-*")), [])
+
+                subprocess.run(["git", "rm", "--cached", "-f", "--", relative], cwd=root,
+                               check=True, capture_output=True)
+                self.assertTrue(clear(root))
+                self.assertFalse(target.exists())
+
+    def test_combined_clear_preflights_both_tracking_states(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            config = root / ".local" / "config"
+            config.mkdir(parents=True)
+            execution = config / "execution-profile.json"
+            preset = config / "preset.json"
+            execution.write_bytes(b"untracked owner content")
+            preset.write_bytes(b"tracked owner content")
+            subprocess.run(["git", "add", "-f", "--", str(preset.relative_to(root))],
+                           cwd=root, check=True, capture_output=True)
+            result = subprocess.run([sys.executable, str(ADAPTERS / "resolve.py"),
+                                     "--adapter", str(ADAPTERS / "codex.json"),
+                                     "--surface", "cli", "--project-root", str(root),
+                                     "--task-profile", "full_access", "--acknowledge-full-access-risk",
+                                     "--task-preset", "standard", "--clear-local",
+                                     "--clear-local-preset"],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Tracked machine-local configuration", result.stderr)
+            self.assertEqual(execution.read_bytes(), b"untracked owner content")
+            self.assertEqual(preset.read_bytes(), b"tracked owner content")
+            self.assertEqual(list(config.glob(".clear-*")), [])
+
     def test_linked_local_override_parents_are_rejected_without_removing_other_files(self):
         for linked_parent in (".local", ".local/config"):
             for filename, path_for, clear in (
