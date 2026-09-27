@@ -345,6 +345,22 @@ process.stdout.write(JSON.stringify(values.map(repository=>
             config.write_text(baseline,encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])
 
+    def test_selected_codex_agent_concurrency_is_typed_and_bounded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.materialized_fixture(root)
+            config=root/".codex/config.toml";baseline=config.read_text(encoding="utf-8")
+            for value,allowed in (("1",True),("2",True),("0",False),("3",False),
+                                  ("1000",False),("true",False),('"2"',False)):
+                with self.subTest(value=value):
+                    config.write_text(baseline+"\n[agents]\nmax_concurrent_threads_per_session = "+value+"\n",
+                                      encoding="utf-8")
+                    failures=verify_materialized.check(root)
+                    self.assertEqual(not failures,allowed,failures)
+                    if not allowed:
+                        self.assertTrue(any("agent concurrency" in failure for failure in failures),failures)
+            config.write_text(baseline,encoding="utf-8")
+            self.assertEqual(verify_materialized.check(root),[])
+
     def test_codex_template_uses_only_selected_keys(self):
         settings=tomllib.loads((v.ROOT/".codex/config.toml").read_text(encoding="utf-8"))
         reject_unselected_codex_config(settings)

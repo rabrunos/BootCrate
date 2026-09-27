@@ -126,7 +126,7 @@ def render(entries: list[dict], field: str, audience: str = "public") -> str:
 def identity(candidate: dict) -> str:
     required={"version","source_commit","payload_sha256","artifacts","included_changes"}
     if not required <= candidate.keys(): raise ValueError("Candidate identity incomplete")
-    if not isinstance(candidate.get("integration_order"),int) or candidate["integration_order"] < 0:
+    if type(candidate.get("integration_order")) is not int or candidate["integration_order"] < 0:
         raise ValueError("Candidate integration order missing")
     if not re.fullmatch(r"[0-9a-f]{40}",candidate["source_commit"]): raise ValueError("Invalid source commit")
     if not re.fullmatch(r"[0-9a-f]{64}",candidate["payload_sha256"]): raise ValueError("Invalid payload digest")
@@ -155,7 +155,7 @@ def _receipt_identity(receipt: dict) -> tuple:
         raise ValueError("Receipt candidate identity is invalid")
     if not re.fullmatch(r"[0-9a-f]{64}",receipt["artifact_sha256"]):
         raise ValueError("Receipt artifact digest is invalid")
-    if not isinstance(receipt.get("integration_order"),int) or receipt["integration_order"]<0:
+    if type(receipt.get("integration_order")) is not int or receipt["integration_order"]<0:
         raise ValueError("Receipt integration order missing")
     changes=receipt.get("included_changes")
     if not isinstance(changes,list) or any(not isinstance(item,str) for item in changes) or len(changes)!=len(set(changes)):
@@ -248,7 +248,7 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
         return {"status":"BLOCK","reason":"Unknown baseline; verify destination history first"}
     if confirmed:
         # Sequence is a confirmed integration order, not lexicographic version sorting.
-        if any(not isinstance(r.get("integration_order"),int) for r in confirmed):
+        if any(type(r.get("integration_order")) is not int for r in confirmed):
             return {"status":"BLOCK","reason":"Receipt integration order missing"}
         baseline=max(confirmed,key=lambda r:r["integration_order"])
         if not set(baseline.get("included_changes",[])) <= set(candidate["included_changes"]):

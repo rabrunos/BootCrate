@@ -19,7 +19,8 @@ from validation_core import (inventory, load_json, materialized_profile,
                              sensitive_name, valid_claude_credential_denials,
                              reject_unselected_codex_config,
                              reject_unselected_claude_config,
-                             validate_codex_agent_configs, validate_claude_agent_configs)
+                             validate_codex_agent_configs, validate_claude_agent_configs,
+                             valid_codex_agent_concurrency)
 
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".yml", ".yaml", ".txt", ".py", ".js", ".cjs", ".html", ".css"}
 SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
@@ -162,6 +163,10 @@ def inspect(root: Path) -> list[dict]:
                             "Enabled Codex protected manual sandbox network must be disabled")
                     require(workspace.get("writable_roots", []) == [],
                             "Enabled Codex protected manual sandbox writable roots must not be widened")
+                    agents = settings.get("agents", {})
+                    if "max_concurrent_threads_per_session" in agents:
+                        require(valid_codex_agent_concurrency(agents["max_concurrent_threads_per_session"]),
+                                "Enabled Codex agent concurrency is invalid or widened")
                     environment = settings.get("shell_environment_policy")
                     require(isinstance(environment, dict) and environment.get("inherit") == "core" and
                             environment.get("ignore_default_excludes") is False,

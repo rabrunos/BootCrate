@@ -64,6 +64,10 @@ ALLOWED_CODEX_CONFIG_KEYS = {
 }
 
 
+def valid_codex_agent_concurrency(value: Any) -> bool:
+    return type(value) is int and 1 <= value <= 2
+
+
 ALLOWED_CLAUDE_CONFIG_KEYS = {
     "$schema": None,
     "effortLevel": None,

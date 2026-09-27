@@ -128,6 +128,17 @@ class DeliveryTests(unittest.TestCase):
         later=receipt('1.4',4,candidate()['included_changes'])
         self.assertEqual(d.plan(candidate(),[resolved,later],target(),self.entries)['status'],'BLOCK')
 
+    def test_boolean_integration_order_cannot_be_a_confirmed_baseline(self):
+        current=candidate()
+        for malformed in (True,False,1.0,"1"):
+            with self.subTest(order=malformed):
+                bad=receipt('1.1',malformed,['#40/1'])
+                self.assertEqual(d.plan(current,[bad],target(),self.entries)['status'],'BLOCK')
+                with self.assertRaisesRegex(ValueError,"Candidate integration order"):
+                    d.identity({**current,"integration_order":malformed})
+        valid=receipt('1.1',1,['#40/1'])
+        self.assertEqual(d.plan(current,[valid],target(),self.entries)['status'],'READY')
+
     def test_receipt_event_reduction_preserves_confirmation_and_identity(self):
         c=candidate();cid=d.identity(c)
         pending=receipt('1.3',3,c['included_changes'],status='unknown',attempt='same',observed_at='2026-09-24T00:00:00Z')

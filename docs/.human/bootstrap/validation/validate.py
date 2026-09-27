@@ -17,7 +17,7 @@ from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_objec
                              reject_unselected_codex_config, reject_unselected_claude_config,
                              validate_codex_agent_configs, validate_claude_agent_configs, load_yaml,
                              materialized_profile, profile_schema,
-                             valid_claude_credential_denials)
+                             valid_claude_credential_denials, valid_codex_agent_concurrency)
 
 try:
     import yaml
@@ -121,7 +121,8 @@ def check_adapters() -> None:
     require(codex["sandbox_workspace_write"]["network_access"] is False, "Sandbox network widened")
     require(codex["sandbox_workspace_write"].get("writable_roots", []) == [],
             "Sandbox writable roots widened")
-    require(codex["agents"]["max_concurrent_threads_per_session"] <= 2, "Agent concurrency widened")
+    require(valid_codex_agent_concurrency(codex["agents"]["max_concurrent_threads_per_session"]),
+            "Agent concurrency invalid or widened")
     require(codex["shell_environment_policy"]["inherit"] == "core" and
             codex["shell_environment_policy"].get("ignore_default_excludes") is False,
             "Unexpected credential environment inheritance")
