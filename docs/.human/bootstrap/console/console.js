@@ -59,6 +59,9 @@
     if(contract.reader==="plain")value=raw.trim();
     else if(contract.reader==="json")value=atPointer(JSON.parse(raw),contract.valuePath);
     else throw new Error("Reader '"+String(contract.reader)+"' is not supported in this Console view; use native validation");
+    if(typeof value==="number"&& !Number.isFinite(value))throw new Error("Version value must be a finite scalar");
+    if(contract.reader==="json"&&typeof value==="number")
+      throw new Error("Numeric JSON version requires native validation; use a string for this Console preview");
     if(typeof value==="boolean"||!["string","number"].includes(typeof value)||
         (typeof value==="number"&&!Number.isFinite(value)))throw new Error("Version value must be a finite scalar");
     const token=String(value).trim();

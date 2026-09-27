@@ -18,6 +18,7 @@
 - O Setup agora restaura rascunhos locais ainda sem repositório ou confirmação de Acesso Total, mantendo a confirmação obrigatória para exportação e execução solicitada.
 - A finalização limita a concorrência dos agentes Codex ao intervalo aprovado, e a entrega rejeita ordens de integração booleanas em candidatos e recibos.
 - Os patches protegidos do Codex agora incluem isolamento de rede e ambiente; o verificador exige limite de concorrência com agentes habilitados, rejeita overrides rastreados com variação de maiúsculas e o Console tolera perfis parciais na prévia local.
+- O Console agora encaminha valores de versão JSON numéricos à validação nativa para preservar a representação exata.
 
 ## v0.8 — Setup guiado
 
