@@ -83,6 +83,10 @@ CODEX_AGENT_INSTRUCTIONS_SHA256 = {
     "scout": "c2499fae1d2a3bc3be41aada8038184432d784419c953ebd4b6e6ceb35e8c35a",
     "worker": "ce445d89179c868978504ad8fee815f1a835a37a6b7c4d4a15325a5139fca3fb",
 }
+CODEX_AGENT_DESCRIPTIONS_SHA256 = {
+    "scout": "ae1ffd2153b8a2fb363e6a6c7c923461e55b2e7f5621d5cfa3395de3fb482304",
+    "worker": "602fc68cc4840903122db8c13703f947d111308d7a3cb79f029009c6d8d04baa",
+}
 ALLOWED_CODEX_AGENT_KEYS = {
     "name", "description", "developer_instructions", "model", "model_reasoning_effort", "sandbox_mode",
 }
@@ -116,6 +120,9 @@ def validate_codex_agent_configs(root: Path) -> None:
         require(hashlib.sha256(settings["developer_instructions"].encode("utf-8")).hexdigest() ==
                 CODEX_AGENT_INSTRUCTIONS_SHA256[role],
                 "Unreviewed Codex agent instructions: " + path.name)
+        require(hashlib.sha256(settings["description"].encode("utf-8")).hexdigest() ==
+                CODEX_AGENT_DESCRIPTIONS_SHA256[role],
+                "Unreviewed Codex agent description: " + path.name)
         require(settings.get("model_reasoning_effort") == CODEX_AGENT_EFFORTS[role],
                 "Unexpected Codex agent effort: " + path.name)
         if "model" in settings:

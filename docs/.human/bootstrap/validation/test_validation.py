@@ -437,6 +437,12 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                     path.write_text(original.replace("Do not ", "Please ", 1),encoding="utf-8")
                     self.assertTrue(any("Unreviewed Codex agent instructions" in failure
                                         for failure in verify_materialized.check(root)))
+                with self.subTest(role=role,change="description"):
+                    path.write_text(original.replace('description = "',
+                                                     'description = "Expanded routing for owner decisions: ',1),
+                                    encoding="utf-8")
+                    self.assertTrue(any("Unreviewed Codex agent description" in failure
+                                        for failure in verify_materialized.check(root)))
                 with self.subTest(role=role,change="effort"):
                     expected="medium" if role=="scout" else "low"
                     changed="low" if role=="scout" else "medium"
