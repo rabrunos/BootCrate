@@ -13,6 +13,7 @@ import tomllib
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from markdown_it import MarkdownIt
 import yaml
 
 
@@ -328,79 +329,11 @@ def _version_contract(profile: dict[str, Any]) -> tuple[dict[str, Any], list[dic
 
 
 def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
-    """Find a history heading outside fences, comments and raw HTML blocks."""
-    fence: str | None = None
-    raw_delimiter: str | None = None
-    in_comment = False
-    raw_html = False
-    html_until_blank = False
-    content_tag = re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?=[\t >]|$)", re.I)
-    content_end = re.compile(r"</(?:script|pre|style|textarea)[ \t]*>", re.I)
-    block_tags = ("address article aside base basefont blockquote body caption center col colgroup "
-                  "dd details dialog dir div dl dt fieldset figcaption figure footer form frame "
-                  "frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main "
-                  "menu menuitem meta nav noframes ol optgroup option p param search section "
-                  "source summary table tbody td tfoot th thead title tr track ul").split()
-    type_six = re.compile(r"^ {0,3}</?(?:" + "|".join(block_tags) + r")(?=[ \t>]|/>|$)", re.I)
-    type_seven = re.compile(r"^ {0,3}</?[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[^<>]*)?/?>[ \t]*$")
-    for raw_line in markdown.splitlines():
-        if fence is not None:
-            if re.fullmatch(r" {0,3}" + re.escape(fence[0]) +
-                            "{" + str(len(fence)) + r",}[ \t]*", raw_line):
-                fence = None
-            continue
-        if raw_delimiter is not None:
-            if raw_delimiter in raw_line:
-                raw_delimiter = None
-            continue
-        if raw_html:
-            if content_end.search(raw_line):
-                raw_html = False
-            continue
-        if html_until_blank:
-            if not raw_line.strip():
-                html_until_blank = False
-            continue
-        if in_comment:
-            end = raw_line.find("-->")
-            if end < 0:
-                continue
-            in_comment = False
-            # A heading after a comment terminator on the same line is not
-            # a standalone Markdown heading.
-            continue
-        delimiter_block = re.match(r"^ {0,3}(<!\[CDATA\[|<\?)", raw_line)
-        if delimiter_block:
-            closing = "]]>" if delimiter_block[1] == "<![CDATA[" else "?>"
-            if closing not in raw_line[delimiter_block.end():]:
-                raw_delimiter = closing
-            continue
-        comment = re.match(r"^ {0,3}<!--", raw_line)
-        if comment:
-            if "-->" not in raw_line[comment.end():]:
-                in_comment = True
-            continue
-        line = raw_line
-        opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
-        if opening and (opening[1][0] == "~" or "`" not in opening[2]):
-            fence = opening[1]
-            continue
-        if content_tag.match(line):
-            raw_html = content_end.search(line) is None
-            continue
-        declaration = re.match(r"^ {0,3}<![A-Za-z]", line)
-        if declaration:
-            # CommonMark declarations end at the first closing bracket, even
-            # when the next release heading follows without a blank line.
-            if ">" not in line[declaration.end():]:
-                raw_delimiter = ">"
-            continue
-        if type_six.match(line) or type_seven.fullmatch(line):
-            # CommonMark type 6/7 blocks end at a blank line; autolinks and
-            # other inline angle-bracket content do not start an HTML block.
-            html_until_blank = True
-            continue
-        if heading.match(line):
+    """Require an actual top-level CommonMark H2 on the declared source line."""
+    lines = markdown.splitlines()
+    for token in MarkdownIt("commonmark").parse(markdown):
+        if (token.type == "heading_open" and token.tag == "h2" and token.level == 0 and
+                token.map and token.map[0] < len(lines) and heading.match(lines[token.map[0]])):
             return True
     return False
 

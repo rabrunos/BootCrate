@@ -250,6 +250,24 @@ class VersionCompatibilityTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no entry for integrated version 1.0"):
                 self.schema_and_finalization(root, profile)
 
+    def test_v3_history_requires_a_top_level_rendered_heading(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.support_files(root)
+            self.write(root, "VERSION", "1.0\n")
+            profile = self.v3_profile("VERSION", "plain", "")
+            profile["versioning"].pop("value_path")
+            for nested in ("- <script>\n\n  ## v1.0 - Hidden\n  </script>",
+                           "- Item\n\n  ## v1.0 - Nested",
+                           "> ## v1.0 - Quoted"):
+                with self.subTest(nested=nested):
+                    self.write(root, "HISTORY.md", "# History\n\n" + nested + "\n")
+                    with self.assertRaisesRegex(ValueError, "no entry for integrated version 1.0"):
+                        self.schema_and_finalization(root, profile)
+                    self.write(root, "HISTORY.md", "# History\n\n" + nested +
+                               "\n\n## v1.0 - Release\n")
+                    self.schema_and_finalization(root, profile)
+
     def test_v3_numeric_versions_must_be_finite(self):
         sources = (
             ("json", "package.json", "{\"version\": NaN}"),
