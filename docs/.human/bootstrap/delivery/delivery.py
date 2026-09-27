@@ -275,7 +275,8 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
         return {"status":"BLOCK","reason":"Notes exceed verified destination field limit"}
     return {"status":"READY","candidate_id":cid,"destination":key[0],"channel":key[1],
             "artifact_sha256":candidate["artifacts"][key[0]],"baseline":baseline["version"] if baseline else "never_published",
-            "included_changes":selected_ids,"notes":notes,"notes_sha256":digest(notes.encode("utf-8")),
+            "included_changes":list(candidate["included_changes"]),"new_change_ids":selected_ids,
+            "notes":notes,"notes_sha256":digest(notes.encode("utf-8")),
             "warning":"Preview only; verify provider state and authorize the exact operation separately"}
 
 

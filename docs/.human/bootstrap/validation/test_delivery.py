@@ -89,8 +89,10 @@ class DeliveryTests(unittest.TestCase):
         old=receipt('1.1',1,['#40/1']);ahead=receipt('1.2',2,['#40/1','#41/1'],id='nexus')
         github=d.plan(candidate(),[old,ahead],target('github',baseline='unknown'),self.entries)
         nexus=d.plan(candidate(),[old,ahead],target('nexus',baseline='unknown'),self.entries)
-        self.assertEqual(hub:=github['included_changes'],['#41/1','#42/1'])
-        self.assertEqual(nexus['included_changes'],['#42/1'])
+        self.assertEqual(github['included_changes'],candidate()['included_changes'])
+        self.assertEqual(nexus['included_changes'],candidate()['included_changes'])
+        self.assertEqual(github['new_change_ids'],['#41/1','#42/1'])
+        self.assertEqual(nexus['new_change_ids'],['#42/1'])
         self.assertIn('CSV',github['notes']);self.assertNotIn('configurações',github['notes'])
         self.assertNotIn('CSV',nexus['notes'])
 
@@ -104,7 +106,14 @@ class DeliveryTests(unittest.TestCase):
         cumulative=receipt('1.2',2,['#40/1','#41/1'])
         ready=d.plan(candidate(),[first,cumulative],target(baseline='unknown'),self.entries)
         self.assertEqual(ready['status'],'READY')
-        self.assertEqual(ready['included_changes'],['#42/1'])
+        self.assertEqual(ready['included_changes'],candidate()['included_changes'])
+        self.assertEqual(ready['new_change_ids'],['#42/1'])
+
+        recorded=receipt('1.3',3,ready['included_changes'],attempt='new-attempt')
+        recorded.update(candidate_id=ready['candidate_id'],
+                        artifact_sha256=ready['artifact_sha256'])
+        self.assertEqual(d.plan(candidate(),[first,cumulative,recorded],
+                                target(baseline='unknown'),self.entries)['status'],'SKIP')
 
         conflict=receipt('1.2-alt',2,['#40/1','#41/1'],attempt='other-attempt')
         ambiguous=d.plan(candidate(),[first,cumulative,conflict],target(baseline='unknown'),self.entries)
@@ -276,7 +285,8 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(result['notes'],'')
         baseline=receipt('1.1',1,['#40/1'])
         later=d.plan(candidate(),[baseline],target(baseline='unknown'),self.entries)
-        self.assertEqual(later['included_changes'],['#41/1','#42/1'])
+        self.assertEqual(later['included_changes'],candidate()['included_changes'])
+        self.assertEqual(later['new_change_ids'],['#41/1','#42/1'])
 
 
 if __name__=='__main__':unittest.main()
