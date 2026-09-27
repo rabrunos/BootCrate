@@ -378,6 +378,13 @@ def _history_has_heading(markdown: str, heading: re.Pattern[str]) -> bool:
         if content_tag.match(line):
             raw_html = content_end.search(line) is None
             continue
+        declaration = re.match(r"^ {0,3}<![A-Z]", line)
+        if declaration:
+            # CommonMark declarations end at the first closing bracket, even
+            # when the next release heading follows without a blank line.
+            if ">" not in line[declaration.end():]:
+                raw_delimiter = ">"
+            continue
         if re.match(r"^ {0,3}<(?:/?[A-Za-z]|[!?])", line):
             # Other raw HTML blocks end at a blank line; conservatively skip
             # unknown tags rather than accepting a hidden version heading.

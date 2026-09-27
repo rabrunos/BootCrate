@@ -220,6 +220,23 @@ class VersionCompatibilityTests(unittest.TestCase):
                     self.write(root, "HISTORY.md", block + "\n## v1.0 - Release\n")
                     self.schema_and_finalization(root, profile)
 
+    def test_v3_history_html_declaration_ends_at_closing_bracket(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.support_files(root)
+            self.write(root, "VERSION", "1.0\n")
+            profile = self.v3_profile("VERSION", "plain", "")
+            profile["versioning"].pop("value_path")
+            for declaration in ("<!DOCTYPE html>",
+                                "<!DOCTYPE html\n PUBLIC \"example\">",
+                                "   <!CUSTOM\n\n## v1.0 - Draft\n>"):
+                with self.subTest(declaration=declaration):
+                    self.write(root, "HISTORY.md", declaration + "\n## v1.0 - Release\n")
+                    self.schema_and_finalization(root, profile)
+            self.write(root, "HISTORY.md", "<!DOCTYPE html\n\n## v1.0 - Draft\n")
+            with self.assertRaisesRegex(ValueError, "no entry for integrated version 1.0"):
+                self.schema_and_finalization(root, profile)
+
     def test_v3_numeric_versions_must_be_finite(self):
         sources = (
             ("json", "package.json", "{\"version\": NaN}"),
