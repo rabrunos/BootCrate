@@ -29,6 +29,56 @@ class AdapterResolverTests(unittest.TestCase):
         self.assertEqual(resolver.resolve_preset(project="economy"), {"preset":"economy", "source":"project"})
         self.assertEqual(resolver.resolve_execution()["requested"], "protected_manual")
 
+    def test_git_tracked_local_overrides_are_never_consumed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            subprocess.run(["git","init","-q",str(root)],check=True)
+            (root/".gitignore").write_text(".local/\n",encoding="utf-8")
+            config=root/".local/config";config.mkdir(parents=True)
+            execution=config/"execution-profile.json"
+            execution.write_text(json.dumps({"schema":resolver.OVERRIDE_SCHEMA,
+                                             "profile":"full_access","risk_acknowledged":True}),
+                                 encoding="utf-8")
+            ignored=subprocess.run(["git","check-ignore","--no-index","--quiet","--",
+                                    str(execution.relative_to(root))],cwd=root)
+            self.assertEqual(ignored.returncode,0)
+            self.assertEqual(resolver.resolve_execution(
+                local=resolver._load_local_config(root,execution.name)),
+                {"requested":"full_access","source":"local"})
+            relative=str(execution.relative_to(root))
+            subprocess.run(["git","add","-f","--",relative],cwd=root,check=True,capture_output=True)
+            self.assertTrue(execution.is_file())
+            with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                resolver._load_local_config(root,execution.name)
+            execution.write_text(json.dumps({"schema":resolver.OVERRIDE_SCHEMA,
+                                             "profile":"protected_auto"}),encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                resolver._load_local_config(root,execution.name)
+            task=subprocess.run([sys.executable,str(ADAPTERS/"resolve.py"),
+                                 "--adapter",str(ADAPTERS/"codex.json"),"--surface","cli",
+                                 "--project-root",str(root),"--task-profile","full_access",
+                                 "--acknowledge-full-access-risk"],
+                                capture_output=True,text=True,check=True,timeout=10)
+            self.assertEqual(json.loads(task.stdout)["execution"]["source"],"task")
+            subprocess.run(["git","rm","--cached","-f","--",relative],cwd=root,check=True,capture_output=True)
+            self.assertTrue(execution.is_file())
+            self.assertEqual(resolver.resolve_execution(
+                local=resolver._load_local_config(root,execution.name))["requested"],
+                "protected_auto")
+            preset=config/"preset.json"
+            preset.write_text(json.dumps({"schema":resolver.PRESET_OVERRIDE_SCHEMA,
+                                          "preset":"economy"}),encoding="utf-8")
+            self.assertEqual(resolver.parse_preset_override(
+                resolver._load_local_config(root,preset.name)),"economy")
+            subprocess.run(["git","add","-f","--",str(preset.relative_to(root))],
+                           cwd=root,check=True,capture_output=True)
+            with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                resolver._load_local_config(root,preset.name)
+            subprocess.run(["git","rm","--cached","--",str(preset.relative_to(root))],
+                           cwd=root,check=True,capture_output=True)
+            self.assertEqual(resolver.parse_preset_override(
+                resolver._load_local_config(root,preset.name)),"economy")
+
     def test_task_local_and_preset_precedence_are_independent(self):
         local = {"schema":resolver.OVERRIDE_SCHEMA, "profile":"protected_auto"}
         self.assertEqual(resolver.resolve_execution(local=local)["source"], "local")

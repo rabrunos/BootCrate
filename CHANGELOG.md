@@ -14,6 +14,7 @@
 - O Intake agora preserva uma identidade canônica de repositório e a origem versionada do BootCrate no handoff.
 - Adicionados três perfis independentes de permissões de execução, com default protegido/manual, opt-in de risco para Acesso Total e adaptadores Codex/Claude que distinguem solicitado de efetivo.
 - Reforçado o opt-in de Acesso Total no contrato do Intake, a comprovação de permissões e sandbox no adapter Claude e a leitura declarativa de versão e histórico no Console.
+- A finalização exige o conjunto exato de skills selecionadas em cada executor, e overrides locais rastreados pelo Git deixam de ser aceitos; a fronteira de isolamento da atualização gerenciada foi explicitada.
 
 ## v0.8 — Setup guiado
 

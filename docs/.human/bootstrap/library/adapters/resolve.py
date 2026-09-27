@@ -13,6 +13,7 @@ import json
 import os
 import secrets
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -280,9 +281,26 @@ def _read_local_bytes(project_root: Path, filename: str) -> bytes | None:
 
 
 def _load_local_config(project_root: Path, filename: str) -> dict[str, Any] | None:
+    _reject_tracked_local_config(project_root, filename)
     _local_config_path(project_root, filename)
     content = _read_local_bytes(project_root, filename)
     return None if content is None else _parse_json(content.decode("utf-8"), filename)
+
+
+def _reject_tracked_local_config(project_root: Path, filename: str) -> None:
+    root = project_root.resolve(strict=True)
+    if not (root / ".git").exists():
+        return
+    relative = ".local/config/" + filename
+    try:
+        result = subprocess.run(
+            ["git", "--literal-pathspecs", "ls-files", "--cached", "-z", "--", relative],
+            cwd=root, capture_output=True, check=True, timeout=10,
+            env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")})
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
+    if relative.encode("ascii") in result.stdout.split(b"\0"):
+        raise ValueError("Tracked machine-local configuration is invalid: " + relative)
 
 
 def _rename_local_noreplace(parent_fd: int, source: str, destination: str) -> None:
@@ -401,11 +419,11 @@ def main() -> int:
         clear_local_override(args.project_root)
     if args.clear_local_preset:
         clear_local_preset(args.project_root)
-    local = _load_local_config(args.project_root, "execution-profile.json")
+    local = None if args.task_profile else _load_local_config(args.project_root, "execution-profile.json")
     resolved = resolve_execution(task=args.task_profile,
                                  task_risk_acknowledged=args.acknowledge_full_access_risk,
                                  local=local)
-    local_preset_data = _load_local_config(args.project_root, "preset.json")
+    local_preset_data = None if args.task_preset else _load_local_config(args.project_root, "preset.json")
     local_preset = parse_preset_override(local_preset_data) if local_preset_data is not None else None
     project_preset = None
     if args.project_profile:

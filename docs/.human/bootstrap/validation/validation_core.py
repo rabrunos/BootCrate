@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -393,6 +394,25 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
     return version
 
 
+def reject_tracked_local_overrides(root: Path) -> None:
+    """A checkout cannot supply a machine-local choice from its Git index."""
+    root = root.resolve()
+    if not (root / ".git").exists():
+        return
+    paths = (".local/config/execution-profile.json", ".local/config/preset.json")
+    try:
+        result = subprocess.run(
+            ["git", "--literal-pathspecs", "ls-files", "--cached", "-z", "--", *paths],
+            cwd=root, capture_output=True, check=True, timeout=10,
+            env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")})
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
+    tracked = set(result.stdout.split(b"\0"))
+    for path in paths:
+        require(path.encode("ascii") not in tracked,
+                "Tracked machine-local configuration is invalid: " + path)
+
+
 def materialized_profile(profile: dict[str, Any], root: Path | None = None) -> None:
     """Finalization gate. A valid draft is not necessarily a completed project."""
     def walk(value: Any) -> None:
@@ -426,6 +446,7 @@ def materialized_profile(profile: dict[str, Any], root: Path | None = None) -> N
             require(all(t["kind"] == distribution["mode"] for t in distribution["targets"]),
                     "Distribution mode and selected targets disagree")
     if root is not None:
+        reject_tracked_local_overrides(root)
         validate_version_contract(profile, root)
         project_file(root, profile["security"]["control_map"], "security control map")
         project_file(root, "PROJECT_GUIDE.md", "project guide")
@@ -437,9 +458,26 @@ def materialized_profile(profile: dict[str, Any], root: Path | None = None) -> N
             entry, skills, native_config = locations[harness]
             project_file(root, entry, "enabled executor instructions")
             project_file(root, native_config, "enabled executor configuration")
-            for skill in profile.get("skills", []):
+            selected_skills = profile.get("skills", [])
+            require(len(selected_skills) == len(set(selected_skills)), "Duplicate selected skill name")
+            for skill in selected_skills:
                 require(re.fullmatch(r"[a-z0-9-]+", skill) is not None, "Invalid selected skill name")
                 project_file(root, f"{skills}/{skill}/SKILL.md", "selected executor skill")
+            skill_root = root / skills
+            if (skill_root.exists() or skill_root.is_symlink() or
+                    getattr(skill_root, "is_junction", lambda: False)()):
+                require(skill_root.is_dir() and not skill_root.is_symlink() and
+                        not getattr(skill_root, "is_junction", lambda: False)(),
+                        "Unsafe enabled executor skill root: " + skills)
+                actual = set()
+                for child in skill_root.iterdir():
+                    require(child.is_dir() and not child.is_symlink() and
+                            not getattr(child, "is_junction", lambda: False)() and
+                            re.fullmatch(r"[a-z0-9-]+", child.name) is not None,
+                            "Unexpected executor skill-root entry: " + child.relative_to(root).as_posix())
+                    actual.add(child.name)
+                require(actual == set(selected_skills),
+                        "Enabled executor skills differ from profile.skills: " + skills)
         if profile["schema"] == "project-profile/v3":
             disabled_paths = {
                 "codex": ("AGENTS.md", ".agents/skills", ".codex"),

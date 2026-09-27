@@ -113,6 +113,85 @@ process.stdout.write(JSON.stringify(values.map(repository=>
         path.write_text(json.dumps(profile),encoding="utf-8")
         return profile,path
 
+    def test_materialized_executor_skill_sets_are_exact(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,path=self.materialized_fixture(root)
+            profile["skills"]=["safe-validation"]
+            path.write_text(json.dumps(profile),encoding="utf-8")
+            codex=root/".agents/skills";codex.mkdir(parents=True)
+            selected=codex/"safe-validation";selected.mkdir()
+            (selected/"SKILL.md").write_text("# selected\n",encoding="utf-8")
+            v.materialized_profile(profile,root)
+            extra=codex/"unexpected";extra.mkdir()
+            (extra/"SKILL.md").write_text("# unexpected\n",encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,"skills differ"):
+                v.materialized_profile(profile,root)
+            self.assertTrue(any("skills differ" in failure for failure in verify_materialized.check(root)))
+            shutil.rmtree(extra)
+            (codex/"command.py").write_text("print('synthetic')\n",encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,"Unexpected executor skill-root entry"):
+                v.materialized_profile(profile,root)
+            (codex/"command.py").unlink()
+            selected.rename(codex/"missing")
+            with self.assertRaisesRegex(ValueError,"Missing selected executor skill"):
+                v.materialized_profile(profile,root)
+            (codex/"missing").rename(codex/"safe-validation")
+            profile["skills"]=[];path.write_text(json.dumps(profile),encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,"skills differ"):
+                v.materialized_profile(profile,root)
+
+    def test_materialized_claude_and_codex_skill_sets_are_exact(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,path=self.materialized_fixture(root)
+            profile["workflow"]["implementation_harnesses"]=["codex","claude_code"]
+            profile["skills"]=["safe-validation"]
+            path.write_text(json.dumps(profile),encoding="utf-8")
+            (root/"CLAUDE.md").write_text("# Claude\n",encoding="utf-8")
+            native=root/".claude/settings.json";native.parent.mkdir()
+            native.write_text("{}",encoding="utf-8")
+            for skill_root in (root/".agents/skills",root/".claude/skills"):
+                selected=skill_root/"safe-validation";selected.mkdir(parents=True)
+                (selected/"SKILL.md").write_text("# selected\n",encoding="utf-8")
+            v.materialized_profile(profile,root)
+            extra=root/".claude/skills/unexpected";extra.mkdir()
+            (extra/"SKILL.md").write_text("# unexpected\n",encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,"skills differ"):
+                v.materialized_profile(profile,root)
+            shutil.rmtree(extra)
+            link=root/".agents/skills/unexpected"
+            self.directory_link(link,root/".agents/skills/safe-validation")
+            try:
+                with self.assertRaisesRegex(ValueError,"Unexpected executor skill-root entry"):
+                    v.materialized_profile(profile,root)
+            finally:
+                if link.is_symlink():link.unlink()
+                elif os.name=="nt" and link.is_junction():os.rmdir(link)
+            v.materialized_profile(profile,root)
+
+    def test_materialized_rejects_tracked_machine_local_overrides(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,_=self.materialized_fixture(root)
+            subprocess.run(["git","init","-q",str(root)],check=True)
+            (root/".gitignore").write_text(".local/\n",encoding="utf-8")
+            config=root/".local/config";config.mkdir(parents=True)
+            for filename in ("execution-profile.json","preset.json"):
+                target=config/filename;target.write_text("{}",encoding="utf-8")
+                self.assertEqual(verify_materialized.check(root),[])
+                ignored=subprocess.run(["git","check-ignore","--no-index","--quiet","--",
+                                        str(target.relative_to(root))],cwd=root)
+                self.assertEqual(ignored.returncode,0)
+                subprocess.run(["git","add","-f","--",str(target.relative_to(root))],
+                               cwd=root,check=True,capture_output=True)
+                with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                    v.materialized_profile(profile,root)
+                self.assertTrue(any("Tracked machine-local configuration" in failure
+                                    for failure in verify_materialized.check(root)))
+                subprocess.run(["git","rm","--cached","-f","--",str(target.relative_to(root))],
+                               cwd=root,check=True,capture_output=True)
+                self.assertTrue(target.is_file())
+                target.unlink()
+            self.assertEqual(verify_materialized.check(root),[])
+
     def directory_link(self, link, target):
         try:
             link.symlink_to(target,target_is_directory=True)
