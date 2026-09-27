@@ -117,6 +117,23 @@ test('invalid repository edit clears the stored identity and exported intake',as
   await page.close();
 });
 
+test('Console local check handles a partial v3 distribution preview',async () => {
+  const page = await browser.newPage(), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(consoleUrl);
+  const partial={schema:'project-profile/v3',project:{name:'Example',kind:'static'},
+    workflow:{tracking:'github_issues',primary_orchestrator:'chatgpt',implementation_harnesses:['codex']},
+    versioning:{canonical_source:'VERSION',history_source:'CHANGELOG.md'},
+    execution_permissions:{safe_default:'protected_manual'},skills:[]};
+  await page.locator('#profile').setInputFiles({name:'partial.json',mimeType:'application/json',
+    buffer:Buffer.from(JSON.stringify(partial))});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Profile imported'));
+  await page.locator('#validateLocal').click();
+  assert.match(await page.locator('#localCheck').innerText(),/Local preview incomplete/);
+  assert.deepEqual(errors,[]);
+  await page.close();
+});
+
 test('file-mode optional Console imports a profile without claiming remote proof',async () => {
   const page = await browser.newPage();
   await page.goto(consoleUrl);

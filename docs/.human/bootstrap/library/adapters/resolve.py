@@ -294,12 +294,12 @@ def _reject_tracked_local_config(project_root: Path, filename: str) -> None:
     relative = ".local/config/" + filename
     try:
         result = subprocess.run(
-            ["git", "--literal-pathspecs", "ls-files", "--cached", "-z", "--", relative],
+            ["git", "ls-files", "--cached", "-z", "--", ":(icase,literal)" + relative],
             cwd=root, capture_output=True, check=True, timeout=10,
             env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")})
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
-    if relative.encode("ascii") in result.stdout.split(b"\0"):
+    if relative.encode("ascii") in (entry.lower() for entry in result.stdout.split(b"\0")):
         raise ValueError("Tracked machine-local configuration is invalid: " + relative)
 
 

@@ -406,12 +406,13 @@ def reject_tracked_local_overrides(root: Path) -> None:
     paths = (".local/config/execution-profile.json", ".local/config/preset.json")
     try:
         result = subprocess.run(
-            ["git", "--literal-pathspecs", "ls-files", "--cached", "-z", "--", *paths],
+            ["git", "ls-files", "--cached", "-z", "--",
+             *(":(icase,literal)" + path for path in paths)],
             cwd=root, capture_output=True, check=True, timeout=10,
             env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")})
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise ValueError("Cannot verify Git tracking for machine-local configuration") from error
-    tracked = set(result.stdout.split(b"\0"))
+    tracked = {entry.lower() for entry in result.stdout.split(b"\0")}
     for path in paths:
         require(path.encode("ascii") not in tracked,
                 "Tracked machine-local configuration is invalid: " + path)

@@ -79,6 +79,26 @@ class AdapterResolverTests(unittest.TestCase):
             self.assertEqual(resolver.parse_preset_override(
                 resolver._load_local_config(root,preset.name)),"economy")
 
+    def test_case_variant_tracked_local_overrides_are_rejected(self):
+        for filename,payload in (("execution-profile.json",
+                                 {"schema":resolver.OVERRIDE_SCHEMA,"profile":"full_access",
+                                  "risk_acknowledged":True}),
+                                 ("preset.json",{"schema":resolver.PRESET_OVERRIDE_SCHEMA,
+                                                 "preset":"economy"})):
+            with self.subTest(filename=filename),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                subprocess.run(["git","init","-q",str(root)],check=True)
+                target=root/".LOCAL/config"/filename;target.parent.mkdir(parents=True)
+                target.write_text(json.dumps(payload),encoding="utf-8")
+                if os.name=="nt":
+                    self.assertEqual(resolver._load_local_config(root,filename),payload)
+                subprocess.run(["git","add","-f","--",str(target.relative_to(root))],
+                               cwd=root,check=True,capture_output=True)
+                tracked=subprocess.check_output(["git","ls-files","-z"],cwd=root)
+                self.assertIn((".LOCAL/config/"+filename).encode("ascii"),tracked.split(b"\0"))
+                with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                    resolver._load_local_config(root,filename)
+
     def test_task_local_and_preset_precedence_are_independent(self):
         local = {"schema":resolver.OVERRIDE_SCHEMA, "profile":"protected_auto"}
         self.assertEqual(resolver.resolve_execution(local=local)["source"], "local")
@@ -128,6 +148,12 @@ class AdapterResolverTests(unittest.TestCase):
         self.assertEqual(len({json.dumps(x, sort_keys=True) for x in actions.values()}), 3)
         self.assertEqual(actions["protected_manual"]["settings_patch"]["approvals_reviewer"], "user")
         self.assertEqual(actions["protected_auto"]["settings_patch"]["approvals_reviewer"], "auto_review")
+        for profile in ("protected_manual", "protected_auto"):
+            patch=actions[profile]["settings_patch"]
+            self.assertEqual(patch["sandbox_workspace_write"],
+                             {"network_access":False,"writable_roots":[]})
+            self.assertEqual(patch["shell_environment_policy"],
+                             {"inherit":"core","ignore_default_excludes":False})
         self.assertEqual(actions["protected_auto"]["cli_args"],
                          ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"])
         self.assertNotIn("--approve-for-me", actions["protected_auto"]["cli_args"])

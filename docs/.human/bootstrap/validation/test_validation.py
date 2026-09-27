@@ -192,6 +192,24 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                 target.unlink()
             self.assertEqual(verify_materialized.check(root),[])
 
+    def test_materialized_rejects_case_variant_tracked_local_overrides(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);profile,_=self.materialized_fixture(root)
+            subprocess.run(["git","init","-q",str(root)],check=True)
+            for filename in ("execution-profile.json","preset.json"):
+                target=root/".LOCAL/config"/filename;target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_text("{}",encoding="utf-8")
+                subprocess.run(["git","add","-f","--",str(target.relative_to(root))],
+                               cwd=root,check=True,capture_output=True)
+                with self.assertRaisesRegex(ValueError,"Tracked machine-local configuration"):
+                    v.materialized_profile(profile,root)
+                self.assertTrue(any("Tracked machine-local configuration" in failure
+                                    for failure in verify_materialized.check(root)))
+                subprocess.run(["git","rm","--cached","--",str(target.relative_to(root))],
+                               cwd=root,check=True,capture_output=True)
+                target.unlink()
+            self.assertEqual(verify_materialized.check(root),[])
+
     def directory_link(self, link, target):
         try:
             link.symlink_to(target,target_is_directory=True)
@@ -358,6 +376,12 @@ process.stdout.write(JSON.stringify(values.map(repository=>
                     self.assertEqual(not failures,allowed,failures)
                     if not allowed:
                         self.assertTrue(any("agent concurrency" in failure for failure in failures),failures)
+            for body,allowed in (("enabled = true\n",False),("enabled = false\n",True),
+                                 ('enabled = "true"\nmax_concurrent_threads_per_session = 2\n',False)):
+                with self.subTest(agents=body):
+                    config.write_text(baseline+"\n[agents]\n"+body,encoding="utf-8")
+                    failures=verify_materialized.check(root)
+                    self.assertEqual(not failures,allowed,failures)
             config.write_text(baseline,encoding="utf-8")
             self.assertEqual(verify_materialized.check(root),[])
 
