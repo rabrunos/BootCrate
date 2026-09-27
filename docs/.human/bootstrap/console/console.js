@@ -76,6 +76,11 @@
         if(closing&&closing[1][0]===fence.marker&&closing[1].length>=fence.length)fence=null;
         return "";
       }
+      const opening=!comment&&/^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if(opening&&(opening[1][0]==="~"||!opening[2].includes("`"))){
+        fence={marker:opening[1][0],length:opening[1].length};
+        return "";
+      }
       let commentLine=comment,position=0;
       while(position<line.length){
         if(comment){
@@ -89,11 +94,6 @@
         }
       }
       if(commentLine)return "";
-      const opening=/^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-      if(opening&&(opening[1][0]==="~"||!opening[2].includes("`"))){
-        fence={marker:opening[1][0],length:opening[1].length};
-        return "";
-      }
       return line;
     }).join("\n");
     const atx=[...visible.matchAll(/^ {0,3}##[ \t]+\[?v?([0-9A-Za-z][0-9A-Za-z._+-]{0,127})\]?(?:[ \t]|$|[\u2014:\u2013-])[^\r\n]*$/gm)]

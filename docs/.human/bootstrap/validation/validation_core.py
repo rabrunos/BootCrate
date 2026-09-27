@@ -8,6 +8,7 @@ import math
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import tomllib
 from typing import Any
@@ -296,19 +297,39 @@ def _value_at(value: Any, pointer: str, label: str) -> Any:
     return current
 
 
+def read_bounded_text(path: Path, limit: int, label: str) -> str:
+    """Read one regular leaf through a bounded handle after path validation."""
+    before = path.lstat()
+    reparse = (getattr(before, "st_file_attributes", 0) &
+               getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    require(stat.S_ISREG(before.st_mode) and not reparse,
+            f"{label} must be a regular, unlinked file")
+    require(before.st_size <= limit, f"{label} is too large")
+    flags = (os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) |
+             getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+    with os.fdopen(os.open(path, flags), "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        require(stat.S_ISREG(opened.st_mode) and opened.st_size <= limit and
+                (opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino),
+                f"{label} changed or is too large")
+        content = stream.read(limit + 1)
+    require(len(content) <= limit, f"{label} is too large")
+    return content.decode("utf-8")
+
+
 def version_value(root: Path, source: dict[str, Any], label: str = "canonical version") -> str:
     """Read a version declaratively; never execute a command from the profile."""
     path = version_source_file(root, source.get("path", ""), label)
     reader = source.get("reader")
     require(reader in {"plain", "json", "toml"}, f"Unsupported {label} reader")
-    require(path.stat().st_size <= 1024 * 1024, f"{label.capitalize()} source is too large")
+    content = read_bounded_text(path, 1024 * 1024, f"{label.capitalize()} source")
     if reader == "plain":
-        value: Any = path.read_text(encoding="utf-8").strip()
+        value: Any = content.strip()
     elif reader == "json":
-        value = _value_at(load_json(path), source.get("value_path", ""), label)
+        value = _value_at(json.loads(content, object_pairs_hook=unique_object),
+                          source.get("value_path", ""), label)
     else:
-        with path.open("rb") as stream:
-            value = _value_at(tomllib.load(stream), source.get("value_path", ""), label)
+        value = _value_at(tomllib.loads(content), source.get("value_path", ""), label)
     require(not isinstance(value, bool) and isinstance(value, (str, int, float)),
             f"{label.capitalize()} value must be scalar")
     require(not isinstance(value, float) or math.isfinite(value),
@@ -380,8 +401,8 @@ def validate_version_contract(profile: dict[str, Any], root: Path) -> str | None
                 "Canonical version and mirror diverge: " + mirror["path"])
     history = version_source_file(root, history_source, "canonical version history")
     require(history_format == "markdown-headings", "Unsupported canonical history reader")
-    require(history.stat().st_size <= 2 * 1024 * 1024, "Canonical version history is too large")
-    require(_history_has_heading(history.read_text(encoding="utf-8"), version),
+    history_text = read_bounded_text(history, 2 * 1024 * 1024, "Canonical version history")
+    require(_history_has_heading(history_text, version),
             "Canonical history has no entry for integrated version " + version)
     return version
 

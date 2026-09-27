@@ -3,8 +3,10 @@ from pathlib import Path
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import validate as v
+import validation_core as core
 from validation_core import validate_version_contract
 
 
@@ -80,6 +82,67 @@ class VersionCompatibilityTests(unittest.TestCase):
                     v.schema_check(v.profile_schema(v.ROOT / "docs/.ai/schemas", profile), profile)
                     with self.assertRaisesRegex(ValueError, message):
                         v.materialized_profile(profile, root)
+
+    def test_version_readers_reject_leaf_replaced_after_path_validation(self):
+        for name,reader,body,value_path in (
+            ("VERSION","plain","1.0\n",None),
+            ("package.json","json",'{"project":{"version":"1.0"}}',"/project/version"),
+            ("pyproject.toml","toml",'[project]\nversion = "1.0"\n',"/project/version"),
+        ):
+            with self.subTest(reader=reader), tempfile.TemporaryDirectory() as directory:
+                home=Path(directory);root=home/"project";root.mkdir()
+                self.write(root,name,body)
+                outside=home/"outside.txt";outside.write_text("outside remains intact\n",encoding="utf-8")
+                original=core.version_source_file
+                def swap_after_validation(root_arg,relative,label):
+                    path=original(root_arg,relative,label)
+                    path.unlink()
+                    try:
+                        path.symlink_to(outside)
+                    except OSError:
+                        self.skipTest("File symlink unavailable on this platform")
+                    return path
+                source={"path":name,"reader":reader}
+                if value_path is not None:source["value_path"]=value_path
+                with patch.object(core,"version_source_file",side_effect=swap_after_validation):
+                    with self.assertRaisesRegex(ValueError,"regular, unlinked file"):
+                        core.version_value(root,source)
+                self.assertEqual(outside.read_text(encoding="utf-8"),"outside remains intact\n")
+
+    def test_history_reader_rejects_leaf_replaced_after_path_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home=Path(directory);root=home/"project";root.mkdir()
+            self.write(root,"VERSION","1.0\n")
+            self.write(root,"HISTORY.md","# History\n\n## v1.0 — Release\n- Useful change\n")
+            outside=home/"outside.txt";outside.write_text("outside remains intact\n",encoding="utf-8")
+            profile=self.v3_profile("VERSION","plain","")
+            original=core.version_source_file
+            def swap_history(root_arg,relative,label):
+                path=original(root_arg,relative,label)
+                if label=="canonical version history":
+                    path.unlink()
+                    try:
+                        path.symlink_to(outside)
+                    except OSError:
+                        self.skipTest("File symlink unavailable on this platform")
+                return path
+            with patch.object(core,"version_source_file",side_effect=swap_history):
+                with self.assertRaisesRegex(ValueError,"Canonical version history must be a regular, unlinked file"):
+                    validate_version_contract(profile,root)
+            self.assertEqual(outside.read_text(encoding="utf-8"),"outside remains intact\n")
+
+    def test_version_reader_rechecks_the_open_handle_after_leaf_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/"VERSION";path.write_text("1.0\n",encoding="utf-8")
+            original_open=core.os.open
+            def replace_before_open(candidate,flags):
+                if Path(candidate)==path:
+                    path.unlink()
+                    path.write_bytes(b"x"*129)
+                return original_open(candidate,flags)
+            with patch.object(core.os,"open",side_effect=replace_before_open):
+                with self.assertRaisesRegex(ValueError,"changed or is too large"):
+                    core.read_bounded_text(path,128,"Canonical version source")
 
     def test_sensitive_version_metadata_names_are_rejected_in_v2_and_v3(self):
         with tempfile.TemporaryDirectory() as directory:
