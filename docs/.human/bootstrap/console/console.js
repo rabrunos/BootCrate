@@ -69,6 +69,8 @@
     return token;
   }
   function historyEntries(source) {
+    if (/<(?:\/?[A-Za-z][A-Za-z0-9-]*(?=[\s/>])|!--|!\[CDATA\[|![A-Za-z]|\?)/i.test(source))
+      throw new Error("Raw HTML is not supported in the history preview; use native validation");
     let fence=null,comment=false;
     const visible=source.split(/\r\n|\n|\r/).map(line=>{
       if(fence){

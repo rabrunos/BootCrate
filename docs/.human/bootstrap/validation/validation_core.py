@@ -367,6 +367,8 @@ def _history_has_heading(markdown: str, version: str) -> bool:
                                 re.escape(version) + r")(?=[ \t]|$)")
 
     def visible_text(token: Any) -> str:
+        if any(child.type == "html_inline" for child in (token.children or [])):
+            return ""
         return "".join(child.content for child in (token.children or [])
                        if child.type in {"text", "code_inline"})
 

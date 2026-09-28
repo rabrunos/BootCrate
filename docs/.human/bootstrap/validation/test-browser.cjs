@@ -196,22 +196,31 @@ test('file-mode optional Console imports a profile without claiming remote proof
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n    ## v1.2 — Code block\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
   assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
+  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('<script>\nv1.0 — Hidden\n---\n</script>\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Raw HTML is not supported'));
+  assert.match(await page.locator('#status').innerText(),/use native validation.*Previous state was preserved/);
+  assert.match(await page.locator('#historyNotes').innerText(),/No changelog imported/);
+  await page.locator('#validateLocal').click();
+  assert.match(await page.locator('#localCheck').innerText(),/CHANGELOG\.md version headings/);
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n  ## v1.2 — Search\n- Added search.\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
   assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 — Search/m);
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\nv1.2 Setext release\n---\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Version headings imported'));
   assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
+  await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('<script>\nv1.0 — Hidden\n---\n</script>\n')});
+  await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Raw HTML is not supported'));
+  assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
   for(const marker of ['```markdown','~~~markdown','``` <!-- -->']){
     const close=marker.slice(0,3);
     await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from(`# Changelog\n${marker}\nv1.2 Fenced example\n---\n${close}\n`)});
     await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
-    assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
+    assert.match(await page.locator('#status').innerText(),marker.includes('<!--')?/Raw HTML is not supported/:/No unique version headings found/);
     assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
   }
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n<!--\nv1.2 Commented example\n---\n-->\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));
-  assert.match(await page.locator('#status').innerText(),/No unique version headings found/);
+  assert.match(await page.locator('#status').innerText(),/Raw HTML is not supported/);
   assert.match(await page.locator('#historyNotes').innerText(),/^v1.2 Setext release/m);
   await page.locator('#history').setInputFiles({name:'CHANGELOG.md',mimeType:'text/markdown',buffer:Buffer.from('# Changelog\n## v1.2 ATX release\nv1.2 Setext release\n---\n')});
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('History import failed'));

@@ -36,7 +36,7 @@ CONSOLE_ASSETS = {
     "styles.css": "5a68eafb183298afb563bf2a80e037b78cf9fea92ff334bdd0239607255dbb8f",
     "preset.js": "1d518102c7238d85a0f3e478844f893695a52d62b114bf01d3091f5103f41487",
     "execution-profile.js": "f803f1a9357404cea1dbdd19e01a8aca7460efb81b2db6066333e0c272bc8198",
-    "console.js": "c7d30ee2152420b0956767235f730cab26e10f96c29569b866c89e9e6e3853da",
+    "console.js": "83016c604cc6fe7b9e8f5fac08856d7a2466ec15d97c49c04ca7304bbefea048",
 }
 CSS_URL = re.compile(r"url\s*\(\s*(?P<quote>['\"]?)(?P<reference>.*?)(?P=quote)\s*\)", re.I | re.S)
 CSS_IMPORT = re.compile(r"@import\b", re.I)

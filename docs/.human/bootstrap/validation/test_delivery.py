@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -53,6 +54,80 @@ def receipt(version,order,changes,id='github',status='confirmed',attempt=None,ob
 
 class DeliveryTests(unittest.TestCase):
     def setUp(self):self.entries=d.changelog(SOURCE)
+
+    def test_cli_reads_four_regular_inputs_and_blocks_large_or_invalid_utf8(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            values={'candidate.json':json.dumps(candidate()),'receipts.json':'[]',
+                    'target.json':json.dumps(target()),'CHANGELOG.md':SOURCE}
+            paths={name:root/name for name in values}
+            def run():
+                return subprocess.run([sys.executable,str(Path(d.__file__)),
+                                       '--candidate',str(paths['candidate.json']),
+                                       '--receipts',str(paths['receipts.json']),
+                                       '--target',str(paths['target.json']),
+                                       '--changelog',str(paths['CHANGELOG.md'])],
+                                      capture_output=True,text=True,timeout=5)
+            for name,value in values.items():
+                paths[name].write_text(value,encoding='utf-8')
+            result=run()
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(json.loads(result.stdout)['status'],'READY')
+            for name,value in values.items():
+                with self.subTest(input=name,case='large'):
+                    paths[name].write_bytes(b'x'*(1024*1024+1))
+                    blocked=run()
+                    self.assertEqual(blocked.returncode,2)
+                    self.assertIn('BLOCKED: Input exceeds 1 MiB',blocked.stderr)
+                    paths[name].write_text(value,encoding='utf-8')
+                with self.subTest(input=name,case='utf8'):
+                    paths[name].write_bytes(b'\xff')
+                    blocked=run()
+                    self.assertEqual(blocked.returncode,2)
+                    self.assertIn('BLOCKED:',blocked.stderr)
+                    self.assertNotIn('Traceback',blocked.stderr)
+                    paths[name].write_text(value,encoding='utf-8')
+
+    def test_cli_blocks_symlink_input(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+            root=Path(directory)
+            values={'candidate.json':json.dumps(candidate()),'receipts.json':'[]',
+                    'target.json':json.dumps(target()),'CHANGELOG.md':SOURCE}
+            for name,value in values.items():
+                (root/name).write_text(value,encoding='utf-8')
+            external=Path(outside)/'input.txt'
+            external.write_text(json.dumps(candidate()),encoding='utf-8')
+            leaf=root/'candidate.json'
+            leaf.unlink()
+            try:
+                leaf.symlink_to(external)
+            except (OSError,NotImplementedError):
+                self.skipTest('File symlink creation is unavailable')
+            result=subprocess.run([sys.executable,str(Path(d.__file__)),
+                                   '--candidate',str(leaf),
+                                   '--receipts',str(root/'receipts.json'),
+                                   '--target',str(root/'target.json'),
+                                   '--changelog',str(root/'CHANGELOG.md')],
+                                  capture_output=True,text=True,timeout=5)
+            self.assertEqual(result.returncode,2)
+            self.assertIn('BLOCKED: Input must be a regular, unlinked file',result.stderr)
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX FIFO is required')
+    def test_cli_blocks_fifo_without_waiting_for_a_writer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            os.mkfifo(root/'candidate.json')
+            (root/'receipts.json').write_text('[]',encoding='utf-8')
+            (root/'target.json').write_text(json.dumps(target()),encoding='utf-8')
+            (root/'CHANGELOG.md').write_text(SOURCE,encoding='utf-8')
+            result=subprocess.run([sys.executable,str(Path(d.__file__)),
+                                   '--candidate',str(root/'candidate.json'),
+                                   '--receipts',str(root/'receipts.json'),
+                                   '--target',str(root/'target.json'),
+                                   '--changelog',str(root/'CHANGELOG.md')],
+                                  capture_output=True,text=True,timeout=3)
+            self.assertEqual(result.returncode,2)
+            self.assertIn('BLOCKED: Input must be a regular, unlinked file',result.stderr)
 
     def test_bootcrate_itself_keeps_integrated_version_history(self):
         source=Path(__file__).resolve().parents[4]/'CHANGELOG.md'

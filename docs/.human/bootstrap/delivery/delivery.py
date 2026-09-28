@@ -8,8 +8,10 @@ import argparse
 from datetime import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import stat
 import sys
 from typing import Any
 
@@ -296,6 +298,28 @@ def plan(candidate: dict, receipts: list[dict], target: dict, entries: list[dict
             "warning":"Preview only; verify provider state and authorize the exact operation separately"}
 
 
+def read_input(path: Path, limit: int = 1024 * 1024) -> str:
+    """Read only a bounded regular file, without following a leaf symlink."""
+    before = path.lstat()
+    reparse = (getattr(before, "st_file_attributes", 0) &
+               getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    if not stat.S_ISREG(before.st_mode) or reparse:
+        raise ValueError("Input must be a regular, unlinked file")
+    if before.st_size > limit:
+        raise ValueError("Input exceeds 1 MiB")
+    flags = (os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) |
+             getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+    with os.fdopen(os.open(path, flags), "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(opened.st_mode) or opened.st_size > limit or
+                (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)):
+            raise ValueError("Input changed or exceeds 1 MiB")
+        content = stream.read(limit + 1)
+    if len(content) > limit:
+        raise ValueError("Input exceeds 1 MiB")
+    return content.decode("utf-8")
+
+
 def main() -> int:
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--candidate",required=True,type=Path)
@@ -304,10 +328,8 @@ def main() -> int:
     p.add_argument("--changelog",required=True,type=Path)
     a=p.parse_args()
     try:
-        for path in [a.candidate,a.receipts,a.target,a.changelog]:
-            if path.stat().st_size > 1024*1024: raise ValueError("Input exceeds 1 MiB")
-        result=plan(json.loads(a.candidate.read_text()),json.loads(a.receipts.read_text()),
-                    json.loads(a.target.read_text()),changelog(a.changelog.read_text()))
+        result=plan(json.loads(read_input(a.candidate)),json.loads(read_input(a.receipts)),
+                    json.loads(read_input(a.target)),changelog(read_input(a.changelog)))
         print(json.dumps(result,ensure_ascii=False,indent=2));return 0 if result["status"] in {"READY","SKIP"} else 2
     except (OSError,ValueError,TypeError,KeyError) as error:
         print("BLOCKED: " + str(error),file=sys.stderr);return 2

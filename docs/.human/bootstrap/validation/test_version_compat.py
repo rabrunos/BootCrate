@@ -342,6 +342,8 @@ class VersionCompatibilityTests(unittest.TestCase):
             profile["versioning"].pop("value_path")
             for history in ("## v1.0\n", "## [v1.0]\n",
                             "## v1.0 -\n", "## v1.0 <!-- hidden -->\n",
+                            "## v1.0 <span hidden>Effect</span>\n",
+                            "## v1.0\n- <span hidden>Effect</span>\n",
                             "## v1.0\n## v1.1 - Other\n- Added other work\n"):
                 with self.subTest(history=history):
                     self.write(root, "HISTORY.md", "# History\n\n" + history)
@@ -349,7 +351,9 @@ class VersionCompatibilityTests(unittest.TestCase):
                         self.schema_and_finalization(root, profile)
             for history in ("## v1.0 - Release\n",
                             "## v1.0\n- Added a useful change\n",
-                            "## [v1.0]\n\nNotes for this version.\n"):
+                            "## [v1.0]\n\nNotes for this version.\n",
+                            "## v1.0 — [Search](https://example.invalid) *improved*\n",
+                            "## v1.0\n- Added `search` support.\n"):
                 with self.subTest(useful=history):
                     self.write(root, "HISTORY.md", "# History\n\n" + history)
                     self.schema_and_finalization(root, profile)
