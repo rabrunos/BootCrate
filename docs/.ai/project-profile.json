@@ -16,7 +16,8 @@
   "constraints": [],
   "architecture_invariants": [],
   "validation": {
-    "canonical_capabilities": []
+    "canonical_capabilities": [],
+    "required_files": []
   },
   "workflow": {
     "tracking": "github_issues",
@@ -32,10 +33,17 @@
     "consumption_preset": "standard",
     "collaboration": "single"
   },
+  "execution_permissions": {
+    "safe_default": "protected_manual"
+  },
   "versioning": {
     "required": true,
     "canonical_source": "<materialize>",
+    "reader": "plain",
     "format": "<materialize>",
+    "history_source": "<materialize>",
+    "history_format": "markdown-headings",
+    "mirrors": [],
     "target_version_in_prompt_h1": true,
     "target_version_in_commit": true,
     "target_version_in_report_h1": true,

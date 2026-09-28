@@ -10,6 +10,15 @@
 - A preparação de entrega agora distingue candidato, notas e confirmação de cada destino, bloqueando duplicatas divergentes e resultados desconhecidos.
 - A atualização de arquivos gerenciados antes da materialização agora preserva customizações e interrompe conflitos.
 - Ampliados os cenários de regressão e os contratos de avaliação para registrar evidência efetivamente observada.
+- Corrigidos os achados A01–A09 da auditoria em atualização gerenciada, validação/materialização, guidance, entrega, adoção e Console, com regressões nos módulos atuais.
+- O Intake agora preserva uma identidade canônica de repositório e a origem versionada do BootCrate no handoff.
+- Adicionados três perfis independentes de permissões de execução, com default protegido/manual, opt-in de risco para Acesso Total e adaptadores Codex/Claude que distinguem solicitado de efetivo.
+- Reforçado o opt-in de Acesso Total no contrato do Intake, a comprovação de permissões e sandbox no adapter Claude e a leitura declarativa de versão e histórico no Console.
+- A finalização exige o conjunto exato de skills selecionadas em cada executor, e overrides locais rastreados pelo Git deixam de ser aceitos; a fronteira de isolamento da atualização gerenciada foi explicitada.
+- O Setup agora restaura rascunhos locais ainda sem repositório ou confirmação de Acesso Total, mantendo a confirmação obrigatória para exportação e execução solicitada.
+- A finalização limita a concorrência dos agentes Codex ao intervalo aprovado, e a entrega rejeita ordens de integração booleanas em candidatos e recibos.
+- Os patches protegidos do Codex agora incluem isolamento de rede e ambiente; o verificador exige limite de concorrência com agentes habilitados, rejeita overrides rastreados com variação de maiúsculas e o Console tolera perfis parciais na prévia local.
+- O Console agora encaminha valores de versão JSON numéricos à validação nativa para preservar a representação exata.
 
 ## v0.8 — Setup guiado
 

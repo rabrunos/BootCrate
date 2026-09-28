@@ -13,6 +13,7 @@
     "repository_state": "none",
     "distribution_mode": "none",
     "consumption_preset": "standard",
+    "execution_profile": "protected_manual",
     "project_console": "no"
   }
 }

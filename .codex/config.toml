@@ -2,6 +2,7 @@
 # Project settings are defaults, not an immutable boundary against a writable workspace.
 model_reasoning_effort = "high"
 approval_policy = "on-request"
+approvals_reviewer = "user"
 sandbox_mode = "workspace-write"
 
 [agents]

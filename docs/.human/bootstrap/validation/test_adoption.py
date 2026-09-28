@@ -1,6 +1,7 @@
 """Disposable Git repositories only; never touch the owner's actual project."""
 from __future__ import annotations
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,6 +17,13 @@ def command(root,*args):
 
 
 class AdoptionTests(unittest.TestCase):
+    def directory_link(self, link, target):
+        try:
+            link.symlink_to(target,target_is_directory=True)
+        except OSError:
+            if os.name!='nt': raise
+            subprocess.run(['cmd.exe','/d','/c','mklink','/J',str(link),str(target)],check=True,capture_output=True)
+
     def fixture(self, home):
         original=home/"original";original.mkdir();command(original,"init","-q")
         command(original,"config","user.name","Fixture")
@@ -70,15 +78,49 @@ class AdoptionTests(unittest.TestCase):
     def test_symlinked_destination_and_committed_symlink_are_blocked(self):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory);original=self.fixture(home);sandbox=home/'sandbox'
-            (home/'points_to_original').symlink_to(original,target_is_directory=True)
+            self.directory_link(home/'points_to_original',original)
             with self.assertRaisesRegex(ValueError,'not be nested'):
                 adoption.prepare(original,home/'points_to_original'/'sandbox')
             adoption.prepare(original,sandbox)
-            (sandbox/'linked').symlink_to('/tmp/outside')
+            outside=home/'outside';outside.mkdir();(outside/'escape.txt').write_text('outside\n')
+            self.directory_link(sandbox/'linked',outside)
             command(sandbox,'add','linked')
             command(sandbox,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','symlink')
             with self.assertRaisesRegex(ValueError,'Unsafe symlink'):
                 adoption.inspect(sandbox)
+
+    def test_complete_adoption_preserves_three_existing_product_shapes(self):
+        for kind in ("static", "native_cli", "game_mod"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                home=Path(directory);original=self.fixture(home);sandbox=home/"sandbox"
+                (original/"AGENTS.md").write_text("# Old method\nDo not use Issues.\n",encoding="utf-8")
+                (original/"KNOWLEDGE.md").write_text("Useful product behavior.\n",encoding="utf-8")
+                (original/"project.json").write_text('{"kind":"'+kind+'","optional_resource":"missing.asset"}\n',encoding="utf-8")
+                (original/".gitignore").write_text(".local/\n",encoding="utf-8")
+                if kind == "native_cli":
+                    (original/"tool.py").write_text("print('native check passed')\n",encoding="utf-8")
+                if kind == "game_mod":
+                    (original/"loader-script.txt").write_text("useful synthetic loader instructions\n",encoding="utf-8")
+                local=original/".local/config.json";local.parent.mkdir(parents=True);local.write_text('{"machine":"synthetic"}\n',encoding="utf-8")
+                command(original,"add",".");command(original,"commit","-qm","existing product knowledge and tools")
+                baseline=adoption.sha(original)
+                adoption.prepare(original,sandbox)
+                (sandbox/"AGENTS.md").write_text("# Current method\nGitHub Issues own active work.\n",encoding="utf-8")
+                command(sandbox,"add","AGENTS.md")
+                command(sandbox,"-c","user.name=Fixture","-c","user.email=fixture@example.invalid","commit","-qm","adopt current method")
+                report=adoption.inspect(sandbox)
+                self.assertEqual(report["changed"],[("M","AGENTS.md")])
+                adoption.apply(sandbox,report["approved_head_candidate"])
+                self.assertEqual(adoption.sha(original),baseline)
+                self.assertIn("Issues own active work",(original/"AGENTS.md").read_text(encoding="utf-8"))
+                self.assertEqual((original/"KNOWLEDGE.md").read_text(encoding="utf-8"),"Useful product behavior.\n")
+                self.assertFalse((original/"missing.asset").exists())
+                self.assertEqual(local.read_text(encoding="utf-8"),'{"machine":"synthetic"}\n')
+                if kind == "native_cli":
+                    result=subprocess.run(["python",str(original/"tool.py")],check=True,capture_output=True,text=True)
+                    self.assertEqual(result.stdout.strip(),"native check passed")
+                if kind == "game_mod":
+                    self.assertEqual((original/"loader-script.txt").read_text(encoding="utf-8"),"useful synthetic loader instructions\n")
 
 
 if __name__=="__main__":unittest.main()

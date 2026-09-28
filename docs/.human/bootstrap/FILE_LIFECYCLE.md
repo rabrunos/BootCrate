@@ -21,7 +21,7 @@ Every integrated version receives a concise canonical changelog entry. Only a se
 
 ## Local only
 
-Ignored `.local/` may contain machine resource values, bounded research/indexes, diagnostics, caches and artifacts. Credentials need an appropriate protected secret mechanism, not plain local path configuration. Do not store real evaluation outputs, live findings or task state in the reusable template.
+Ignored `.local/` may contain machine resource values, bounded research/indexes, diagnostics, caches, artifacts and the optional `config/execution-profile.json` request. Clearing that execution override restores the protected/manual default without changing the shared project version. Credentials need an appropriate protected secret mechanism, not plain local path configuration. Do not store real evaluation outputs, live findings or task state in the reusable template.
 
 ## Permanent stable versus mutable
 

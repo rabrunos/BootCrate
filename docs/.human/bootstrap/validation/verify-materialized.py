@@ -5,15 +5,140 @@ Run from a retained copy of the bootstrap tools. Product behavior is a separate 
 from __future__ import annotations
 
 import argparse
+import hashlib
+from html.parser import HTMLParser
 import json
+import os
 from pathlib import Path
+import re
+import stat
 import sys
+import tomllib
+from urllib.parse import unquote, urlsplit
 
-from validation_core import (inventory, load_json, materialized_profile, profile_schema,
-                             schema_check, secret_findings, sensitive_name)
+from validation_core import (inventory, load_json, materialized_profile,
+                             profile_schema, schema_check, secret_findings,
+                             sensitive_name, unique_object, valid_claude_credential_denials,
+                             reject_unselected_codex_config,
+                             reject_unselected_claude_config,
+                             validate_codex_agent_configs, validate_claude_agent_configs,
+                             valid_codex_agent_concurrency)
 
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".yml", ".yaml", ".txt", ".py", ".js", ".cjs", ".html", ".css"}
 SCHEMAS = Path(__file__).resolve().parents[4] / "docs/.ai/schemas"
+MAX_TEXT_BYTES = 2 * 1024 * 1024
+MAX_INVENTORY_FILES = 10_000
+MAX_INVENTORY_BYTES = 512 * 1024 * 1024
+# Approved static Console assets. Hash normalized UTF-8 text so Windows and POSIX
+# checkouts agree; the retained verifier does not need a second template copy.
+CONSOLE_ASSETS = {
+    "index.html": "0ef86967a5b7b5dc34ffb618292fb673f38f2942d49ca68a3095947c72f8196f",
+    "styles.css": "5a68eafb183298afb563bf2a80e037b78cf9fea92ff334bdd0239607255dbb8f",
+    "preset.js": "1d518102c7238d85a0f3e478844f893695a52d62b114bf01d3091f5103f41487",
+    "execution-profile.js": "f803f1a9357404cea1dbdd19e01a8aca7460efb81b2db6066333e0c272bc8198",
+    "console.js": "83016c604cc6fe7b9e8f5fac08856d7a2466ec15d97c49c04ca7304bbefea048",
+}
+CSS_URL = re.compile(r"url\s*\(\s*(?P<quote>['\"]?)(?P<reference>.*?)(?P=quote)\s*\)", re.I | re.S)
+CSS_IMPORT = re.compile(r"@import\b", re.I)
+CSS_QUOTED = re.compile(r"(?P<quote>['\"])(?P<reference>.*?)(?P=quote)", re.S)
+
+
+class BlockedCheck(RuntimeError):
+    pass
+
+
+class LocalReferences(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.resources = []
+        self.inline_styles = []
+        self.in_style = False
+        self.has_base = False
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if tag == "base":
+            self.has_base = True
+        if tag == "script" and "src" in values:
+            self.resources.append((values["src"], False))
+        if tag == "link" and "href" in values:
+            stylesheet = "stylesheet" in (values.get("rel") or "").lower().split()
+            self.resources.append((values["href"], stylesheet))
+        if tag == "style":
+            self.in_style = True
+        if "style" in values:
+            self.inline_styles.append(values["style"] or "")
+
+    def handle_endtag(self, tag):
+        if tag == "style":
+            self.in_style = False
+
+    def handle_data(self, data):
+        if self.in_style:
+            self.inline_styles.append(data)
+
+
+def local_console_resource(reference: str, base: Path, console: Path) -> Path:
+    """Resolve only relative files within the selected local Console."""
+    if (not isinstance(reference, str) or not reference or reference != reference.strip()
+            or "\\" in reference or any(ord(char) < 32 or ord(char) == 127 for char in reference)):
+        raise ValueError("selected Project Console invalid local reference: " + str(reference))
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc:
+        raise ValueError("selected Project Console non-local reference: " + reference)
+    path = unquote(parsed.path)
+    if not path or path.startswith("/") or Path(path).is_absolute():
+        raise ValueError("selected Project Console reference must be relative: " + reference)
+    target = (base / path).resolve()
+    if not target.is_relative_to(console.resolve()):
+        raise ValueError("selected Project Console reference escapes project-console: " + reference)
+    if not target.is_file():
+        raise ValueError("selected Project Console reference missing: " + reference)
+    return target
+
+
+def css_references(content: str) -> list[str]:
+    """Extract simple CSS imports and URLs; reject syntax this offline check cannot prove local."""
+    content = re.sub(r"/\*.*?\*/", "", content, flags=re.S)
+    if "\\" in content:
+        raise ValueError("selected Project Console CSS escapes are unsupported in the local resource check")
+    references = [match.group("reference") for match in CSS_URL.finditer(content)]
+    for match in CSS_IMPORT.finditer(content):
+        remainder = content[match.end():].lstrip()
+        quoted = CSS_QUOTED.match(remainder)
+        if quoted:
+            references.append(quoted.group("reference"))
+        elif not CSS_URL.match(remainder):
+            raise ValueError("selected Project Console CSS import cannot be verified as local")
+    return references
+
+
+def console_asset_matches(path: Path, expected: str) -> bool:
+    normalized = read_native_config(path, "Project Console asset").replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+    return hashlib.sha256(normalized).hexdigest() == expected
+
+
+def read_native_config(path: Path, executor: str) -> str:
+    """Reject links and special leaves, then read at most the configured limit."""
+    before = path.lstat()
+    reparse = (getattr(before, "st_file_attributes", 0) &
+               getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    require_regular = stat.S_ISREG(before.st_mode) and not reparse
+    if not require_regular:
+        raise ValueError(f"Enabled {executor} configuration must be a regular, unlinked file")
+    if before.st_size > MAX_TEXT_BYTES:
+        raise ValueError(f"Enabled {executor} configuration is too large")
+    flags = (os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) |
+             getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+    with os.fdopen(os.open(path, flags), "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(opened.st_mode) or opened.st_size > MAX_TEXT_BYTES or
+                (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)):
+            raise ValueError(f"Enabled {executor} configuration changed or is too large")
+        content = stream.read(MAX_TEXT_BYTES + 1)
+    if len(content) > MAX_TEXT_BYTES:
+        raise ValueError(f"Enabled {executor} configuration is too large")
+    return content.decode("utf-8")
 
 
 def inspect(root: Path) -> list[dict]:
@@ -22,9 +147,11 @@ def inspect(root: Path) -> list[dict]:
 
     def check(check_id: str, action, evidence: str) -> None:
         try:
-            action()
-            status, summary = "pass", "Verified in the requested checkout"
-        except (ValueError, OSError, KeyError, TypeError, RuntimeError) as error:
+            detail = action()
+            status, summary = "pass", detail or "Verified in the requested checkout"
+        except BlockedCheck as error:
+            status, summary = "blocked", str(error)
+        except (ValueError, OSError, KeyError, TypeError, RuntimeError, UnicodeError) as error:
             status, summary = "fail", str(error)
         results.append({"check_id": check_id, "scope": "structure", "required": True,
                         "status": status, "evidence_ref": evidence, "summary": summary})
@@ -39,8 +166,88 @@ def inspect(root: Path) -> list[dict]:
         data = load_json(path)
         schema_check(profile_schema(SCHEMAS, data), data)
         materialized_profile(data, root)
+        if data["schema"] == "project-profile/v3":
+            # v3 declares a protected manual default. Check the selected native files,
+            # because their existence alone does not prove that default is in force.
+            for harness in data["workflow"]["implementation_harnesses"]:
+                if harness == "codex":
+                    native = root / ".codex/config.toml"
+                    settings = tomllib.loads(read_native_config(native, "Codex"))
+                    reject_unselected_codex_config(settings)
+                    require(settings.get("model_reasoning_effort") == "high",
+                            "Enabled Codex Main default must remain High")
+                    require(settings.get("sandbox_mode") == "workspace-write" and
+                            settings.get("approval_policy") == "on-request" and
+                            settings.get("approvals_reviewer") == "user",
+                            "Enabled Codex protected manual defaults are not configured")
+                    workspace = settings.get("sandbox_workspace_write")
+                    require(isinstance(workspace, dict) and workspace.get("network_access") is False,
+                            "Enabled Codex protected manual sandbox network must be disabled")
+                    require(workspace.get("writable_roots", []) == [],
+                            "Enabled Codex protected manual sandbox writable roots must not be widened")
+                    agents = settings.get("agents", {})
+                    if "enabled" in agents:
+                        require(type(agents["enabled"]) is bool,
+                                "Enabled Codex agents flag must be boolean")
+                    if agents.get("enabled") is True or "max_concurrent_threads_per_session" in agents:
+                        require(valid_codex_agent_concurrency(agents.get("max_concurrent_threads_per_session")),
+                                "Enabled Codex agent concurrency is invalid or widened")
+                    environment = settings.get("shell_environment_policy")
+                    require(isinstance(environment, dict) and environment.get("inherit") == "core" and
+                            environment.get("ignore_default_excludes") is False,
+                            "Enabled Codex protected manual environment inheritance is too broad")
+                    validate_codex_agent_configs(root)
+                elif harness == "claude_code":
+                    native = root / ".claude/settings.json"
+                    settings = json.loads(read_native_config(native, "Claude"),
+                                          object_pairs_hook=unique_object)
+                    reject_unselected_claude_config(settings)
+                    permissions = settings.get("permissions") if isinstance(settings, dict) else None
+                    sandbox = settings.get("sandbox") if isinstance(settings, dict) else None
+                    require(isinstance(settings, dict) and settings.get("effortLevel") == "high",
+                            "Enabled Claude Main default must remain High")
+                    require(isinstance(permissions, dict) and permissions.get("defaultMode") == "default" and
+                            isinstance(sandbox, dict) and sandbox.get("enabled") is True,
+                            "Enabled Claude protected manual defaults are not configured")
+                    deny = permissions.get("deny")
+                    require(valid_claude_credential_denials(deny),
+                            "Enabled Claude credential-deny rules are missing")
+                    validate_claude_agent_configs(root)
         if data["schema"] == "project-profile/v3" and data["console"]["enabled"]:
-            require((root / "project-console/index.html").is_file(), "selected Project Console missing")
+            console = root / "project-console"
+            require(console.is_dir() and not console.is_symlink(), "selected Project Console directory missing or linked")
+            for name in CONSOLE_ASSETS:
+                require((console / name).is_file() and not (console / name).is_symlink(),
+                        "selected Project Console dependency missing: " + name)
+            parser = LocalReferences()
+            parser.feed(read_native_config(console / "index.html", "Project Console HTML"))
+            require(not parser.has_base, "selected Project Console base URL is unsupported")
+            stylesheets = [console / "styles.css"]
+            for reference, stylesheet in parser.resources:
+                target = local_console_resource(reference, console, console)
+                if stylesheet or target.suffix.lower() == ".css":
+                    stylesheets.append(target)
+            for content in parser.inline_styles:
+                for reference in css_references(content):
+                    target = local_console_resource(reference, console, console)
+                    if target.suffix.lower() == ".css":
+                        stylesheets.append(target)
+            seen = set()
+            while stylesheets:
+                stylesheet = stylesheets.pop()
+                if stylesheet in seen:
+                    continue
+                seen.add(stylesheet)
+                for reference in css_references(read_native_config(stylesheet, "Project Console CSS")):
+                    target = local_console_resource(reference, stylesheet.parent, console)
+                    if target.suffix.lower() == ".css":
+                        stylesheets.append(target)
+            # A relative resource can still execute attacker-controlled code.
+            # Finalization approves only the reviewed Console bytes, including
+            # its HTML (which could otherwise add inline scripts/event handlers).
+            for name, digest in CONSOLE_ASSETS.items():
+                require(console_asset_matches(console / name, digest),
+                        "selected Project Console asset differs from approved template: " + name)
 
     def pruning() -> None:
         require(not (root / "docs/.human/bootstrap").exists(), "bootstrap directory remains")
@@ -50,26 +257,63 @@ def inspect(root: Path) -> list[dict]:
             require("This package is **BootCrate v" not in readme.read_text(encoding="utf-8"),
                     "README still carries BootCrate package identity")
 
-    def files() -> None:
+    cached = None
+
+    def candidates():
+        nonlocal cached
+        if cached is not None:
+            return cached
         tracked, untracked = inventory(root)
-        for path in sorted(set(tracked + untracked)):
+        paths = sorted(set(tracked + untracked))
+        require(len(paths) <= MAX_INVENTORY_FILES,
+                f"inventory exceeds {MAX_INVENTORY_FILES} files")
+        total = 0
+        tracked_set = set(tracked)
+        for path in paths:
             rel = path.relative_to(root)
             require(not path.is_symlink() and path.resolve().is_relative_to(root),
                     "symlink/external path: " + str(rel))
-            require(path not in tracked or not sensitive_name(path), "secret-bearing filename tracked: " + str(rel))
-            require(path.stat().st_size <= 2 * 1024 * 1024, "oversized candidate file: " + str(rel))
+            if path.is_dir():
+                raise BlockedCheck("submodule/directory inventory requires a selected verifier: " + str(rel))
+            require(path.is_file(), "inventory path is not a regular file: " + str(rel))
+            require(path not in tracked_set or not sensitive_name(path),
+                    "secret-bearing filename tracked: " + str(rel))
+            total += path.stat().st_size
+            require(total <= MAX_INVENTORY_BYTES,
+                    f"inventory exceeds {MAX_INVENTORY_BYTES} bytes")
+        cached = tracked_set, paths, total
+        return cached
+
+    def files() -> str:
+        _, paths, total = candidates()
+        return f"Inventoried {len(paths)} files / {total} bytes without following links"
+
+    def text_scan() -> str:
+        _, paths, _ = candidates()
+        scanned = 0
+        oversized = []
+        for path in paths:
+            rel = path.relative_to(root)
             if path.suffix.lower() not in TEXT_SUFFIXES:
                 continue
-            try:
-                content = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
+            if path.lstat().st_size > MAX_TEXT_BYTES:
+                oversized.append(str(rel))
                 continue
+            try:
+                content = read_native_config(path, "project text candidate")
+            except UnicodeDecodeError as error:
+                raise BlockedCheck("text candidate is not UTF-8 and was not scanned: " + str(rel)) from error
+            scanned += 1
             require("docs/.human/bootstrap/" not in content, "dangling bootstrap reference: " + str(rel))
             require(not secret_findings(content), "secret-pattern smoke check failed: " + str(rel))
+        if oversized:
+            raise BlockedCheck("text scan limit exceeded: " + ", ".join(oversized[:5]))
+        return f"Scanned {scanned} bounded UTF-8 text candidates; binary assets were metadata-only"
 
     check("profile.finalized", profile, "docs/.ai/project-profile.json")
     check("bootstrap.pruned", pruning, "PROJECT_GUIDE.md + bootstrap absence")
     check("source.inventory", files, "git ls-files or bounded project inventory")
+    check("security.text_scan", text_scan, "bounded UTF-8 candidates from source inventory")
     results.append({"check_id": "behavior.native", "scope": "behavior", "required": False,
                     "status": "not_run", "evidence_ref": "native project checks",
                     "summary": "Run applicable build/test/smoke/security checks separately; structure cannot prove behavior"})
@@ -78,7 +322,8 @@ def inspect(root: Path) -> list[dict]:
 
 def check(root: Path) -> list[str]:
     """Backward-compatible list of failures for callers expecting the earlier smoke API."""
-    return [entry["summary"] for entry in inspect(root) if entry["status"] == "fail"]
+    return [entry["summary"] for entry in inspect(root)
+            if entry["required"] and entry["status"] != "pass"]
 
 
 def main() -> int:

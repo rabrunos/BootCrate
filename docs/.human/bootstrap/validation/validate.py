@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 from pathlib import Path
 import re
@@ -12,9 +11,13 @@ import sys
 import tomllib
 from typing import Any
 
-from validation_core import (require, unique_object, load_json, inventory as project_inventory,
-                             sensitive_name, secret_findings, local_refs_only, schema_check,
-                             materialized_profile, profile_schema)
+from validation_core import (CLAUDE_CREDENTIAL_DENY_RULES, require, unique_object, load_json,
+                             inventory as project_inventory, sensitive_name,
+                             secret_findings, local_refs_only, schema_check,
+                             reject_unselected_codex_config, reject_unselected_claude_config,
+                             validate_codex_agent_configs, validate_claude_agent_configs, load_yaml,
+                             materialized_profile, profile_schema,
+                             valid_claude_credential_denials, valid_codex_agent_concurrency)
 
 try:
     import yaml
@@ -29,36 +32,16 @@ SKIP = {".git", ".local", ".venv", "__pycache__", "node_modules", ".temp"}
 EXAMPLES = {".env.example", ".env.sample", ".env.template"}
 
 
-class UniqueLoader(yaml.SafeLoader):
-    """Safe YAML with duplicate rejection and YAML-1.2-style boolean spellings."""
-
-
-UniqueLoader.yaml_implicit_resolvers = copy.deepcopy(yaml.SafeLoader.yaml_implicit_resolvers)
-for key, entries in UniqueLoader.yaml_implicit_resolvers.items():
-    UniqueLoader.yaml_implicit_resolvers[key] = [e for e in entries if e[0] != "tag:yaml.org,2002:bool"]
-UniqueLoader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true|false|True|False|TRUE|FALSE)$"), list("tTfF"))
-
-
-def unique_mapping(loader: UniqueLoader, node: Any, deep: bool = False) -> dict[str, Any]:
-    loader.flatten_mapping(node)
-    result: dict[str, Any] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=deep)
-        require(key not in result, f"Duplicate YAML key: {key}")
-        result[key] = loader.construct_object(value_node, deep=deep)
-    return result
-
-
-UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
-
-
-def load_yaml(text: str) -> Any:
-    return yaml.load(text, Loader=UniqueLoader)
-
-
 def run(command: list[str], cwd: Path = ROOT) -> str:
     result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=90)
-    require(result.returncode == 0, f"Command failed: {' '.join(command)}\n{result.stderr[:2000]}")
+    if result.returncode:
+        def tail(value: str, limit: int, stream: str) -> str:
+            if len(value) > limit:
+                return f"[{len(value) - limit} earlier {stream} characters omitted]\n" + value[-limit:]
+            return value
+        raise ValueError(f"Command failed (exit {result.returncode}): {' '.join(command)}\n"
+                         f"stderr:\n{tail(result.stderr, 8000, 'stderr')}\n"
+                         f"stdout:\n{tail(result.stdout, 2000, 'stdout')}")
     return result.stdout + result.stderr
 
 
@@ -117,6 +100,9 @@ def check_documents(files: list[Path]) -> None:
     version = (ROOT / "VERSION").read_text().strip()
     require(re.fullmatch(r"\d+\.\d+(?:\.\d+)?", version) is not None, "Invalid VERSION")
     require(f"BootCrate v{version}" in (ROOT / "README.md").read_text(encoding="utf-8"), "README/version mismatch")
+    handoff = (BOOT / "app/setup-handoff.js").read_text(encoding="utf-8")
+    require(f'version: "{version}"' in handoff and 'repository: "https://github.com/rabrunos/BootCrate"' in handoff,
+            "Setup bootstrap identity/version drift")
     guide = (ROOT / "PROJECT_GUIDE.md").read_text(encoding="utf-8")
     require("stable entry point" in guide and "active work state" in guide, "PROJECT_GUIDE lost stable routing/authority")
     project_instructions = (BOOT / "templates/chatgpt-project-instructions.md").read_text(encoding="utf-8")
@@ -128,20 +114,30 @@ def check_documents(files: list[Path]) -> None:
 
 def check_adapters() -> None:
     codex = tomllib.loads((ROOT / ".codex/config.toml").read_text(encoding="utf-8"))
+    reject_unselected_codex_config(codex)
     require(codex["model_reasoning_effort"] == "high", "Main default must remain High")
-    require(codex["approval_policy"] == "on-request" and codex["sandbox_mode"] == "workspace-write", "Unsafe Codex defaults")
+    require(codex["approval_policy"] == "on-request" and codex["sandbox_mode"] == "workspace-write" and
+            codex["approvals_reviewer"] == "user", "Unsafe Codex defaults")
     require(codex["sandbox_workspace_write"]["network_access"] is False, "Sandbox network widened")
-    require(codex["agents"]["max_concurrent_threads_per_session"] <= 2, "Agent concurrency widened")
-    require(codex["shell_environment_policy"]["inherit"] == "core", "Unexpected credential environment inheritance")
-    scout = tomllib.loads((ROOT / ".codex/agents/scout.toml").read_text(encoding="utf-8"))
-    require(scout["sandbox_mode"] == "read-only", "Codex Scout may write")
-    text = (ROOT / ".claude/agents/scout.md").read_text(encoding="utf-8")
-    fm = load_yaml(text.split("---", 2)[1])
-    require(set(t.strip() for t in fm["tools"].split(",")) == {"Read", "Grep", "Glob"}, "Claude Scout tool pool widened")
+    require(codex["sandbox_workspace_write"].get("writable_roots", []) == [],
+            "Sandbox writable roots widened")
+    require(valid_codex_agent_concurrency(codex["agents"]["max_concurrent_threads_per_session"]),
+            "Agent concurrency invalid or widened")
+    require(codex["shell_environment_policy"]["inherit"] == "core" and
+            codex["shell_environment_policy"].get("ignore_default_excludes") is False,
+            "Unexpected credential environment inheritance")
+    require((ROOT / ".codex/agents/scout.toml").is_file(), "Codex Scout configuration missing")
+    require((ROOT / ".codex/agents/worker.toml").is_file(), "Codex Worker configuration missing")
+    validate_codex_agent_configs(ROOT)
+    require((ROOT / ".claude/agents/scout.md").is_file(), "Claude Scout configuration missing")
+    require((ROOT / ".claude/agents/worker.md").is_file(), "Claude Worker configuration missing")
+    validate_claude_agent_configs(ROOT)
     settings = load_json(ROOT / ".claude/settings.json")
+    reject_unselected_claude_config(settings)
     require(settings["effortLevel"] == "high" and settings["permissions"]["defaultMode"] == "default", "Unsafe Claude defaults")
     require(settings.get("sandbox", {}).get("enabled") is True, "Claude sandbox baseline disabled")
-    require("Read(./**/.env)" in settings["permissions"]["deny"], "Nested env denial missing")
+    require(valid_claude_credential_denials(settings["permissions"].get("deny")),
+            "Claude credential-deny rules missing")
     for canonical in (BOOT / "library/skills").glob("*/SKILL.md"):
         relative = canonical.relative_to(BOOT / "library/skills")
         content = canonical.read_text(encoding="utf-8")
@@ -158,8 +154,14 @@ def check_adapters() -> None:
                 adapter["declared"]["main_requested"] == ["medium", "high", "xhigh"] and
                 adapter["declared"]["consumption_presets"] == ["standard", "economy"],
                 "Adapter weakens common effort/preset contract")
+        permissions = adapter["execution_permissions"]
+        require(permissions["safe_default"] == "protected_manual" and
+                set(permissions["profiles"]) == {"protected_manual", "protected_auto", "full_access"},
+                "Adapter execution profiles drifted")
     require((BOOT / "app/preset.js").read_bytes() == (BOOT / "console/preset.js").read_bytes(),
             "Setup/Console preset resolver drift")
+    require((BOOT / "app/execution-profile.js").read_bytes() == (BOOT / "console/execution-profile.js").read_bytes(),
+            "Setup/Console execution-profile resolver drift")
 
 
 def check_github() -> None:

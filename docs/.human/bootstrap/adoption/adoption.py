@@ -25,7 +25,8 @@ def git(root: Path, *args: str, input: bytes | None = None) -> bytes:
 
 def safe_root(root: Path) -> Path:
     root = root.resolve(strict=True)
-    if git(root, "rev-parse", "--show-toplevel").decode().strip() != str(root):
+    top = Path(git(root, "rev-parse", "--path-format=absolute", "--show-toplevel").decode().strip()).resolve(strict=True)
+    if top != root:
         raise ValueError("Select the repository root, not a nested folder")
     return root
 
